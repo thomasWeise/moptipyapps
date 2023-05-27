@@ -173,7 +173,7 @@ The build only works under Linux.
 [`moptipyapps`](https://thomasweise.github.io/moptipyapps) is a library for implementing, using, and experimenting with metaheuristic optimization algorithms.
 Our project is developed for scientific, educational, and industrial applications.
 
-Copyright (C) 2021-2022  [Thomas Weise](http://iao.hfuu.edu.cn/5) (汤卫思教授)
+Copyright (C) 2023  [Thomas Weise](http://iao.hfuu.edu.cn/5) (汤卫思教授)
 
 Dr. Thomas Weise (see [Contact](#6-contact)) holds the copyright of this package *except* for the data of the benchmark sets we imported from other sources.
 `moptipyapps` is provided to the public as open source software under the [GNU GENERAL PUBLIC LICENSE, Version 3, 29 June 2007](https://thomasweise.github.io/moptipyapps/LICENSE.html).
