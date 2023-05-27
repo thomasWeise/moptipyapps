@@ -423,19 +423,19 @@ def check_links_in_file(file: str) -> None:
 
 def test_all_links_in_readme_md() -> None:
     """Test all the links in the README.md file."""
-    assert True
+    check_links_in_file("README.md")
 
 
 def test_all_links_in_contributing_md() -> None:
     """Test all the links in the CONTRIBUTING.md file."""
-    assert True
+    check_links_in_file("CONTRIBUTING.md")
 
 
 def test_all_links_in_security_md() -> None:
     """Test all the links in the SECURITY.md file."""
-    assert True
+    check_links_in_file("SECURITY.md")
 
 
 def test_all_links_in_license() -> None:
     """Test all the links in the LICENSE file."""
-    assert True
+    check_links_in_file("LICENSE")
