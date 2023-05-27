@@ -1,0 +1,41 @@
+#
+# Dependencies Required to Use `moptipyapps`
+#
+# In this file we list all the libraries that are required to use
+# `moptipyapps`. You must install them before using `moptipyapps`.
+# If you install `moptipyapps` via pip, i.e., do
+# `pip install moptipyapps`, then this is done automatically for you.
+# Otherwise, you could do
+# `pip install --no-input --timeout 360 --retries 100 -r requirements.txt`
+# with a text file `requirements.txt` that has the exact same contents as this
+# file here.
+#
+# `moptipyapps` is available at https://thomasweise.github.io/moptipyapps.
+# This file is available at https://github.com/thomasWeise/moptipyapps.
+#
+# Below, we list each required library and specify the reason why it is
+# needed. Notice that these libraries may, in turn, depend on other libraries.
+# We cannot maintain a full list of these recursive dependencies.
+# Here we only list the top-level dependencies that are actually used by
+# `moptipyapps` directly.
+#
+
+# `moptipy` provides the basic optimization infrastructure and the spaces and
+# tools that we use for optimization.
+moptipy >= 0.9.69
+
+# `numpy` is needed for its efficient data structures.
+numpy >= 1.24.3
+
+# `numba` provides JIT compilers useful making vector/numpy operations
+# efficient.
+numba >= 0.57.0
+
+# matplotlib is used to create plots in the evaluation procedures.
+matplotlib >= 3.7.1
+
+# urllib3 and certifi are used to build instance data from internet resources.
+# They are also used to check the URLs in the README.md as part of the build
+# process, we check all the URLs in the README.md file..
+urllib3 >= 1.26.16
+certifi >= 2023.05.7
