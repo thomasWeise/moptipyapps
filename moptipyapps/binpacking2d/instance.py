@@ -330,11 +330,12 @@ class Instance(Component, np.ndarray):
         obj.name = use_name
         #: the number of different items
         obj.n_different_items = n_different_items
-        #: the number of jobs == self.shape[0]
+        #: the total number of items, i.e., the number of different items
+        #: multiplied with their repetition counts
         obj.n_items = n_items
-        #: the number of machines == self.shape[1]
+        #: the height of the bins
         obj.bin_height = bin_height
-        #: the lower bound of the makespan of this JSSP instance
+        #: the width of the bins
         obj.bin_width = bin_width
 
 # We need as least as many bins such that their area is big enough
