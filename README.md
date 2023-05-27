@@ -84,6 +84,12 @@ While the former one is faster, the latter one leads to better packings.
 We can then apply a black-box metaheuristic to search in the space of these signed permutations with repetitions.
 The objective function would be some measure consistent with the goal of minimizing the number of bins used.
 
+*Examples:*
+
+- [plot a packing chart](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_plot.html)
+- [apply a randomized local search to one 2D bin packing instance](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_rls.html)
+- [measure the runtime of the different encodings for the 2D bin packing problem](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_timing.html)
+
 The encodings were originally implemented by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student of the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
 
 
