@@ -514,9 +514,9 @@ class Instance(Component, np.ndarray):
     @staticmethod
     def list_resources() -> tuple[str, ...]:
         """
-        Get an iterable of all the instances available as resource.
+        Get a tuple of all the instances available as resource.
 
-        :return: the iterable with the instance names
+        :return: the tuple with the instance names
 
         >>> len(list(Instance.list_resources()))
         553
