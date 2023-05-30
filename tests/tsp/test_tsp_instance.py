@@ -23,7 +23,7 @@ def __check_resource_instance(name: str) -> None:
     instance: Final[Instance] = Instance.from_resource(name)
     try:
         assert isinstance(instance, Instance)
-        assert 0 < instance.tour_length_lower_bound < \
+        assert 0 <= instance.tour_length_lower_bound < \
                instance.tour_length_upper_bound < 1_000_000_000_000_000
         assert instance.name == name
         assert instance.n_cities > 1

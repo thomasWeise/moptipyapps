@@ -11,9 +11,11 @@ from moptipyapps.tsp.tsplib import open_resource_stream
 
 #: the set of known optimal tours
 _TOURS: Final[tuple[str, ...]] = (
-    "ulysses22", "ulysses16", "tsp225", "st70", "rd100", "pr1002",
-    "pr76", "pcb442", "lin105", "kroD100", "kroC100", "kroA100", "eil101",
-    "eil76", "eil51", "ch150", "ch130", "berlin52", "att48", "a280")
+    "a280", "att48", "bayg29", "bays29", "berlin52", "brg180", "ch130",
+    "ch150", "eil101", "eil51", "eil76", "fri26", "gr120", "gr202", "gr24",
+    "gr48", "gr666", "gr96", "kroA100", "kroC100", "kroD100", "lin105",
+    "pcb442", "pr1002", "pr76", "rd100", "st70", "tsp225", "ulysses16",
+    "ulysses22")
 
 
 def _from_stream(stream: TextIO) -> np.ndarray:
