@@ -316,14 +316,15 @@ class Instance(Component, np.ndarray):
             width, height, repetitions = row
             width = check_int_range(int(width), "width", 1, max_dim)
             height = check_int_range(int(height), "height", 1, max_dim)
-            item_area += (width * height)
+            repetitions = check_int_range(int(repetitions), "repetitions",
+                                          1, 100_000_000)
+            item_area += (width * height * repetitions)
             max_size = max(width, height)
             if (width > min_dim) and (height > min_dim):
                 raise ValueError(
                     f"object with width={width} and height={height} does "
                     f"not fit into bin with width={width} and "
                     f"height={height}.")
-            check_int_range(int(repetitions), "repetitions", 1, 100_000_000)
             n_items += repetitions
 
         obj: Final[Instance] = super().__new__(

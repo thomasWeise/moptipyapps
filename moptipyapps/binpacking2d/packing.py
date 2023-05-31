@@ -10,17 +10,17 @@ from moptipy.utils.types import type_error
 
 from moptipyapps.binpacking2d.instance import Instance
 
-#: the index of the ID
+#: the index of the ID in a :class:`Packing` row
 IDX_ID: Final[int] = 0
-#: the index of the bin
+#: the index of the bin in a :class:`Packing` row
 IDX_BIN: Final[int] = 1
-#: the index of the left x coordinate
+#: the index of the left x coordinate in a :class:`Packing` row
 IDX_LEFT_X: Final[int] = 2
-#: the index of the bottom y coordinate
+#: the index of the bottom y coordinate in a :class:`Packing` row
 IDX_BOTTOM_Y: Final[int] = 3
-#: the index of the right x coordinate
+#: the index of the right x coordinate in a :class:`Packing` row
 IDX_RIGHT_X: Final[int] = 4
-#: the index of the top y coordinate
+#: the index of the top y coordinate in a :class:`Packing` row
 IDX_TOP_Y: Final[int] = 5
 
 
@@ -41,10 +41,10 @@ class Packing(Component, np.ndarray):
 
     def __new__(cls, instance: Instance) -> "Packing":
         """
-        Create an instance of the 2D bin packing problem.
+        Create an solution record for the 2D bin packing problem.
 
         :param cls: the class
-        :param instance: the instance
+        :param instance: the solution record
         """
         if not isinstance(instance, Instance):
             raise type_error(instance, "instance", Instance)
