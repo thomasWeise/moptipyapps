@@ -10,7 +10,7 @@ bins.
 We apply the algorithm to instance `a10`. The result of a short run with 1024
 steps of the algorithm is a packing that needs two bins only. You can compare
 this with the example file `binpacking2d_plot.py`, where three bins are needed
-by the same encoding (or four by `ImprovedBottomLeftEncoding1`=.
+by the same encoding (or four by `ImprovedBottomLeftEncoding1`).
 """
 import os
 from time import sleep

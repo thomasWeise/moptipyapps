@@ -1,10 +1,11 @@
 """
 The tour length objective function for tours in path representation.
 
-A Traveling Salesperson Problem (TSP) is defined as a fully-connected graph
-with :attr:`~moptipyapps.tsp.instance.Instance.n_cities` nodes. Each edge in
-the graph has a weight, which identifies the distance between the nodes. The
-goal is to find the *shortest* tour that visits every single node in the graph
+A Traveling Salesperson Problem (TSP) instance  is defined as a
+fully-connected graph with
+:attr:`~moptipyapps.tsp.instance.Instance.n_cities` nodes. Each edge in the
+graph has a weight, which identifies the distance between the nodes. The goal
+is to find the *shortest* tour that visits every single node in the graph
 exactly once and then returns back to its starting node. Then nodes are
 usually called cities. In this file, we present methods for loading instances
 of the TSP as distance matrices `A`. In other words, the value at `A[i, j]`

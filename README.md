@@ -58,11 +58,12 @@ The additional dependencies for a [full `make` build](https://thomasweise.github
 
 ## 3. Applications
 
-Here we list the applications.
+Here we list the applications of [`moptipy`](https://thomasweise.github.io/moptipy`).
 
 
 ### 3.1. Two-Dimensional Bin Packing Problem
 
+In the package [`moptipyapps.binpacking2d`](https://thomasweise.github.io/moptipyapps/moptipyapps.binpacking2d.html#module-moptipyapps.binpacking2d), we provide tools for experimenting and playing around with the two-dimensional bin packing problem.
 Bin packing is a classical domain from Operations Research.
 The goal is to pack objects into containers, the so-called bins.
 We address [two-dimensional rectangular bin packing](https://thomasweise.github.io/moptipyapps/moptipyapps.binpacking2d.html#module-moptipyapps.binpacking2d).
@@ -96,7 +97,8 @@ The encodings were originally implemented by Mr. Rui ZHAO (赵睿), <zr132914266
 
 ### 3.2. The Traveling Salesperson Problem (TSP)
 
-A Traveling Salesperson Problem (TSP) is defined as a fully-connected graph with `n_cities` nodes.
+In the package [`moptipyapps.tsp`](https://thomasweise.github.io/moptipyapps/moptipyapps.tsp.html#module-moptipyapps.tsp), we provide tools to run experiments and play around with the Traveling Salesperson Problem (TSP) .
+A TSP instance is defined as a fully-connected graph with `n_cities` nodes.
 Each edge in  the graph has a weight, which identifies the distance between the nodes.
 The goal is to find the *shortest* tour that visits every single node in the graph exactly once and then returns back to its starting node.
 Then nodes are usually called cities.

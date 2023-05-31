@@ -1,14 +1,14 @@
 """
 An instance of the Traveling Salesperson Problem (TSP) as distance matrix.
 
-A Traveling Salesperson Problem (TSP) is defined as a fully-connected graph
-with :attr:`Instance.n_cities` nodes. Each edge in the graph has a weight,
-which identifies the distance between the nodes. The goal is to find the
-*shortest* tour that visits every single node in the graph exactly once and
-then returns back to its starting node. Then nodes are usually called cities.
-In this file, we present methods for loading instances of the TSP as distance
-matrices `A`. In other words, the value at `A[i, j]` identifies the travel
-distance from `i` to `j`.
+An instance of the Traveling Salesperson Problem (TSP) is defined as a
+fully-connected graph with :attr:`Instance.n_cities` nodes. Each edge in the
+graph has a weight, which identifies the distance between the nodes. The goal
+is to find the *shortest* tour that visits every single node in the graph
+exactly once and then returns back to its starting node. Then nodes are
+usually called cities. In this file, we present methods for loading instances
+of the TSP as distance matrices `A`. In other words, the value at `A[i, j]`
+identifies the travel distance from `i` to `j`.
 
 We can load files in a subset of the TSPLib format [1, 2] and also include the
 instances of TSPLib with no more than 2000 cities. We load instances as full
