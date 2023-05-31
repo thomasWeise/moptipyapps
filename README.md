@@ -58,7 +58,7 @@ The additional dependencies for a [full `make` build](https://thomasweise.github
 
 ## 3. Applications
 
-Here we list the applications of [`moptipy`](https://thomasweise.github.io/moptipy`).
+Here we list the applications of [`moptipy`](https://thomasweise.github.io/moptipy).
 
 
 ### 3.1. Two-Dimensional Bin Packing Problem
@@ -92,7 +92,7 @@ The objective function would be some measure consistent with the goal of minimiz
 - [apply a randomized local search to one 2D bin packing instance](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_rls.html)
 - [measure the runtime of the different encodings for the 2D bin packing problem](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_timing.html)
 
-The encodings were originally implemented by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
+Important work on this code has been contributed by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
 
 
 ### 3.2. The Traveling Salesperson Problem (TSP)
@@ -110,6 +110,8 @@ The length of the tour can be computed by summing up the distances from the `k`-
 
 We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/), the maybe most important benchmark set for the TSP.
 110 of these instances are included as resources in this package.
+
+*Examples:*
 
 Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 
