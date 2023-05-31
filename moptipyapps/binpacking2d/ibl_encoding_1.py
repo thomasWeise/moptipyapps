@@ -50,8 +50,8 @@ all the bins, starting at bin `1`, when placing any object. That other
 encoding variant therefore must always consider all bins and is thus slower,
 but tends to yield better packings.
 
-This procedure has originally been developed an implemented by Mr. Rui ZHAO
-(赵睿), <zr1329142665@163.com> a Master's student of the Institute of Applied
+This procedure has originally been developed and implemented by Mr. Rui ZHAO
+(赵睿), <zr1329142665@163.com> a Master's student at the Institute of Applied
 Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of
 Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University
 (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of

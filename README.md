@@ -10,6 +10,7 @@
 - [Installation](#2-installation)
 - [Applications](#3-applications)
   - [Two-Dimensional Bin Packing Problem](#31-two-dimensional-bin-packing-problem)
+  - [Traveling Salesperson Problem (TSP)](#32-the-traveling-salesperson-problem-tsp)
 - [Unit Tests and Static Analysis](#4-unit-tests-and-static-analysis)
 - [License](#5-license)
 - [Contact](#6-contact)
@@ -90,7 +91,25 @@ The objective function would be some measure consistent with the goal of minimiz
 - [apply a randomized local search to one 2D bin packing instance](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_rls.html)
 - [measure the runtime of the different encodings for the 2D bin packing problem](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_timing.html)
 
-The encodings were originally implemented by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student of the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
+The encodings were originally implemented by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
+
+
+### 3.2. The Traveling Salesperson Problem (TSP)
+
+A Traveling Salesperson Problem (TSP) is defined as a fully-connected graph with `n_cities` nodes.
+Each edge in  the graph has a weight, which identifies the distance between the nodes.
+The goal is to find the *shortest* tour that visits every single node in the graph exactly once and then returns back to its starting node.
+Then nodes are usually called cities.
+A tour can be represented in path representation, which means that it is stored as a permutation of the numbers `0` to `n_cities-1`.
+The number at index `k` identifies that `k`-th city to visit.
+So the first number in the permutation identifies the first city, the second number the second city,
+and so on.
+The length of the tour can be computed by summing up the distances from the `k`-th city to the `k+1`-st city, for `k` in `0..n_cities-2` and then adding the distance from the last city to the first city.
+
+We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/), the maybe most important benchmark set for the TSP.
+110 of these instances are included as resources in this package.
+
+Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 
 
 ## 4. Unit Tests and Static Analysis
@@ -193,6 +212,8 @@ If you have any concerns regarding security, please visit our [security policy](
 - The included benchmark instance data of the [two-dimensional bin packing](#31-two-dimensional-bin-packing-problem) is taken from [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib).
   It has been stored in a more size-efficient way and some unnecessary information has been stripped from it (as we really only need the raw bin packing data).
   Nevertheless, the copyright of the original data lies with the authors [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib) or the original authors of the datasets used by them.
+- The included benchmark instances for the [Traveling Salesperson Problem](#32-the-traveling-salesperson-problem-tsp) are taken from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/).
+  The copyright of the original data lies with Gerhard Reinelt, the original author of TSPLib, or the original authors of the datasets used by him.
 
 
 ## 6. Contact

@@ -1,11 +1,147 @@
-"""An instance of the Traveling Salesperson Problem."""
+"""
+An instance of the Traveling Salesperson Problem (TSP) as distance matrix.
 
-from math import acos, cos, sqrt
+A Traveling Salesperson Problem (TSP) is defined as a fully-connected graph
+with :attr:`Instance.n_cities` nodes. Each edge in the graph has a weight,
+which identifies the distance between the nodes. The goal is to find the
+*shortest* tour that visits every single node in the graph exactly once and
+then returns back to its starting node. Then nodes are usually called cities.
+In this file, we present methods for loading instances of the TSP as distance
+matrices `A`. In other words, the value at `A[i, j]` identifies the travel
+distance from `i` to `j`.
+
+We can load files in a subset of the TSPLib format [1, 2] and also include the
+instances of TSPLib with no more than 2000 cities. We load instances as full
+distance matrices, which makes writing algorithms to solve them easier but
+handling instances with more than 2000 cities problematic due to the high
+memory consumption. Of course, you could still load them, but it would be
+ill-advised to do so on a normal PC (at the time of this writing).
+
+The TSPLib contains many instances of the symmetric TSP, where the distance
+`A[i, j]` from city `i` to city `j` is the same as the distance `A[j, i]` from
+`j` to `i`. Here, we provide 110 of them as resource. The cities of some of
+these instances are points in the Euclidean plain and the distances are the
+(approximate) Euclidean distances. Others use geographical coordinates
+(longitude/latitude), and yet others are provides as distances matrices
+directly. We also provide 19 of the asymmetric TSPLib instances, where the
+distance `A[i, j]` from `i` to `j` may be different from the distance
+`A[j, i]` from `j` to `i`.
+
+You can obtain lists of either all, only the symmetric, or only the asymmetric
+instance resources via
+
+>>> print(Instance.list_resources()[0:10])  # get all instances (1..10)
+('a280', 'ali535', 'att48', 'att532', 'bayg29', 'bays29', 'berlin52', \
+'bier127', 'br17', 'brazil58')
+
+>>> print(Instance.list_resources(asymmetric=False)[0:10])  # only symmetric
+('a280', 'ali535', 'att48', 'att532', 'bayg29', 'bays29', 'berlin52', \
+'bier127', 'brazil58', 'brg180')
+
+>>> print(Instance.list_resources(symmetric=False)[0:10])  # only asymmetric
+('br17', 'ft53', 'ft70', 'ftv170', 'ftv33', 'ftv35', 'ftv38', 'ftv44', \
+'ftv47', 'ftv55')
+
+You can load any of these instances from the resources via
+:meth:`Instance.from_resource` as follows:
+
+>>> inst = Instance.from_resource("a280")
+>>> print(inst.n_cities)
+280
+
+If you want to read an instance from an external TSPLib file, you can use
+:meth:`Instance.from_file`. Be aware that not the whole TSPLib standard is
+supported right now, but only a reasonably large subset.
+
+Every TSP instance automatically provides a lower bound
+:attr:`Instance.tour_length_lower_bound` and an upper bound
+:attr:`Instance.tour_length_upper_bound` of the lengths of valid tours.
+For the TSPLib instances, the globally optimal solutions and their tour
+lengths are known, so we can use them as lower bounds directly. Otherwise,
+we currently use a very crude approximation: We assume that, for each city
+`i`, the next city `j` to be visited would be the nearest neighbor of `i`.
+Of course, in reality, such a tour may not be feasible, as it could contain
+disjoint sets of loops. But no tour can be shorter than this.
+As upper bound, we do the same but assume that `j` would be the cities
+farthest away from `i`.
+
+>>> print(inst.tour_length_lower_bound)
+2579
+>>> print(inst.tour_length_upper_bound)
+65406
+
+It should be noted that all TSPLib instances by definition have integer
+distances. This means that there are never floating point distances and, for
+example, Euclidean distances are rounded and are only approximate Euclidean.
+Then again, since floating point numbers could also only represent things such
+as `sqrt(2)` approximately, using integers instead of floating point numbers
+does not really change anything - distances would be approximately Euclidean
+or approximately geographical either way.
+
+TSPLib also provides some known optimal solutions in path representation,
+i.e., as permutations of the numbers `0` to `n_cities-1`. The optimal
+solutions corresponding to the instances provides as resources can be obtained
+via :mod:`~moptipyapps.tsp.known_optima`.
+
+The original data of TSPLib can be found at
+<http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/>. Before doing
+anything with these data directly, you should make sure to read the FAQ
+<http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/TSPFAQ.html> and the
+documentation
+<http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf>.
+
+Important initial work on this code has been contributed by Mr. Tianyu LIANG
+(梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of
+Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School
+of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei
+University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the
+supervision of Prof. Dr. Thomas Weise (汤卫思教授).
+
+1. Gerhard Reinelt. TSPLIB - A Traveling Salesman Problem Library.
+   *ORSA Journal on Computing* 3(4):376-384. November 1991.
+   https://doi.org/10.1287/ijoc.3.4.376.
+   http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/
+2. Gerhard Reinelt. *TSPLIB95.* Heidelberg, Germany: Universität
+   Heidelberg, Institut für Angewandte Mathematik. 1995.
+   http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf
+3. David Lee Applegate, Robert E. Bixby, Vašek Chvátal, and William John Cook.
+   *The Traveling Salesman Problem: A Computational Study.* Second Edition,
+   2007. Princeton, NJ, USA: Princeton University Press. Volume 17 of
+   Princeton Series in Applied Mathematics. ISBN: 0-691-12993-2.
+4. Gregory Z. Gutin and Abraham P. Punnen. *The Traveling Salesman Problem and
+   its Variations.* 2002. Kluwer Academic Publishers. Volume 12 of
+   Combinatorial Optimization. https://doi.org/10.1007/b101971.
+5. Pedro Larrañaga, Cindy M. H. Kuijpers, Roberto H. Murga, Iñaki Inza, and
+   Sejla Dizdarevic. Genetic Algorithms for the Travelling Salesman Problem: A
+   Review of Representations and Operators. *Artificial Intelligence Review*
+   13(2):129-170. April 1999. https://doi.org/10.1023/A:1006529012972.
+6. Eugene Leighton Lawler, Jan Karel Lenstra, Alexander Hendrik George Rinnooy
+   Kan, and David B. Shmoys. *The Traveling Salesman Problem: A Guided Tour of
+   Combinatorial Optimization.* September 1985. Chichester, West Sussex, UK:
+   Wiley Interscience. In Estimation, Simulation, and
+   Control - Wiley-Interscience Series in Discrete Mathematics and
+   Optimization. ISBN: 0-471-90413-9
+7. Tianyu Liang, Zhize Wu, Jörg Lässig, Daan van den Berg, and Thomas Weise.
+   Solving the Traveling Salesperson Problem using Frequency Fitness
+   Assignment. In *Proceedings of the IEEE Symposium on Foundations of
+   Computational Intelligence (IEEE FOCI'22),* part of the *IEEE Symposium
+   Series on Computational Intelligence (SSCI'22),* December 4-7, 2022,
+   Singapore. Pages 360-367. IEEE.
+   https://doi.org/10.1109/SSCI51031.2022.10022296.
+8. Thomas Weise, Raymond Chiong, Ke Tang, Jörg Lässig, Shigeyoshi Tsutsui,
+   Wenxiang Chen, Zbigniew Michalewicz, and Xin Yao. Benchmarking Optimization
+   Algorithms: An Open Source Framework for the Traveling Salesman Problem.
+   *IEEE Computational Intelligence Magazine.* 9(3):40-52. August 2014.
+   https://doi.org/10.1109/MCI.2014.2326101.
+"""
+
+from math import acos, cos, isfinite, sqrt
 from typing import Any, Callable, Final, TextIO, cast
 
 import moptipy.utils.nputils as npu
 import numpy as np
 from moptipy.api.component import Component
+from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import int_range_to_dtype
 from moptipy.utils.path import Path
 from moptipy.utils.strings import sanitize_name
@@ -77,7 +213,7 @@ _ASYMMETRIC_INSTANCES: Final[tuple[str, ...]] = (
 _INSTANCES: Final[tuple[str, ...]] = tuple(sorted(
     _SYMMETRIC_INSTANCES + _ASYMMETRIC_INSTANCES))
 
-#: the set of symmetric resources
+#: the set of asymmetric resources
 _ASYMMETRIC_RESOURCES: Final[set[str]] = set(_ASYMMETRIC_INSTANCES)
 
 #: the problem is a symmetric tsp
@@ -129,13 +265,11 @@ __EDGE_WEIGHT_FORMATS: Final[set[str]] = {
 __KEY_NODE_COORD_TYPE: Final[str] = "NODE_COORD_TYPE"
 #: 2d coordinates
 __NODE_COORD_TYPE_2D: Final[str] = "TWOD_COORDS"
-#: 3d coordinates
-__NODE_COORD_TYPE_3D: Final[str] = "THREED_COORDS"
 #: no coordinates
 __NODE_COORD_TYPE_NONE: Final[str] = "NO_COORDS"
 #: the permitted node coordinate types
 __NODE_COORD_TYPES: Final[set[str]] = {
-    __NODE_COORD_TYPE_2D, __NODE_COORD_TYPE_3D, __NODE_COORD_TYPE_NONE}
+    __NODE_COORD_TYPE_2D, __NODE_COORD_TYPE_NONE}
 #: the node coordinate section starts
 __START_NODE_COORD_SECTION: Final[str] = "NODE_COORD_SECTION"
 #: start the edge weight section
@@ -172,7 +306,11 @@ def __line_to_nums(line: str,
 
         part: str = line[idx:next_space]
         if ("." in part) or ("E" in part) or ("e" in part):
-            collector(float(part))
+            f: float = float(part)
+            if not isfinite(f):
+                raise ValueError(
+                    f"{part!r} translates to non-finite float {f}.")
+            collector(f)
         else:
             collector(check_to_int_range(
                 part, "line fragment", -1_000_000_000_000, 1_000_000_000_000))
@@ -698,6 +836,39 @@ class Instance(Component, np.ndarray):
         obj.is_symmetric = is_symmetric
         return obj
 
+    def __str__(self):
+        """
+        Get the name of this instance.
+
+        :return: the name of this instance
+
+        >>> str(Instance.from_resource("gr17"))
+        'gr17'
+        """
+        return self.name
+
+    def log_parameters_to(self, logger: KeyValueLogSection) -> None:
+        """
+        Log the parameters of the instance to the given logger.
+
+        :param logger: the logger for the parameters
+
+        >>> from moptipy.utils.logger import InMemoryLogger
+        >>> with InMemoryLogger() as l:
+        ...     with l.key_values("I") as kv:
+        ...         Instance.from_resource("kroE100").log_parameters_to(kv)
+        ...     print(repr('@'.join(l.get_log())))
+        'BEGIN_I@name: kroE100@class: moptipyapps.tsp.instance.Instance\
+@nCities: 100@tourLengthLowerBound: 22068@tourLengthUpperBound: 330799@\
+symmetric: T@dtype: i@END_I'
+        """
+        super().log_parameters_to(logger)
+        logger.key_value("nCities", self.n_cities)
+        logger.key_value("tourLengthLowerBound", self.tour_length_lower_bound)
+        logger.key_value("tourLengthUpperBound", self.tour_length_upper_bound)
+        logger.key_value("symmetric", self.is_symmetric)
+        logger.key_value(npu.KEY_NUMPY_TYPE, self.dtype.char)
+
     @staticmethod
     def from_file(
             path: str,
@@ -726,6 +897,9 @@ class Instance(Component, np.ndarray):
 
         :param name: the name string
         :return: the instance
+
+        >>> Instance.from_resource("br17").n_cities
+        17
         """
         if not isinstance(name, str):
             raise type_error(name, "name", str)
@@ -746,14 +920,6 @@ class Instance(Component, np.ndarray):
                 setattr(container, inst_attr, inst)
             return inst
 
-    def __str__(self):
-        """
-        Get the name of this instance.
-
-        :return: the name of this instance
-        """
-        return self.name
-
     @staticmethod
     def list_resources(symmetric: bool = True,
                        asymmetric: bool = True) -> tuple[str, ...]:
@@ -763,6 +929,20 @@ class Instance(Component, np.ndarray):
         :param symmetric: include the symmetric instances
         :param asymmetric: include the asymmetric instances
         :return: the tuple with the instance names
+
+        >>> a = len(Instance.list_resources(True, True))
+        >>> print(a)
+        110
+        >>> b = len(Instance.list_resources(True, False))
+        >>> print(b)
+        91
+        >>> c = len(Instance.list_resources(False, True))
+        >>> print(c)
+        19
+        >>> print(a == (b + c))
+        True
+        >>> print(len(Instance.list_resources(False, False)))
+        0
         """
         return _INSTANCES if (symmetric and asymmetric) else (
             _SYMMETRIC_INSTANCES if symmetric else (
