@@ -13,3 +13,6 @@ The following additional tools are implemented:
   different problems that are provided above.
 - :mod:`~moptipyapps.shared` offers shared constants and tools.
 """
+from moptipy.utils.sys_info import add_dependency
+
+add_dependency("moptipyapps")
