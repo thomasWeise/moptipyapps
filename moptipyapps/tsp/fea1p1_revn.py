@@ -33,10 +33,11 @@ from typing import Callable, Final, cast
 
 import numba  # type: ignore
 import numpy as np
+from moptipy.algorithms.so.fea1plus1 import log_h
 from moptipy.api.algorithm import Algorithm
 from moptipy.api.process import Process
-from moptipy.utils.logger import CSV_SEPARATOR, KeyValueLogSection
-from moptipy.utils.nputils import DEFAULT_INT, array_to_str
+from moptipy.utils.logger import KeyValueLogSection
+from moptipy.utils.nputils import DEFAULT_INT
 from moptipy.utils.types import type_error
 from numpy.random import Generator
 
@@ -77,40 +78,6 @@ def rev_if_h_not_worse(i: int, j: int, n_cities: int, dist: np.ndarray,
             x[i:j + 1:1] = x[j:i - 1:-1]
         return y2  # return new tour length
     return y  # return old tour length
-
-
-def log_frequency_table(h: np.ndarray, process: Process) -> None:
-    """
-    Log the frequency table to a given process.
-
-    The frequency table is logged as a string of the form
-    `a;b;h[a];h[a+1];...;h[b-1];h[b]` into a section with name `H`.
-    `a` is the first objective value that was encountered, `b` the last one.
-    Normally, `a` should be the tour length of the best tour that was
-    discovered.
-
-    :param h: the frequency table
-    :param process: the process
-    """
-    i: int = 0
-    n_h: Final[int] = len(h)
-    for i in range(cast(int, process.get_best_f()), n_h):
-        if h[i] > 0:  # find first non-zero element
-            break
-    j: int = n_h
-    for j in range(n_h - 1, i, -1):
-        if h[j] > 0:  # find last non-zero element
-            break
-
-    s: str  # the string with the data to log
-    if i <= 2:  # can we use the dirty trick below?
-        h[i - 2] = i  # dirty trick to easily store indices of first and
-        h[i - 1] = j  # last non-zero items
-        s = array_to_str(h[i - 2:j + 1])
-    else:  # no ... ok, then we just write it as-is
-        s = f"{i}{CSV_SEPARATOR}{j}{CSV_SEPARATOR}{array_to_str(h[i:j + 1])}"
-
-    process.add_log_section("H", s)
 
 
 class TSPFEA1p1revn(Algorithm):
@@ -164,7 +131,10 @@ class TSPFEA1p1revn(Algorithm):
             register(x, y)  # register the objective value
 
         # we log the frequency table at the very end of the run
-        log_frequency_table(h, process)
+        if h[y] == 0:
+            h[y] = 1
+        log_h(process, range(len(h)),
+              cast(Callable[[int | float], int], h.__getitem__), str)
 
     def __str__(self):
         """
