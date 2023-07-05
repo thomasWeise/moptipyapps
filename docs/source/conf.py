@@ -116,6 +116,7 @@ intersphinx_mapping = {
     "moptipy": ("https://thomasweise.github.io/moptipy/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
     "python": ("https://docs.python.org/3/", None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
     "urllib3": ("https://urllib3.readthedocs.io/en/stable/", None),
 }
 
