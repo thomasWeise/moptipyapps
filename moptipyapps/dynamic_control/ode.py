@@ -88,50 +88,45 @@ def __diff_update(cur_diff: np.ndarray, cur_row: np.ndarray,
     >>> c_diff = np.array([1.0, 1.0, 1.0], float)
     >>> l_diff = np.zeros_like(c_diff)
     >>> n_row = np.zeros_like(c_row)
-    >>> __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # log-limit
-    0.3586249472058058
-    >>> print(";".join(str(s) for s in n_row))
-    0.3586249472058058;0.3586249472058058;0.3586249472058058;0.0
-    >>> print(c_row[-1])
-    0.3586249472058058
+    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # log-limit
+    >>> print(";".join(f"{s:.10f}" for s in n_row))
+    0.3586249472;0.3586249472;0.3586249472;0.0000000000
+    >>> print(f"{c_row[-1]:.10f}")
+    0.3586249472
     >>> print((np.log1p(np.sqrt(3.0)) * 0.6180339887498948) / np.sqrt(3.0))
     0.3586249472058058
-    >>> __diff_update(c_diff, c_row, l_diff, n_row, 0.05)  # hard limit
-    0.02886751345948129
-    >>> print(";".join(str(s) for s in n_row))
-    0.02886751345948129;0.02886751345948129;0.02886751345948129;0.0
-    >>> print(c_row[-1])
-    0.02886751345948129
+    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 0.05)  # hard limit
+    >>> print(";".join(f"{s:.10f}" for s in n_row))
+    0.0288675135;0.0288675135;0.0288675135;0.0000000000
+    >>> print(f"{c_row[-1]:.10f}")
+    0.0288675135
     >>> print(0.05 / np.sqrt(3.0))
     0.02886751345948129
     >>> l_diff = np.array([-1.0, -1.0, -1.0], float)
-    >>> __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit
-    2.8940860228184496e-05
-    >>> print(";".join(str(s) for s in n_row))
-    2.8940860228184496e-05;2.8940860228184496e-05;2.8940860228184496e-05;0.0
-    >>> print(c_row[-1])
-    2.8940860228184496e-05
+    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit
+    >>> print(";".join(f"{s:.10f}" for s in n_row))
+    0.0000289409;0.0000289409;0.0000289409;0.0000000000
+    >>> print(f"{c_row[-1]:.10f}")
+    0.0000289409
     >>> print((np.log1p(np.sqrt(3.0)) * 0.6180339887498948
     ...        * np.exp(-3 * np.pi)) / np.sqrt(3.0))
     2.8940860228184496e-05
     >>> l_diff = np.array([-1.0, -1.0, 1.0], float)
-    >>> __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit soft
-    0.0011622728230403685
-    >>> print(";".join(str(s) for s in n_row))
-    0.0011622728230403685;0.0011622728230403685;0.0011622728230403685;0.0
-    >>> print(c_row[-1])
-    0.0011622728230403685
+    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit
+    >>> print(";".join(f"{s:.10f}" for s in n_row))
+    0.0011622728;0.0011622728;0.0011622728;0.0000000000
+    >>> print(f"{c_row[-1]:.10f}")
+    0.0011622728
     >>> print((np.log1p(np.sqrt(3.0)) * 0.6180339887498948
     ...        * np.exp(-3 * np.arccos(-1 / 3))) / np.sqrt(3.0))
     0.0011622728230403685
     >>> c_row = np.array([0.1, 0.1, 0.1, 0.0], float)
     >>> l_diff = np.zeros_like(c_diff)
-    >>> __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # center limit
-    0.0007812500000000002
-    >>> print(";".join(str(s) for s in n_row))
-    0.10078125;0.10078125;0.10078125;0.0
-    >>> print(c_row[-1])
-    0.0007812500000000002
+    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # center limit
+    >>> print(";".join(f"{s:.10f}" for s in n_row))
+    0.1007812500;0.1007812500;0.1007812500;0.0000000000
+    >>> print(f"{c_row[-1]:.10f}")
+    0.0007812500
     >>> print((np.sqrt(0.03) / 128) / np.sqrt(3))
     0.00078125
     """
@@ -262,6 +257,8 @@ def run_ode(starting_state: np.ndarray,
     `controller_dim==1`, this third tuple element is a plain vector and not a
     matrix.
 
+    The last time slice (at index `-1,-1`) will always be set to zero.
+
     :param starting_state: the starting
     :param equations: the differential system
     :param controller: the controller function
@@ -280,11 +277,11 @@ def run_ode(starting_state: np.ndarray,
     >>> v = 100.0
     >>> angle = np.deg2rad(45.0)
     >>> v_x = v * np.cos(angle)
-    >>> print(v_x)
-    70.71067811865476
+    >>> print(f"{v_x:.10f}")
+    70.7106781187
     >>> v_y = v * np.sin(angle)
-    >>> print(v_y)
-    70.71067811865474
+    >>> print(f"{v_y:.10f}")
+    70.7106781187
     >>> def projectile(position, ttime, ctrl, out):
     ...     out[0] = 70.71067811865474
     ...     out[1] = 70.71067811865474 - ttime * 9.80665
@@ -294,25 +291,27 @@ def run_ode(starting_state: np.ndarray,
     >>> strt = np.array([0.0, 1.0])
     >>> ode = run_ode(strt, projectile, contrl, param, 1, 10000)
     >>> time_of_flight = 2 * v_y / 9.80665
-    >>> print(time_of_flight)
-    14.420964981651174
+    >>> print(f"{time_of_flight:.10f}")
+    14.4209649817
     >>> travel_distance_x = time_of_flight * v_x
-    >>> print(travel_distance_x)
-    1019.7162129779282
+    >>> print(f"{travel_distance_x:.10f}")
+    1019.7162129779
     >>> idx = np.argwhere(ode[:, 1] <= 0.0)[0][0]
     >>> print(idx)
     9631
-    >>> print(ode[idx - 1, 0])
-    1020.8026525593104
-    >>> print(ode[idx, 0])
-    1020.8909467852925
-    >>> print(fsum(ode[0:idx, -1]))
-    14.437578226476697
-    >>> print(fsum(ode[0:idx + 1, -1]))
-    14.438826787281707
+    >>> print(f"{ode[idx - 1, 0]:.10f}")
+    1020.8026525593
+    >>> print(f"{ode[idx, 0]:.10f}")
+    1020.8909467853
+    >>> print(f"{fsum(ode[0:idx, -1]):.10f}")
+    14.4375782265
+    >>> print(f"{fsum(ode[0:idx + 1, -1]):.10f}")
+    14.4388267873
+    >>> print(ode[-1, -1])
+    0.0
     """
     state_dim: Final[int] = len(starting_state)
-    result: Final[np.ndarray] = np.ones((
+    result: Final[np.ndarray] = np.zeros((
         steps, state_dim + controller_dim + 1))
     max_dist: Final[float] = sqrt(
         (state_dim - 1) / 64.0)  # the maximum distance
@@ -429,8 +428,15 @@ def t_from_ode(ode: np.ndarray) -> float:
 
     :param ode: the ODE solution, as return from :func:`run_ode`.
     :return: the time sum
+
+    >>> od = np.array([[1, 2, 3, 4, 0.1],
+    ...                [5, 6, 7, 8, 0.2],
+    ...                [9, 6, 4, 3, 0.3],
+    ...                [7, 4, 2, 1, 0.4]])
+    >>> print(t_from_ode(od))
+    0.6
     """
-    return fsum(ode[:, -1])
+    return fsum(ode[0:-1, -1])
 
 
 def j_from_ode(ode: np.ndarray, state_dim: int) -> float:
@@ -448,6 +454,16 @@ def j_from_ode(ode: np.ndarray, state_dim: int) -> float:
     :param ode: the array returned by the ODE function, i.e., :func:`run_ode`
     :param state_dim: the state dimension
     :return: the figure of merit
+
+    >>> od = np.array([[1, 2, 3, 4, 0.1],
+    ...                [5, 6, 7, 8, 0.2],
+    ...                [9, 6, 4, 3, 0.3],
+    ...                [7, 4, 2, 1, 0.4]])
+    >>> sta_dim = 3
+    >>> print(f"{j_from_ode(od, sta_dim):.10f}")
+    106.0166666667
+    >>> print((24.3 + 10.8 + 4.8 + 0.27 + 5. + 7.2 + 9.8 + 1.28 + 0.16) / 0.6)
+    106.01666666666667
     """
     dest: Final[np.ndarray] = np.empty(
         (ode.shape[0] - 1) * (ode.shape[1] - 1) - state_dim)

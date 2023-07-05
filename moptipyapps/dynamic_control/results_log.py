@@ -33,11 +33,14 @@ class ResultsLog(AbstractContextManager):
     ...                       [np.array([1.0, 1.0])],
     ...                       log.collector, projectile, contrl, param,
     ...                       1, 10000, 10000)
-    ...         print(sio.getvalue())
+    ...         x=sio.getvalue()
+    >>> tt = x.split()
+    >>> print(tt[0])
     figureOfMerit;totalTime;nSteps;start0;start1;end0;end1
-    378000.1394646287;15.889902329942183;10000;0;1;1052.8750908707495;-33.12458047185337
-    382295.81107652164;15.961433107786055;10000;1;1;1058.9330806784412;-38.53614632437352
-    <BLANKLINE>
+    >>> for y in tt[1:]:
+    ...     print(";".join(f"{float(v):.3f}" for v in y.split(";")))
+    403386.481;14.890;10000.000;0.000;1.000;1052.875;-33.125
+    407847.896;14.961;10000.000;1.000;1.000;1058.933;-38.536
     """
 
     def __init__(self, state_dim: int, out: TextIOBase | str) -> None:
