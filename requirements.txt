@@ -22,7 +22,7 @@
 
 # `moptipy` provides the basic optimization infrastructure and the spaces and
 # tools that we use for optimization.
-moptipy == 0.9.82
+moptipy == 0.9.83
 
 # `numpy` is needed for its efficient data structures.
 numpy == 1.24.3

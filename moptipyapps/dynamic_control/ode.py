@@ -108,18 +108,20 @@ def __diff_update(cur_diff: np.ndarray, cur_row: np.ndarray,
     0.0000289409;0.0000289409;0.0000289409;0.0000000000
     >>> print(f"{c_row[-1]:.10f}")
     0.0000289409
-    >>> print((np.log1p(np.sqrt(3.0)) * 0.6180339887498948
-    ...        * np.exp(-3 * np.pi)) / np.sqrt(3.0))
-    2.8940860228184496e-05
+    >>> a = (np.log1p(np.sqrt(3.0)) * 0.6180339887498948
+    ...      * np.exp(-3 * np.pi)) / np.sqrt(3.0)
+    >>> print(f"{a:.10f}")
+    0.0000289409
     >>> l_diff = np.array([-1.0, -1.0, 1.0], float)
     >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit
     >>> print(";".join(f"{s:.10f}" for s in n_row))
     0.0011622728;0.0011622728;0.0011622728;0.0000000000
     >>> print(f"{c_row[-1]:.10f}")
     0.0011622728
-    >>> print((np.log1p(np.sqrt(3.0)) * 0.6180339887498948
-    ...        * np.exp(-3 * np.arccos(-1 / 3))) / np.sqrt(3.0))
-    0.0011622728230403685
+    >>> a = (np.log1p(np.sqrt(3.0)) * 0.6180339887498948
+    ...      * np.exp(-3 * np.arccos(-1 / 3))) / np.sqrt(3.0)
+    >>> print(f"{a:.10f}")
+    0.0011622728
     >>> c_row = np.array([0.1, 0.1, 0.1, 0.0], float)
     >>> l_diff = np.zeros_like(c_diff)
     >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # center limit

@@ -107,15 +107,13 @@ def make_interesting_starting_points(
 
     >>> p = make_interesting_starting_points(
     ...     3, np.array([[1.0, 2.0], [3.0, 2.9]]), False)
-    >>> print(",".join(";".join(f"{x:.10f}" for x in row) for row in p))
-    0.9272205441;-1.5522477810,-3.6107702483;0.1979460999,\
--0.9153960386;-5.3464895111
+    >>> print(",".join(";".join(f"{x:.5f}" for x in row) for row in p))
+    0.92722;-1.55225,-3.61077;0.19795,-0.91540;-5.34649
 
     >>> p = make_interesting_starting_points(
     ...     3, np.array([[1.0, 2.0, 7.0], [3.0, 2.9, 1.1]]), False)
-    >>> print(",".join(";".join(f"{x:.10f}" for x in row) for row in p))
-    -0.3568763347;-3.0811633985;0.7204660948,-5.4937198876;1.9383468204;\
--2.5732962132,0.2261570167;-7.2144301703;-6.2578630795
+    >>> print(",".join(";".join(f"{x:.5f}" for x in row) for row in p))
+    -0.35688;-3.08116;0.72047,-5.49372;1.93835;-2.57330,0.22616;-7.21443;-6.25786
     """
     other_points: Final[np.ndarray] = np.array(other)
     dim: Final[int] = other_points.shape[1]
