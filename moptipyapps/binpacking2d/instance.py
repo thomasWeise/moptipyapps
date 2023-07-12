@@ -256,6 +256,8 @@ class Instance(Component, np.ndarray):
     n_items: int
     #: the number of different items
     n_different_items: int
+    #: the total area occupied by all items
+    total_item_area: int
     #: the bin width
     bin_width: int
     #: the bin height
@@ -345,8 +347,10 @@ class Instance(Component, np.ndarray):
         obj.bin_height = bin_height
         #: the width of the bins
         obj.bin_width = bin_width
+        #: the total area occupied by all items
+        obj.total_item_area = item_area
 
-# We need as least as many bins such that their area is big enough
+# We need at least as many bins such that their area is big enough
 # for the total area of the items.
         bin_area: int = bin_height * bin_width
         min_size: int = item_area // bin_area

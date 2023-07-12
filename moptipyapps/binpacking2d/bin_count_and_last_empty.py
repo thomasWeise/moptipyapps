@@ -6,7 +6,7 @@ This objective function first computes the number of bins used. Let's call it
 :attr:`~moptipyapps.binpacking2d.instance.Instance.n_items`, as
 well (because this is also the number of rows in the packing).
 Now we return `(n_items * (n_bins - 1)) + number_of_items_in_last_bin`,
-wher `number_of_items_in_last_bin` is, well, the number of items in the
+where `number_of_items_in_last_bin` is, well, the number of items in the
 very last bin.
 
 The idea behind this is: If one of two packings has the smaller number of
@@ -27,7 +27,7 @@ from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing import IDX_BIN
 
 
-@numba.njit(cache=True, inline="always")
+@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
 def bin_count_and_last_empty(y: np.ndarray) -> int:
     """
     Compute the number of bins and the emptiness of the last bin.

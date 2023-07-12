@@ -118,6 +118,33 @@ We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/softw
 Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 
 
+### 3.3. Dynamic Controller Synthesis
+
+Another interesting example for optimization is the synthesis of [active controllers for dynamic systems](https://thomasweise.github.io/moptipyapps/moptipyapps.dynamic_control.html).
+Dynamic systems have a state that changes over time based on some laws.
+These laws may be expressed as ordinary differential equations, for example.
+The classical [Stuart-Landau system](https://thomasweise.github.io/moptipyapps/moptipyapps.dynamic_control.systems.html#module-moptipyapps.dynamic_control.systems.stuart_landau), for instance, represents an object whose coordinates on a two-dimensional plane change as follows:
+
+```
+sigma = 0.1 - x² - y²
+dx/dt = sigma * x - y
+dy/dt = sigma * y + x
+```
+
+Regardless on which `(x, y)` the object initially starts, it tends to move to a circular rotation path centered around the origin with radius `sqrt(0.1)`.
+Now we try to create a controller `ctrl` for such a system that moves the object from this periodic circular path into a fixed and stable location.
+The controller `ctrl` receives the current state, i.e., the object location, as input and can influence the system as follows:
+
+```
+sigma = 0.1 - x² - y²
+c = ctrl(x, y)
+dx/dt = sigma * x - y
+dy/dt = sigma * y + x + c
+```
+
+What we try to find is the controller which can bring move object to the origin `(0, 0)` as quickly as possible while expending the least amount of force, i.e., having the smallest aggregated `c` values over time.
+
+
 ## 4. Unit Tests and Static Analysis
 
 When developing and applying randomized algorithms, proper testing and checking of the source code is of utmost importance.

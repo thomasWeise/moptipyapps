@@ -9,8 +9,6 @@ scenarios such as flight control or other fluid dynamic systems. Different
 from such more complicated systems, they are much faster and easier to
 simulate, though. So we can play with them much more easily and quickly.
 
-
-
 The initial starting point of the work here were conversations with
 Prof. Dr. Bernd NOACK and Guy Yoslan CORNJO MACEDA of the Harbin Institute
 of Technology in Shenzhen, China (哈尔滨工业大学(深圳)) as well as the

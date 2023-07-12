@@ -70,7 +70,7 @@ def predefined(system: System) -> tuple[Controller, ...]:
     if system.state_dims == 2:
         return (Controller("cornejo_maeda", 2, 1, 3, __cornejo_maeda), )
     if system.state_dims == 3:
-        return (Controller("table_3_1_lgpc", 3, 1, 2, __table_3_1_ga),
+        return (Controller("table_3_1_ga", 3, 1, 2, __table_3_1_ga),
                 Controller("table_3_1_lgpc", 3, 1, 4, __table_3_1_lgpc))
     raise ValueError("invalid state dimensions "
                      f"{system.state_dims} for {system!r}.")
