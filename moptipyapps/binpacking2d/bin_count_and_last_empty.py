@@ -105,6 +105,30 @@ class BinCountAndLastEmpty(Objective):
         on.
 
         :return: `max(n_items, (lb - 1) * n_items + 1)`
+
+        >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])
+        >>> ins.n_items
+        3
+        >>> ins.lower_bound_bins
+        1
+        >>> BinCountAndLastEmpty(ins).lower_bound()
+        3
+
+        >>> ins = Instance("b", 10, 50, [[10, 5, 10], [3, 3, 1], [5, 5, 1]])
+        >>> ins.n_items
+        12
+        >>> ins.lower_bound_bins
+        2
+        >>> BinCountAndLastEmpty(ins).lower_bound()
+        13
+
+        >>> ins = Instance("c", 10, 50, [[10, 5, 20], [30, 3, 10], [5, 5, 1]])
+        >>> ins.n_items
+        31
+        >>> ins.lower_bound_bins
+        4
+        >>> BinCountAndLastEmpty(ins).lower_bound()
+        94
         """
         return max(self.__instance.n_items,
                    ((self.__instance.lower_bound_bins - 1)
@@ -123,6 +147,24 @@ class BinCountAndLastEmpty(Objective):
         Get the upper bound of the number of bins plus emptiness.
 
         :return: the number of items in the instance to the square
+
+        >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])
+        >>> ins.n_items
+        3
+        >>> BinCountAndLastEmpty(ins).upper_bound()
+        9
+
+        >>> ins = Instance("b", 10, 50, [[10, 5, 10], [3, 3, 1], [5, 5, 1]])
+        >>> ins.n_items
+        12
+        >>> BinCountAndLastEmpty(ins).upper_bound()
+        144
+
+        >>> ins = Instance("c", 10, 50, [[10, 5, 20], [30, 3, 10], [5, 5, 1]])
+        >>> ins.n_items
+        31
+        >>> BinCountAndLastEmpty(ins).upper_bound()
+        961
         """
         return self.__instance.n_items * self.__instance.n_items
 

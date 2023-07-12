@@ -63,6 +63,11 @@ def bin_count_and_last_small(y: np.ndarray, bin_area: int) -> int:
     ...                                    [1, 1, 20, 20, 30, 30]], int),
     ...                                    50*50)
     5100
+    >>> bin_count_and_last_small(np.array([[1, 3, 10, 10, 50, 50],  # bin 3!
+    ...                                    [1, 2, 30, 30, 60, 60],  # bin 2!
+    ...                                    [1, 1, 20, 20, 30, 30]], np.int8),
+    ...                                    50*50)
+    6600
     """
     current_bin: int = -1  # the current idea of what the last bin is
     current_area: int = 0  # the area of items already in that bin
@@ -72,8 +77,8 @@ def bin_count_and_last_small(y: np.ndarray, bin_area: int) -> int:
         bin_idx: int = y[i, IDX_BIN]  # get the bin index of the item
         if bin_idx < current_bin:
             continue
-        area: int = (y[i, IDX_RIGHT_X] - y[i, IDX_LEFT_X]) \
-            * (y[i, IDX_TOP_Y] - y[i, IDX_BOTTOM_Y])
+        area: int = int(y[i, IDX_RIGHT_X] - y[i, IDX_LEFT_X]) \
+            * int(y[i, IDX_TOP_Y] - y[i, IDX_BOTTOM_Y])
         if bin_idx > current_bin:  # it's a new biggest bin = new last bin?
             current_area = area  # then the current area is this
             current_bin = bin_idx  # and we remember it
@@ -99,7 +104,7 @@ class BinCountAndLastSmall(Objective):
         self.evaluate = numba.njit(  # type: ignore
             lambda y, z=instance.bin_width * instance.bin_height:
             bin_count_and_last_small(y, z),
-            cache=True, inline="always", fastmath=True, boundscheck=False)
+            cache=False, inline="always", fastmath=True, boundscheck=False)
 
     def lower_bound(self) -> int:
         """
@@ -125,17 +130,41 @@ class BinCountAndLastSmall(Objective):
             `bin_area` is the area of a bin, `total_item_area` is the area of
             all items added up, and `smallest_area` is the area of the
             smallest item
+
+        >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])
+        >>> ins.total_item_area
+        84
+        >>> ins.lower_bound_bins
+        1
+        >>> BinCountAndLastSmall(ins).lower_bound()
+        84
+
+        >>> ins = Instance("b", 10, 50, [[10, 5, 10], [3, 3, 1], [5, 5, 1]])
+        >>> ins.total_item_area
+        534
+        >>> ins.lower_bound_bins
+        2
+        >>> BinCountAndLastSmall(ins).lower_bound()
+        509
+
+        >>> ins = Instance("c", 10, 50, [[10, 5, 10], [30, 3, 1], [5, 5, 1]])
+        >>> ins.total_item_area
+        615
+        >>> ins.lower_bound_bins
+        2
+        >>> BinCountAndLastSmall(ins).lower_bound()
+        525
         """
         if self.__instance.lower_bound_bins == 1:
             return self.__instance.total_item_area
         smallest_area: int = -1
         for row in self.__instance:
-            area: int = row[0] * row[1]
-            if (smallest_area <= 0) or (area > smallest_area):
+            area: int = int(row[0]) * int(row[1])
+            if (smallest_area < 0) or (area < smallest_area):
                 smallest_area = area
         return int(((self.__instance.lower_bound_bins - 1)
-                    * (self.__instance.bin_height
-                       * self.__instance.bin_height)) + smallest_area)
+                    * self.__instance.bin_height
+                    * self.__instance.bin_width) + smallest_area)
 
     def is_always_integer(self) -> bool:
         """
@@ -150,6 +179,24 @@ class BinCountAndLastSmall(Objective):
         Get the upper bound of this objective function.
 
         :return: a very coarse estimate of the upper bound
+
+        >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])
+        >>> ins.n_items
+        3
+        >>> BinCountAndLastSmall(ins).upper_bound()
+        15000
+
+        >>> ins = Instance("b", 10, 50, [[10, 5, 10], [3, 3, 1], [5, 5, 1]])
+        >>> ins.n_items
+        12
+        >>> BinCountAndLastSmall(ins).upper_bound()
+        6000
+
+        >>> ins = Instance("c", 10, 50, [[10, 5, 10], [30, 3, 1], [5, 5, 10]])
+        >>> ins.n_items
+        21
+        >>> BinCountAndLastSmall(ins).upper_bound()
+        10500
         """
         return self.__instance.n_items * self.__instance.bin_height \
             * self.__instance.bin_width
