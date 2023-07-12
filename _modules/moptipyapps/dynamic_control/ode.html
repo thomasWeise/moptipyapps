@@ -1,0 +1,521 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.ode — moptipyapps 0.8.8 documentation</title><link href=../../../_static/pygments.css rel=stylesheet><link href=../../../_static/bizstyle.css rel=stylesheet><script data-url_root=../../../ id=documentation_options src=../../../_static/documentation_options.js></script><script src=../../../_static/doctools.js></script><script src=../../../_static/sphinx_highlight.js></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/ode.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.8 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.ode</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.ode</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A primitive integrator for systems of ordinary differential equations.</span>
+
+<span class=sd>Many dynamic systems can be modeled as systems of ordinary differential</span>
+<span class=sd>equations that govern their progress over time. Trying to find out in</span>
+<span class=sd>which state such systems are at a given point in time means to integrate</span>
+<span class=sd>these equations until that point in time (starting from a starting state).</span>
+<span class=sd>Now there are several methods for doing such a thing, including, e.g.,</span>
+<span class=sd>:func:`scipy.integrate.odeint`.</span>
+
+<span class=sd>What we want to play around with, however, is synthesizing controllers.</span>
+<span class=sd>In this case, the differential equations also merge the output of the</span>
+<span class=sd>controller with the current state. If the controller behaves inappropriately,</span>
+<span class=sd>this may make the system diverge, i.e., some of its state variables go to</span>
+<span class=sd>infinity over time or sometimes rather quickly.</span>
+
+<span class=sd>Using ODE integrators that compute the system state at pre-defined time steps</span>
+<span class=sd>is thus cumbersome, as the system may have already exploded at these goal</span>
+<span class=sd>times. Therefore, we cooked our own, simple ODE integrator. Our integrator</span>
+<span class=sd>dynamically chooses the length of the time step based on the output of the</span>
+<span class=sd>differential equations. If the output is large, then we will automatically use</span>
+<span class=sd>shorter time slices. A large differential applied for a small time slice still</span>
+<span class=sd>leads to a reasonably-large change in the system state. More specifically, the</span>
+<span class=sd>system cannot diverge to infinity: The larger the differential step, the</span>
+<span class=sd>shorter the time slice we use, so everything balances out.</span>
+
+<span class=sd>Thus, we can simulate a well-behaved system over a long time and an</span>
+<span class=sd>ill-behaved system for a shorter time period. Neither system will diverge.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span> <span class=nn>math</span> <span class=kn>import</span> <span class=n>fsum</span><span class=p>,</span> <span class=n>sqrt</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>TypeVar</span>
+
+<span class=kn>import</span> <span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>numba</span><span class=o>.</span><span class=n>float64</span><span class=p>(</span><span class=n>numba</span><span class=o>.</span><span class=n>float64</span><span class=p>[:],</span> <span class=n>numba</span><span class=o>.</span><span class=n>float64</span><span class=p>[:],</span>
+                          <span class=n>numba</span><span class=o>.</span><span class=n>float64</span><span class=p>[:],</span> <span class=n>numba</span><span class=o>.</span><span class=n>float64</span><span class=p>[:],</span> <span class=n>numba</span><span class=o>.</span><span class=n>float64</span><span class=p>),</span>
+            <span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__diff_update</span><span class=p>(</span><span class=n>cur_diff</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>cur_row</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                  <span class=n>last_diff</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>next_row</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                  <span class=n>max_dist</span><span class=p>:</span> <span class=nb>float</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Add the current differential to the current state to get the next state.</span>
+
+<span class=sd>    The input of this function is the current differential vector `cur_diff`,</span>
+<span class=sd>    the current row of the ode matrix `cur_row`, the last differential vector</span>
+<span class=sd>    `last_diff`, the next row of the ode matrix `next_row`, and the maximum</span>
+<span class=sd>    permitted step length `max_dist`.</span>
+<span class=sd>    In an ideal world, we would set the weight value of the current row, i.e.,</span>
+<span class=sd>    `cur_row[-1]` to `1.0` and set `next_row[0:s] = cur_row[0:s] + cur_diff`,</span>
+<span class=sd>    where `s` be the dimension of the state. In other words, we would just add</span>
+<span class=sd>    the differential vector to the current state and get the next state.</span>
+<span class=sd>    However, we do not live in an ideal world. The absolute value</span>
+<span class=sd>    `z = |cur_diff| = np.sqrt(np.square(cur_diff).sum())`</span>
+<span class=sd>    may be too large. This can have two reasons:</span>
+
+<span class=sd>    1. Maybe the differential equation system diverges, i.e., the system</span>
+<span class=sd>       moves towards infinity.</span>
+<span class=sd>    2. Maybe we are close to some state towards the system may converge, but</span>
+<span class=sd>       the step length does not become small enough to actually converge and</span>
+<span class=sd>       the system jumps around.</span>
+
+<span class=sd>    So we put several mechanisms in place to limit the step lengths:</span>
+
+<span class=sd>    1. We never use the full step length `z` but pre-scale it to</span>
+<span class=sd>       `log(1 + z) * 0.6180339887498948`.</span>
+<span class=sd>    2. We limit the step length to the 1/128th of the distance of the current</span>
+<span class=sd>       system state to the center of coordinates.</span>
+<span class=sd>    3. We multiply the step length with a factor that exponentially decreases</span>
+<span class=sd>       with the angle between the current and the last differential.</span>
+<span class=sd>    4. We impose a hard limit on the step length based on the dimensionality</span>
+<span class=sd>       of the system.</span>
+
+<span class=sd>    All of this leads to a smaller step length `t <= z`. The weight of the</span>
+<span class=sd>    step is then `t / z` (if `z > 0`, otherwise `1`)</span>
+
+<span class=sd>    :param cur_diff: the differential vector</span>
+<span class=sd>    :param cur_row: the current row</span>
+<span class=sd>    :param last_diff: the last differential vector</span>
+<span class=sd>    :param next_row: the state to update</span>
+<span class=sd>    :param max_dist: the maximum distance to move</span>
+<span class=sd>    :returns: the current weight</span>
+<span class=sd>    :returns: the length of the time slice</span>
+
+<span class=sd>    >>> c_row = np.array([0.0, 0.0, 0.0, 0.0], float)</span>
+<span class=sd>    >>> c_diff = np.array([1.0, 1.0, 1.0], float)</span>
+<span class=sd>    >>> l_diff = np.zeros_like(c_diff)</span>
+<span class=sd>    >>> n_row = np.zeros_like(c_row)</span>
+<span class=sd>    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # log-limit</span>
+<span class=sd>    >>> print(";".join(f"{s:.10f}" for s in n_row))</span>
+<span class=sd>    0.3586249472;0.3586249472;0.3586249472;0.0000000000</span>
+<span class=sd>    >>> print(f"{c_row[-1]:.10f}")</span>
+<span class=sd>    0.3586249472</span>
+<span class=sd>    >>> print((np.log1p(np.sqrt(3.0)) * 0.6180339887498948) / np.sqrt(3.0))</span>
+<span class=sd>    0.3586249472058058</span>
+<span class=sd>    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 0.05)  # hard limit</span>
+<span class=sd>    >>> print(";".join(f"{s:.10f}" for s in n_row))</span>
+<span class=sd>    0.0288675135;0.0288675135;0.0288675135;0.0000000000</span>
+<span class=sd>    >>> print(f"{c_row[-1]:.10f}")</span>
+<span class=sd>    0.0288675135</span>
+<span class=sd>    >>> print(0.05 / np.sqrt(3.0))</span>
+<span class=sd>    0.02886751345948129</span>
+<span class=sd>    >>> l_diff = np.array([-1.0, -1.0, -1.0], float)</span>
+<span class=sd>    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit</span>
+<span class=sd>    >>> print(";".join(f"{s:.10f}" for s in n_row))</span>
+<span class=sd>    0.0000289409;0.0000289409;0.0000289409;0.0000000000</span>
+<span class=sd>    >>> print(f"{c_row[-1]:.10f}")</span>
+<span class=sd>    0.0000289409</span>
+<span class=sd>    >>> a = (np.log1p(np.sqrt(3.0)) * 0.6180339887498948</span>
+<span class=sd>    ...      * np.exp(-3 * np.pi)) / np.sqrt(3.0)</span>
+<span class=sd>    >>> print(f"{a:.10f}")</span>
+<span class=sd>    0.0000289409</span>
+<span class=sd>    >>> l_diff = np.array([-1.0, -1.0, 1.0], float)</span>
+<span class=sd>    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit</span>
+<span class=sd>    >>> print(";".join(f"{s:.10f}" for s in n_row))</span>
+<span class=sd>    0.0011622728;0.0011622728;0.0011622728;0.0000000000</span>
+<span class=sd>    >>> print(f"{c_row[-1]:.10f}")</span>
+<span class=sd>    0.0011622728</span>
+<span class=sd>    >>> a = (np.log1p(np.sqrt(3.0)) * 0.6180339887498948</span>
+<span class=sd>    ...      * np.exp(-3 * np.arccos(-1 / 3))) / np.sqrt(3.0)</span>
+<span class=sd>    >>> print(f"{a:.10f}")</span>
+<span class=sd>    0.0011622728</span>
+<span class=sd>    >>> c_row = np.array([0.1, 0.1, 0.1, 0.0], float)</span>
+<span class=sd>    >>> l_diff = np.zeros_like(c_diff)</span>
+<span class=sd>    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # center limit</span>
+<span class=sd>    >>> print(";".join(f"{s:.10f}" for s in n_row))</span>
+<span class=sd>    0.1007812500;0.1007812500;0.1007812500;0.0000000000</span>
+<span class=sd>    >>> print(f"{c_row[-1]:.10f}")</span>
+<span class=sd>    0.0007812500</span>
+<span class=sd>    >>> print((np.sqrt(0.03) / 128) / np.sqrt(3))</span>
+<span class=sd>    0.00078125</span>
+<span class=sd>    """</span>
+<span class=c1># Compute the square sum of the current differential.</span>
+    <span class=n>dsum</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>c</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>failure</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=k>for</span> <span class=n>dx</span> <span class=ow>in</span> <span class=n>cur_diff</span><span class=p>:</span>
+        <span class=k>if</span> <span class=o>-</span><span class=mf>1e100</span> <span class=o><</span> <span class=n>dx</span> <span class=o><</span> <span class=mf>1e100</span><span class=p>:</span>
+            <span class=n>y</span> <span class=o>=</span> <span class=p>(</span><span class=n>dx</span> <span class=o>*</span> <span class=n>dx</span><span class=p>)</span> <span class=o>-</span> <span class=n>c</span>
+            <span class=n>t</span> <span class=o>=</span> <span class=n>dsum</span> <span class=o>+</span> <span class=n>y</span>
+            <span class=n>c</span> <span class=o>=</span> <span class=p>(</span><span class=n>t</span> <span class=o>-</span> <span class=n>dsum</span><span class=p>)</span> <span class=o>-</span> <span class=n>y</span>
+            <span class=n>dsum</span> <span class=o>=</span> <span class=n>t</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>failure</span> <span class=o>=</span> <span class=kc>True</span>
+            <span class=k>break</span>
+
+<span class=c1># If the differential grew out of bounds, we just add a logarithmic step.</span>
+    <span class=k>if</span> <span class=n>failure</span> <span class=ow>or</span> <span class=p>(</span><span class=n>dsum</span> <span class=o>></span> <span class=mf>1e100</span><span class=p>):</span>
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>d</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>cur_diff</span><span class=p>):</span>
+            <span class=n>next_row</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>cur_row</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>+</span> <span class=p>(</span>
+                <span class=o>-</span><span class=n>np</span><span class=o>.</span><span class=n>log1p</span><span class=p>(</span><span class=o>-</span><span class=n>d</span><span class=p>)</span> <span class=k>if</span> <span class=n>d</span> <span class=o><</span> <span class=mf>0.0</span> <span class=k>else</span> <span class=n>np</span><span class=o>.</span><span class=n>log1p</span><span class=p>(</span><span class=n>d</span><span class=p>))</span>
+        <span class=n>cur_row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>=</span> <span class=mf>1.0</span>
+        <span class=k>return</span> <span class=mf>1.0</span>
+
+    <span class=n>dist</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>dsum</span><span class=p>)</span>
+    <span class=n>dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>cur_diff</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>dist</span> <span class=o><=</span> <span class=mf>0.0</span><span class=p>:</span>  <span class=c1># If the step length if 0, we can quit directly.</span>
+        <span class=n>next_row</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>dim</span><span class=p>]</span> <span class=o>=</span> <span class=n>cur_row</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>dim</span><span class=p>]</span>
+        <span class=n>next_row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>=</span> <span class=mf>1.0</span>
+        <span class=k>return</span> <span class=mf>1.0</span>
+
+<span class=c1># the first adjustment of the step length is always log(1+dist) / golden ratio</span>
+    <span class=n>use_dist</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>log1p</span><span class=p>(</span><span class=n>dist</span><span class=p>)</span> <span class=o>*</span> <span class=mf>0.6180339887498948</span>
+
+<span class=c1># now compute the angle-based limit</span>
+<span class=c1># The angle between two vectors A and B is arccos(A*B / (|A| * |B|)).</span>
+    <span class=n>p_dsum</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>  <span class=c1># this will be used to compute |B|</span>
+    <span class=n>prod</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>  <span class=c1># this is used to compute A*B</span>
+    <span class=n>c2</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>dd</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>last_diff</span><span class=p>):</span>
+        <span class=k>if</span> <span class=o>-</span><span class=mf>1e100</span> <span class=o><</span> <span class=n>dd</span> <span class=o><</span> <span class=mf>1e100</span><span class=p>:</span>
+            <span class=n>y</span> <span class=o>=</span> <span class=p>(</span><span class=n>dd</span> <span class=o>*</span> <span class=n>dd</span><span class=p>)</span> <span class=o>-</span> <span class=n>c</span>
+            <span class=n>t</span> <span class=o>=</span> <span class=n>p_dsum</span> <span class=o>+</span> <span class=n>y</span>
+            <span class=n>c</span> <span class=o>=</span> <span class=p>(</span><span class=n>t</span> <span class=o>-</span> <span class=n>p_dsum</span><span class=p>)</span> <span class=o>-</span> <span class=n>y</span>
+            <span class=n>p_dsum</span> <span class=o>=</span> <span class=n>t</span>
+
+            <span class=n>y</span> <span class=o>=</span> <span class=p>(</span><span class=n>dd</span> <span class=o>*</span> <span class=n>cur_diff</span><span class=p>[</span><span class=n>i</span><span class=p>])</span> <span class=o>-</span> <span class=n>c2</span>
+            <span class=n>t</span> <span class=o>=</span> <span class=n>prod</span> <span class=o>+</span> <span class=n>y</span>
+            <span class=n>c2</span> <span class=o>=</span> <span class=p>(</span><span class=n>t</span> <span class=o>-</span> <span class=n>prod</span><span class=p>)</span> <span class=o>-</span> <span class=n>y</span>
+            <span class=n>prod</span> <span class=o>=</span> <span class=n>t</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>failure</span> <span class=o>=</span> <span class=kc>True</span>
+            <span class=k>break</span>
+
+    <span class=k>if</span> <span class=p>(</span><span class=ow>not</span> <span class=n>failure</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>p_dsum</span> <span class=o>></span> <span class=mf>0.0</span><span class=p>):</span>
+        <span class=n>p_dsum</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>p_dsum</span><span class=p>)</span> <span class=o>*</span> <span class=n>dist</span>
+        <span class=k>if</span> <span class=n>p_dsum</span> <span class=o>></span> <span class=mf>0.0</span><span class=p>:</span>
+            <span class=n>prod</span> <span class=o>/=</span> <span class=n>p_dsum</span>
+            <span class=k>if</span> <span class=n>prod</span> <span class=o><</span> <span class=mf>1.0</span><span class=p>:</span>
+                <span class=n>use_dist</span> <span class=o>*=</span> <span class=n>np</span><span class=o>.</span><span class=n>exp</span><span class=p>(</span>
+                    <span class=o>-</span><span class=mf>3.0</span> <span class=o>*</span> <span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>arccos</span><span class=p>(</span><span class=n>prod</span><span class=p>)</span> <span class=k>if</span> <span class=n>prod</span> <span class=o>></span> <span class=o>-</span><span class=mf>1.0</span> <span class=k>else</span> <span class=n>np</span><span class=o>.</span><span class=n>pi</span><span class=p>))</span>
+
+<span class=c1># now limit the step length to 1/128th of the distance to the center</span>
+    <span class=n>center_dist</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>c</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>dim</span><span class=p>):</span>
+        <span class=n>dd</span> <span class=o>=</span> <span class=n>cur_row</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+        <span class=k>if</span> <span class=o>-</span><span class=mf>1e100</span> <span class=o><</span> <span class=n>dd</span> <span class=o><</span> <span class=mf>1e100</span><span class=p>:</span>
+            <span class=n>y</span> <span class=o>=</span> <span class=p>(</span><span class=n>dd</span> <span class=o>*</span> <span class=n>dd</span><span class=p>)</span> <span class=o>-</span> <span class=n>c</span>
+            <span class=n>t</span> <span class=o>=</span> <span class=n>center_dist</span> <span class=o>+</span> <span class=n>y</span>
+            <span class=n>c</span> <span class=o>=</span> <span class=p>(</span><span class=n>t</span> <span class=o>-</span> <span class=n>center_dist</span><span class=p>)</span> <span class=o>-</span> <span class=n>y</span>
+            <span class=n>center_dist</span> <span class=o>=</span> <span class=n>t</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>center_dist</span> <span class=o>=</span> <span class=n>max_dist</span>
+            <span class=k>break</span>
+    <span class=n>center_dist</span> <span class=o>=</span> <span class=mf>0.0078125</span> <span class=o>*</span> <span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>center_dist</span><span class=p>)</span>
+    <span class=k>if</span> <span class=mf>0.0</span> <span class=o><</span> <span class=n>center_dist</span> <span class=o><</span> <span class=n>use_dist</span><span class=p>:</span>
+        <span class=n>use_dist</span> <span class=o>=</span> <span class=n>center_dist</span>
+
+<span class=c1># now apply the hard, dimension-based limit</span>
+    <span class=k>if</span> <span class=n>max_dist</span> <span class=o><</span> <span class=n>use_dist</span><span class=p>:</span>
+        <span class=n>use_dist</span> <span class=o>=</span> <span class=n>max_dist</span>
+
+<span class=c1># store the weight in the current row and update the next row</span>
+    <span class=n>cur_row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>=</span> <span class=n>weight</span> <span class=o>=</span> <span class=n>use_dist</span> <span class=o>/</span> <span class=n>dist</span>
+    <span class=n>next_row</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>dim</span><span class=p>]</span> <span class=o>=</span> <span class=n>cur_row</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>dim</span><span class=p>]</span> <span class=o>+</span> <span class=p>(</span><span class=n>weight</span> <span class=o>*</span> <span class=n>cur_diff</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>weight</span>
+
+
+<span class=c1>#: the type variable for ODE controller parameters</span>
+<span class=n>T</span> <span class=o>=</span> <span class=n>TypeVar</span><span class=p>(</span><span class=s2>"T"</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=run_ode><a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.run_ode>[docs]</a><span class=k>def</span> <span class=nf>run_ode</span><span class=p>(</span><span class=n>starting_state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+            <span class=n>equations</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+                <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+            <span class=n>controller</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>T</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+            <span class=n>parameters</span><span class=p>:</span> <span class=n>T</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span><span class=p>,</span>
+            <span class=n>steps</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>5000</span><span class=p>)</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Simulate a set of controlled differential system.</span>
+
+<span class=sd>    The system begins in the starting state stored in the vector</span>
+<span class=sd>    `starting_state`. In each time step, first, the `controller` is invoked.</span>
+<span class=sd>    It receives the current system state vector as input, the current time</span>
+<span class=sd>    `t`, its parameters (`parameters`), and an output array to store its</span>
+<span class=sd>    computed control values into. This array has dimension `controller_dim`,</span>
+<span class=sd>    which usually is `1`. Then, the function `system` will be called and</span>
+<span class=sd>    receives the current state vector, the time step `t`, and the controller</span>
+<span class=sd>    output as input, as well as an output array to store the result of the</span>
+<span class=sd>    differential into. This output array has the same dimension as the state</span>
+<span class=sd>    vector.</span>
+
+<span class=sd>    The system will be simulated for exactly `steps` time steps. The length of</span>
+<span class=sd>    the time steps will automatically be determined based on a quick</span>
+<span class=sd>    preliminary simulation of the system and controller. A maximum time</span>
+<span class=sd>    index `max_time` can be provided. The system will automatically determine</span>
+<span class=sd>    the right length of the time steps.</span>
+
+<span class=sd>    As result, this function returns a tuple of three components: First, the</span>
+<span class=sd>    matrix `steps` rows, where each row corresponds to one system state</span>
+<span class=sd>    vector. The first row will be identical tp `starting_state`. The second</span>
+<span class=sd>    element of the return tuple is the time vector, holding `steps` strictly</span>
+<span class=sd>    increasing time value. The third and last return component is the control</span>
+<span class=sd>    matrix. It has one row for each time step, i.e., `steps` in total, and</span>
+<span class=sd>    each row corresponds to the controller output at that time step. If</span>
+<span class=sd>    `controller_dim==1`, this third tuple element is a plain vector and not a</span>
+<span class=sd>    matrix.</span>
+
+<span class=sd>    The last time slice (at index `-1,-1`) will always be set to zero.</span>
+
+<span class=sd>    :param starting_state: the starting</span>
+<span class=sd>    :param equations: the differential system</span>
+<span class=sd>    :param controller: the controller function</span>
+<span class=sd>    :param parameters: the controller parameters</span>
+<span class=sd>    :param controller_dim: the dimension of the controller result</span>
+<span class=sd>    :param steps: the number of steps to simulate</span>
+<span class=sd>    :returns: a matrix where each row represents a point in time, composed of</span>
+<span class=sd>        the current state, the controller output, and the length of the time</span>
+<span class=sd>        slice</span>
+
+<span class=sd>    If we simulate the flight of a projectile with our ODE execution, then</span>
+<span class=sd>    both the flight time as well as the flight length are about 0.12% off from</span>
+<span class=sd>    what the mathematical solution of the flight system prescribe. That's</span>
+<span class=sd>    actually not bad for a crude and fast integration method...</span>
+
+<span class=sd>    >>> v = 100.0</span>
+<span class=sd>    >>> angle = np.deg2rad(45.0)</span>
+<span class=sd>    >>> v_x = v * np.cos(angle)</span>
+<span class=sd>    >>> print(f"{v_x:.10f}")</span>
+<span class=sd>    70.7106781187</span>
+<span class=sd>    >>> v_y = v * np.sin(angle)</span>
+<span class=sd>    >>> print(f"{v_y:.10f}")</span>
+<span class=sd>    70.7106781187</span>
+<span class=sd>    >>> def projectile(position, ttime, ctrl, out):</span>
+<span class=sd>    ...     out[0] = 70.71067811865474</span>
+<span class=sd>    ...     out[1] = 70.71067811865474 - ttime * 9.80665</span>
+<span class=sd>    >>> param = 0.0   # ignore</span>
+<span class=sd>    >>> def contrl(position, ttime, params, dest):</span>
+<span class=sd>    ...     dest[0] = 0.0  #  controller that does nothing</span>
+<span class=sd>    >>> strt = np.array([0.0, 1.0])</span>
+<span class=sd>    >>> ode = run_ode(strt, projectile, contrl, param, 1, 10000)</span>
+<span class=sd>    >>> time_of_flight = 2 * v_y / 9.80665</span>
+<span class=sd>    >>> print(f"{time_of_flight:.10f}")</span>
+<span class=sd>    14.4209649817</span>
+<span class=sd>    >>> travel_distance_x = time_of_flight * v_x</span>
+<span class=sd>    >>> print(f"{travel_distance_x:.10f}")</span>
+<span class=sd>    1019.7162129779</span>
+<span class=sd>    >>> idx = np.argwhere(ode[:, 1] <= 0.0)[0][0]</span>
+<span class=sd>    >>> print(idx)</span>
+<span class=sd>    9631</span>
+<span class=sd>    >>> print(f"{ode[idx - 1, 0]:.10f}")</span>
+<span class=sd>    1020.8026525593</span>
+<span class=sd>    >>> print(f"{ode[idx, 0]:.10f}")</span>
+<span class=sd>    1020.8909467853</span>
+<span class=sd>    >>> print(f"{fsum(ode[0:idx, -1]):.10f}")</span>
+<span class=sd>    14.4375782265</span>
+<span class=sd>    >>> print(f"{fsum(ode[0:idx + 1, -1]):.10f}")</span>
+<span class=sd>    14.4388267873</span>
+<span class=sd>    >>> print(ode[-1, -1])</span>
+<span class=sd>    0.0</span>
+<span class=sd>    """</span>
+    <span class=n>state_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>starting_state</span><span class=p>)</span>
+    <span class=n>result</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span>
+        <span class=n>steps</span><span class=p>,</span> <span class=n>state_dim</span> <span class=o>+</span> <span class=n>controller_dim</span> <span class=o>+</span> <span class=mi>1</span><span class=p>))</span>
+    <span class=n>max_dist</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>sqrt</span><span class=p>(</span>
+        <span class=p>(</span><span class=n>state_dim</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>/</span> <span class=mf>64.0</span><span class=p>)</span>  <span class=c1># the maximum distance</span>
+
+    <span class=n>point</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span><span class=n>state_dim</span><span class=p>)</span>
+    <span class=n>cur_diff</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span><span class=n>state_dim</span><span class=p>)</span>
+    <span class=n>last_diff</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>(</span><span class=n>state_dim</span><span class=p>)</span>
+    <span class=n>c_out</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span><span class=n>controller_dim</span><span class=p>)</span>
+    <span class=n>time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>c</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>c_end_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>state_dim</span> <span class=o>+</span> <span class=n>controller_dim</span>
+
+    <span class=n>next_row</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>result</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+    <span class=n>next_row</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>state_dim</span><span class=p>]</span> <span class=o>=</span> <span class=n>starting_state</span>
+
+    <span class=c1># compute the first row</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>steps</span><span class=p>):</span>
+        <span class=n>cur_row</span> <span class=o>=</span> <span class=n>next_row</span>
+        <span class=n>next_row</span> <span class=o>=</span> <span class=n>result</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+        <span class=n>point</span><span class=p>[:]</span> <span class=o>=</span> <span class=n>cur_row</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>state_dim</span><span class=p>]</span>  <span class=c1># get point part of state</span>
+        <span class=n>controller</span><span class=p>(</span><span class=n>point</span><span class=p>,</span> <span class=n>time</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>c_out</span><span class=p>)</span>  <span class=c1># invoke controller</span>
+        <span class=n>equations</span><span class=p>(</span><span class=n>point</span><span class=p>,</span> <span class=n>time</span><span class=p>,</span> <span class=n>c_out</span><span class=p>,</span> <span class=n>cur_diff</span><span class=p>)</span>  <span class=c1># invoke equations</span>
+
+<span class=c1># invoke the differential update and update time as well</span>
+        <span class=n>y</span> <span class=o>=</span> <span class=n>__diff_update</span><span class=p>(</span><span class=n>cur_diff</span><span class=p>,</span> <span class=n>cur_row</span><span class=p>,</span> <span class=n>last_diff</span><span class=p>,</span>
+                          <span class=n>next_row</span><span class=p>,</span> <span class=n>max_dist</span><span class=p>)</span> <span class=o>-</span> <span class=n>c</span>
+        <span class=n>t</span> <span class=o>=</span> <span class=n>time</span> <span class=o>+</span> <span class=n>y</span>
+        <span class=n>c</span> <span class=o>=</span> <span class=p>(</span><span class=n>t</span> <span class=o>-</span> <span class=n>time</span><span class=p>)</span> <span class=o>-</span> <span class=n>y</span>
+        <span class=n>time</span> <span class=o>=</span> <span class=n>t</span>
+
+        <span class=n>cur_row</span><span class=p>[</span><span class=n>state_dim</span><span class=p>:</span><span class=n>c_end_dim</span><span class=p>]</span> <span class=o>=</span> <span class=n>c_out</span>  <span class=c1># store controller output</span>
+        <span class=n>last_diff</span><span class=p>,</span> <span class=n>cur_diff</span> <span class=o>=</span> <span class=n>cur_diff</span><span class=p>,</span> <span class=n>last_diff</span>
+
+    <span class=n>point</span><span class=p>[:]</span> <span class=o>=</span> <span class=n>next_row</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>state_dim</span><span class=p>]</span>
+    <span class=n>controller</span><span class=p>(</span><span class=n>point</span><span class=p>,</span> <span class=n>time</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>c_out</span><span class=p>)</span>
+    <span class=n>next_row</span><span class=p>[</span><span class=n>state_dim</span><span class=p>:</span><span class=n>c_end_dim</span><span class=p>]</span> <span class=o>=</span> <span class=n>c_out</span>
+    <span class=k>return</span> <span class=n>result</span></div>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__j_from_ode_compute</span><span class=p>(</span><span class=n>ode</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                         <span class=n>dest</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Prepare the input array for the figure of merit computation.</span>
+
+<span class=sd>    The `ode` matrix contains one row for each time step.</span>
+<span class=sd>    The row is composed of the current state, the current controller output,</span>
+<span class=sd>    and the length of the time slice.</span>
+<span class=sd>    However, all systems of a given simulation start in the same initial</span>
+<span class=sd>    state, so it makes little sense to include this initial state into the</span>
+<span class=sd>    figure of merit computation. It does make sense to include the control</span>
+<span class=sd>    output at that moment, though, because it contributes to the next state.</span>
+<span class=sd>    It also makes no sense to count in the last row of the ODE computation,</span>
+<span class=sd>    because this is the final system state whose weight will not actually</span>
+<span class=sd>    be computed.</span>
+
+<span class=sd>    :param ode: the output array from the ODE simulation</span>
+<span class=sd>    :param state_dim: the state dimension</span>
+<span class=sd>    :param dest: the destination array</span>
+
+<span class=sd>    >>> od = np.array([[1, 2, 3, 4, 0.1],</span>
+<span class=sd>    ...                [5, 6, 7, 8, 0.2],</span>
+<span class=sd>    ...                [9, 6, 4, 3, 0.3],</span>
+<span class=sd>    ...                [7, 4, 2, 1, 0.4]])</span>
+<span class=sd>    >>> sta_dim = 3</span>
+<span class=sd>    >>> dst = np.empty((od.shape[0] - 1) * (od.shape[1] - 1) - sta_dim)</span>
+<span class=sd>    >>> __j_from_ode_compute(od, sta_dim, dst)</span>
+<span class=sd>    >>> print(dst)</span>
+<span class=sd>    [24.3  10.8   4.8   0.27  5.    7.2   9.8   1.28  0.16]</span>
+<span class=sd>    >>> rs = np.array([9 * 9 * 0.3, 6 * 6 * 0.3, 4 * 4 * 0.3, 3 * 3 * 0.03,</span>
+<span class=sd>    ...                5 * 5 * 0.2, 6 * 6 * 0.2, 7 * 7 * 0.2, 8 * 8 * 0.02,</span>
+<span class=sd>    ...                4 * 4 * 0.01])</span>
+<span class=sd>    >>> print(rs)</span>
+<span class=sd>    [24.3  10.8   4.8   0.27  5.    7.2   9.8   1.28  0.16]</span>
+<span class=sd>    """</span>
+    <span class=n>index</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span>
+    <span class=n>start</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>ode</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>-</span> <span class=mi>2</span>
+
+    <span class=n>inner</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>start</span>
+    <span class=n>row</span> <span class=o>=</span> <span class=n>ode</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+    <span class=n>weight_01</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>*</span> <span class=mf>0.1</span>
+    <span class=k>while</span> <span class=n>inner</span> <span class=o>>=</span> <span class=n>state_dim</span><span class=p>:</span>
+        <span class=n>v</span> <span class=o>=</span> <span class=n>row</span><span class=p>[</span><span class=n>inner</span><span class=p>]</span>
+        <span class=n>inner</span> <span class=o>-=</span> <span class=mi>1</span>
+        <span class=n>index</span> <span class=o>-=</span> <span class=mi>1</span>
+        <span class=n>dest</span><span class=p>[</span><span class=n>index</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>v</span> <span class=o>*</span> <span class=n>v</span><span class=p>)</span> <span class=o>*</span> <span class=n>weight_01</span> <span class=k>if</span> <span class=o>-</span><span class=mf>1e100</span> <span class=o><</span> <span class=n>v</span> <span class=o><</span> <span class=mf>1e100</span> <span class=k>else</span> <span class=mf>1e100</span>
+    <span class=k>for</span> <span class=n>row</span> <span class=ow>in</span> <span class=n>ode</span><span class=p>[</span><span class=mi>1</span><span class=p>:</span><span class=o>-</span><span class=mi>1</span><span class=p>]:</span>
+        <span class=n>inner</span> <span class=o>=</span> <span class=n>start</span>
+        <span class=n>weight</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span>
+        <span class=n>weight_01</span> <span class=o>=</span> <span class=n>weight</span> <span class=o>*</span> <span class=mf>0.1</span>
+        <span class=k>while</span> <span class=n>inner</span> <span class=o>>=</span> <span class=n>state_dim</span><span class=p>:</span>
+            <span class=n>v</span> <span class=o>=</span> <span class=n>row</span><span class=p>[</span><span class=n>inner</span><span class=p>]</span>
+            <span class=n>inner</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=n>index</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=n>dest</span><span class=p>[</span><span class=n>index</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>v</span> <span class=o>*</span> <span class=n>v</span><span class=p>)</span> <span class=o>*</span> <span class=n>weight_01</span> <span class=k>if</span> <span class=o>-</span><span class=mf>1e100</span> <span class=o><</span> <span class=n>v</span> <span class=o><</span> <span class=mf>1e100</span> <span class=k>else</span> <span class=mf>1e100</span>
+        <span class=k>while</span> <span class=n>inner</span> <span class=o>>=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>v</span> <span class=o>=</span> <span class=n>row</span><span class=p>[</span><span class=n>inner</span><span class=p>]</span>
+            <span class=n>inner</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=n>index</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=n>dest</span><span class=p>[</span><span class=n>index</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>v</span> <span class=o>*</span> <span class=n>v</span><span class=p>)</span> <span class=o>*</span> <span class=n>weight</span> <span class=k>if</span> <span class=o>-</span><span class=mf>1e100</span> <span class=o><</span> <span class=n>v</span> <span class=o><</span> <span class=mf>1e100</span> <span class=k>else</span> <span class=mf>1e100</span>
+
+
+<div class=viewcode-block id=t_from_ode><a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.t_from_ode>[docs]</a><span class=k>def</span> <span class=nf>t_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get the time sum from an ODE solution.</span>
+
+<span class=sd>    The total time that we simulate a system depends on the behavior of the</span>
+<span class=sd>    system. If the system makes small steps (has small differential values)</span>
+<span class=sd>    and does not change its direction, it can be simulated for a long time.</span>
+<span class=sd>    If the system diverges, e.g., if some state variables would go to</span>
+<span class=sd>    infinity, or if it often changes direction or has some larger steps, then</span>
+<span class=sd>    the total simulation time shortens automatically. This prevents the system</span>
+<span class=sd>    from actually diverging.</span>
+
+<span class=sd>    :param ode: the ODE solution, as return from :func:`run_ode`.</span>
+<span class=sd>    :return: the time sum</span>
+
+<span class=sd>    >>> od = np.array([[1, 2, 3, 4, 0.1],</span>
+<span class=sd>    ...                [5, 6, 7, 8, 0.2],</span>
+<span class=sd>    ...                [9, 6, 4, 3, 0.3],</span>
+<span class=sd>    ...                [7, 4, 2, 1, 0.4]])</span>
+<span class=sd>    >>> print(t_from_ode(od))</span>
+<span class=sd>    0.6</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=n>fsum</span><span class=p>(</span><span class=n>ode</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=o>-</span><span class=mi>1</span><span class=p>,</span> <span class=o>-</span><span class=mi>1</span><span class=p>])</span></div>
+
+
+<div class=viewcode-block id=j_from_ode><a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.j_from_ode>[docs]</a><span class=k>def</span> <span class=nf>j_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the original figure of merit from an ODE array.</span>
+
+<span class=sd>    The figure of merit is the sum of state variable squares plus 0.1 times</span>
+<span class=sd>    the control variable squares. We disregard the state variable values of</span>
+<span class=sd>    the starting states (because they are the same for all controllers on</span>
+<span class=sd>    a given training case and because the control cannot influence them) and</span>
+<span class=sd>    we also disregard the final state and final controller output (as there is</span>
+<span class=sd>    no time slice associated with them, i.e., we only "arrive" in them but</span>
+<span class=sd>    basically spent 0 time in them in our simulation).</span>
+
+<span class=sd>    :param ode: the array returned by the ODE function, i.e., :func:`run_ode`</span>
+<span class=sd>    :param state_dim: the state dimension</span>
+<span class=sd>    :return: the figure of merit</span>
+
+<span class=sd>    >>> od = np.array([[1, 2, 3, 4, 0.1],</span>
+<span class=sd>    ...                [5, 6, 7, 8, 0.2],</span>
+<span class=sd>    ...                [9, 6, 4, 3, 0.3],</span>
+<span class=sd>    ...                [7, 4, 2, 1, 0.4]])</span>
+<span class=sd>    >>> sta_dim = 3</span>
+<span class=sd>    >>> print(f"{j_from_ode(od, sta_dim):.10f}")</span>
+<span class=sd>    106.0166666667</span>
+<span class=sd>    >>> print((24.3 + 10.8 + 4.8 + 0.27 + 5. + 7.2 + 9.8 + 1.28 + 0.16) / 0.6)</span>
+<span class=sd>    106.01666666666667</span>
+<span class=sd>    """</span>
+    <span class=n>dest</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span>
+        <span class=p>(</span><span class=n>ode</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=p>(</span><span class=n>ode</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>-</span> <span class=n>state_dim</span><span class=p>)</span>
+    <span class=n>__j_from_ode_compute</span><span class=p>(</span><span class=n>ode</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>,</span> <span class=n>dest</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>fsum</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span> <span class=o>/</span> <span class=n>t_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=multi_run_ode><a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.multi_run_ode>[docs]</a><span class=k>def</span> <span class=nf>multi_run_ode</span><span class=p>(</span>
+        <span class=n>test_starting_states</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span>
+        <span class=n>training_starting_states</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span>
+        <span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=nb>float</span><span class=p>],</span> <span class=kc>None</span><span class=p>]</span> <span class=o>|</span> <span class=n>Iterable</span><span class=p>[</span>
+            <span class=n>Callable</span><span class=p>[[</span><span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=nb>float</span><span class=p>],</span> <span class=kc>None</span><span class=p>]],</span>
+        <span class=n>equations</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+        <span class=n>controller</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>T</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+        <span class=n>parameters</span><span class=p>:</span> <span class=n>T</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span><span class=p>,</span>
+        <span class=n>test_steps</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>5000</span><span class=p>,</span> <span class=n>training_steps</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>5000</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Invoke :func:`run_ode` multiple times and pass the result to `collector`.</span>
+
+<span class=sd>    This function allows us to perform multiple runs of the differential</span>
+<span class=sd>    equation simulator, using different starting points. It also allows us to</span>
+<span class=sd>    distinguish training and test points and to assign them different numbers</span>
+<span class=sd>    of steps. For each of them, :func:`run_ode` will be applied and the</span>
+<span class=sd>    returned matrix is passed to the `collector` function.</span>
+
+<span class=sd>    :param test_starting_states: the iterable of test starting states</span>
+<span class=sd>    :param training_starting_states: the iterable of training starting states</span>
+<span class=sd>    :param collector: the destination to receive the results</span>
+<span class=sd>    :param equations: the differential system</span>
+<span class=sd>    :param controller: the controller function</span>
+<span class=sd>    :param parameters: the controller parameters</span>
+<span class=sd>    :param controller_dim: the dimension of the controller result</span>
+<span class=sd>    :param test_steps: the number of test steps to simulate</span>
+<span class=sd>    :param training_steps: the number of training steps to simulate</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>collector</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+        <span class=n>collector</span> <span class=o>=</span> <span class=p>(</span><span class=n>collector</span><span class=p>,</span> <span class=p>)</span>
+    <span class=n>index</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>for</span> <span class=n>sp</span> <span class=ow>in</span> <span class=n>test_starting_states</span><span class=p>:</span>
+        <span class=n>ode</span> <span class=o>=</span> <span class=n>run_ode</span><span class=p>(</span><span class=n>sp</span><span class=p>,</span> <span class=n>equations</span><span class=p>,</span> <span class=n>controller</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>,</span>
+                      <span class=n>test_steps</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>c</span> <span class=ow>in</span> <span class=n>collector</span><span class=p>:</span>
+            <span class=n>c</span><span class=p>(</span><span class=n>index</span><span class=p>,</span> <span class=n>ode</span><span class=p>,</span> <span class=n>j_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=n>sp</span><span class=p>)),</span> <span class=n>t_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>))</span>
+        <span class=n>index</span> <span class=o>+=</span> <span class=mi>1</span>
+    <span class=k>for</span> <span class=n>sp</span> <span class=ow>in</span> <span class=n>training_starting_states</span><span class=p>:</span>
+        <span class=n>ode</span> <span class=o>=</span> <span class=n>run_ode</span><span class=p>(</span><span class=n>sp</span><span class=p>,</span> <span class=n>equations</span><span class=p>,</span> <span class=n>controller</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>,</span>
+                      <span class=n>training_steps</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>c</span> <span class=ow>in</span> <span class=n>collector</span><span class=p>:</span>
+            <span class=n>c</span><span class=p>(</span><span class=n>index</span><span class=p>,</span> <span class=n>ode</span><span class=p>,</span> <span class=n>j_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=n>sp</span><span class=p>)),</span> <span class=n>t_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>))</span>
+        <span class=n>index</span> <span class=o>+=</span> <span class=mi>1</span></div>
+</pre></div><div class=clearer></div></div></div></div><div aria-label="main navigation"class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><div id=searchbox role=search style=display:none><h3 id=searchlabel>Quick search</h3><div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div></div><script>document.getElementById('searchbox').style.display="block"</script></div></div><div class=clearer></div></div><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.8 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.ode</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2023, Thomas Weise. Created using <a href=https://www.sphinx-doc.org/>Sphinx</a> 7.0.1.</div>

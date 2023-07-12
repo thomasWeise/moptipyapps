@@ -1,0 +1,117 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.objective_le — moptipyapps 0.8.8 documentation</title><link href=../../../_static/pygments.css rel=stylesheet><link href=../../../_static/bizstyle.css rel=stylesheet><script data-url_root=../../../ id=documentation_options src=../../../_static/documentation_options.js></script><script src=../../../_static/doctools.js></script><script src=../../../_static/sphinx_highlight.js></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/objective_le.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.8 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.objective_le</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.objective_le</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An alternative objective function for the dynamic control problem.</span>
+
+<span class=sd>Different from :mod:`~moptipyapps.dynamic_control.objective`, we compute</span>
+<span class=sd>the mean of `log(z + 1)` where `z` be the figures of merit of the single</span>
+<span class=sd>training cases. We then return `exp(mean[log(z + 1)]) - 1` as final</span>
+<span class=sd>result. The goal is to reduce the impact of training cases that require</span>
+<span class=sd>more control effort.</span>
+
+<span class=sd>If we solve the dynamic control problem for diverse training cases, then we</span>
+<span class=sd>may have some very easy cases, where the system just needs a small control</span>
+<span class=sd>impulse to move into a stable and cheap state. Others may have very far out</span>
+<span class=sd>and expensive starting states that require lots of control efforts to be</span>
+<span class=sd>corrected. If we simply average over all states, then these expensive states</span>
+<span class=sd>will dominate whatever good we are doing in the cheap states. Averaging over</span>
+<span class=sd>the `log(z+1)` reduces such impact. We then compute `exp[...]-1` of the result</span>
+<span class=sd>as cosmetics to get back into the original range of the figure of merits.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span> <span class=nn>math</span> <span class=kn>import</span> <span class=n>expm1</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.objective</span> <span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.logger</span> <span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.types</span> <span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.instance</span> <span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.ode</span> <span class=kn>import</span> <span class=n>j_from_ode</span><span class=p>,</span> <span class=n>run_ode</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.shared</span> <span class=kn>import</span> <span class=n>SCOPE_INSTANCE</span>
+
+
+<div class=viewcode-block id=FigureOfMeritLE><a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective_le.FigureOfMeritLE>[docs]</a><span class=k>class</span> <span class=nc>FigureOfMeritLE</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""Compute a `exp(mean(log(z+1)))-1` over the figures of merit `z`."""</span>
+
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the figure-of-merit objective of the dynamic control problem.</span>
+
+<span class=sd>        :param instance: the instance</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=c1>#: the dynamic control instance</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+
+        <span class=c1>#: the simulation steps</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__steps</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>training_steps</span>
+        <span class=c1>#: the training starting states</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__training</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>training_starting_states</span>
+        <span class=c1>#: the results</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__results</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span>
+            <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__training</span><span class=p>),</span> <span class=nb>float</span><span class=p>)</span>
+        <span class=c1>#: the equations</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> \
+            <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>equations</span>
+        <span class=c1>#: the controller</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__controller</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> \
+            <span class=n>instance</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>controller</span>
+        <span class=c1>#: the controller dimension</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__controller_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>control_dims</span>
+
+    <span class=k>def</span> <span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this objective function.</span>
+
+<span class=sd>        :return: `figureOfMeritLE`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"figureOfMeritLE"</span>
+
+<div class=viewcode-block id=FigureOfMeritLE.evaluate><a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective_le.FigureOfMeritLE.evaluate>[docs]</a>    <span class=k>def</span> <span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Evaluate the parameterization of a controller.</span>
+
+<span class=sd>        :param x: the controller parameters</span>
+<span class=sd>        :return: the figure of merit</span>
+<span class=sd>        """</span>
+        <span class=n>steps</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__steps</span>
+        <span class=n>training</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__training</span>
+        <span class=n>results</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__results</span>
+        <span class=n>equations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> \
+            <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span>
+        <span class=n>controller</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span>
+            <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> \
+            <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__controller</span>
+        <span class=n>controller_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__controller_dim</span>
+
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>start</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>training</span><span class=p>):</span>
+            <span class=n>results</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>j_from_ode</span><span class=p>(</span><span class=n>run_ode</span><span class=p>(</span>
+                <span class=n>start</span><span class=p>,</span> <span class=n>equations</span><span class=p>,</span> <span class=n>controller</span><span class=p>,</span> <span class=n>x</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>,</span> <span class=n>steps</span><span class=p>),</span>
+                <span class=nb>len</span><span class=p>(</span><span class=n>start</span><span class=p>))</span>
+        <span class=k>return</span> <span class=n>expm1</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>log1p</span><span class=p>(</span><span class=n>results</span><span class=p>)</span><span class=o>.</span><span class=n>mean</span><span class=p>())</span></div>
+
+<div class=viewcode-block id=FigureOfMeritLE.log_parameters_to><a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective_le.FigureOfMeritLE.log_parameters_to>[docs]</a>    <span class=k>def</span> <span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=n>SCOPE_INSTANCE</span><span class=p>)</span> <span class=k>as</span> <span class=n>scope</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>scope</span><span class=p>)</span></div>
+
+<div class=viewcode-block id=FigureOfMeritLE.lower_bound><a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective_le.FigureOfMeritLE.lower_bound>[docs]</a>    <span class=k>def</span> <span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of the figure of merit, which is 0.</span>
+
+<span class=sd>        :returns: 0.0</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mf>0.0</span></div></div>
+</pre></div><div class=clearer></div></div></div></div><div aria-label="main navigation"class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><div id=searchbox role=search style=display:none><h3 id=searchlabel>Quick search</h3><div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div></div><script>document.getElementById('searchbox').style.display="block"</script></div></div><div class=clearer></div></div><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.8 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.objective_le</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2023, Thomas Weise. Created using <a href=https://www.sphinx-doc.org/>Sphinx</a> 7.0.1.</div>
