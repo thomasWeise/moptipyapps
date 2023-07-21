@@ -242,6 +242,155 @@ _INSTANCES: Final[tuple[str, ...]] = (
     "cl10_100_07", "cl10_100_08", "cl10_100_09", "cl10_100_10")
 
 
+def __cutsq(matrix: np.ndarray) -> list[int]:
+    """
+    Cut all items into squares via the CUTSQ procedure.
+
+    :param matrix: the item matrix
+    :return: the list of squares
+
+    >>> __cutsq(np.array([[14, 12, 1]], int))
+    [12, 2, 2, 2, 2, 2, 2]
+
+    >>> __cutsq(np.array([[14, 12, 2]], int))
+    [12, 12, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+    """
+    # create list of items in horizontal orientation
+    j_sq: Final[list[int]] = []  # the list of squares (width = height)
+    s: Final[list[int]] = []  # a temporary list
+    for row in matrix:
+        w: int = int(row[0])
+        h: int = int(row[1])
+        if h > w:
+            w, h = h, w
+        while h > 1:
+            k: int = w // h
+            for _ in range(k):
+                s.append(h)
+            w, h = h, w - (k * h)
+        times: int = int(row[2])
+        j_sq.extend(s * times if times > 1 else s)
+        s.clear()
+
+    j_sq.sort(reverse=True)  # sort the squares in decreasing size
+    return j_sq
+
+
+def __lb_q(bin_width: int, bin_height: int, q: int, j_js: list[int]) -> int:
+    """
+    Compute the lower bound for a given q.
+
+    :param bin_width: the bin width
+    :param bin_height: the bin height
+    :param q: the parameter q
+    :param j_js: the sorted square list
+    :return: the lower bound
+
+    >>> jj = [18, 18, 12, 12, 11, 11, 11, 11, 11, 7, 7, 7, 7, 7, 7]
+    >>> len(jj)
+    15
+    >>> __lb_q(23, 20, 6, jj)
+    6
+    """
+    m: Final[int] = len(j_js)
+    half_width: Final[float] = bin_width / 2
+    half_height: Final[float] = bin_height / 2
+    width_m_q: Final[int] = bin_width - q
+
+    # First we compute sets S1 to S4.
+    s1: list[int] = []  # S1 from Equation 2
+    s2: list[int] = []  # S2 from Equation 3
+    s3: list[int] = []  # S2 from Equation 4
+    s4: list[int] = []  # S2 from Equation 5
+
+    for i in range(m):
+        l_i: int = j_js[i]
+        if l_i > width_m_q:
+            s1.append(i)  # Equation 2
+        elif l_i > half_width:
+            s2.append(i)  # Equation 3
+        elif l_i > half_height:
+            s3.append(i)  # Equation 4
+        elif l_i >= q:
+            s4.append(i)  # Equation 5
+        else:
+            break
+
+    # compute set S23 as in Theorem 3 under Equation 7
+    height_m_q: Final[int] = bin_height - q
+    s23: Final[list[int]] = [j for j in (s2 + s3) if j_js[j] > height_m_q]
+
+    # Now we sort S2 by non-increasing value of residual space.
+    s2.reverse()  # = .sort(key=lambda i: bin_width - j_js[i], reverse=True)
+
+    # Now we compute S3 - ^S3^
+    s3_minus_s3d: list[int] = s3.copy()
+    for i in s2:
+        residual: int = bin_width - j_js[i]
+        not_found: bool = True
+        for j, idx in enumerate(s3_minus_s3d):
+            needs: int = j_js[idx]
+            if needs <= residual:
+                del s3_minus_s3d[j]
+                not_found = False
+                break
+        if not_found:
+            break
+
+    sum_s3_l: int = sum(j_js[i] for i in s3_minus_s3d)
+    b1 = sum_s3_l // bin_width
+    if (b1 * bin_width) < sum_s3_l:
+        b1 = b1 + 1
+
+    len_s3: int = len(s3_minus_s3d)
+    div: int = bin_width // ((bin_height // 2) + 1)
+    b2 = len_s3 // div
+    if (b2 * div) < len_s3:
+        b2 = b2 + 1
+
+    l_tilde: Final[int] = len(s2) + (b1 if b1 >= b2 else b2)  # Equation 6.
+    bound: int = len(s1) + l_tilde
+
+    # Now compute the final bound based on Theorem 3 / Equation 7.
+    bin_size: Final[int] = bin_width * bin_height
+    denom: int = sum(j_js[i] ** 2 for i in (s2 + s3 + s4)) \
+        - ((bin_size * l_tilde) - sum(j_js[i] * (
+            bin_height - j_js[i]) for i in s23))
+    if denom > 0:
+        b = denom // bin_size
+        if (b * bin_size) < denom:
+            b = b + 1
+        bound = bound + b
+
+    return bound
+
+
+def _lower_bound_damv(bin_width: int, bin_height: int,
+                      matrix: np.ndarray) -> int:
+    """
+    Compute the lower bound as defined by Dell'Amico et al.
+
+    :param bin_width: the bin width
+    :param bin_height: the bin height
+    :param matrix: the item matrix
+    :return: the lower bound
+
+    >>> mat = np.array([[10, 5, 1], [3, 3, 1], [3, 3, 1]])
+    >>> _lower_bound_damv(23, 20, mat)
+    1
+
+    >>> mat = np.array([[20, 5, 3], [13, 23, 1], [13, 9, 3]])
+    >>> _lower_bound_damv(23, 20, mat)
+    3
+    """
+    # ensure horizontal orientation (width >= height)
+    if bin_height > bin_width:
+        bin_width, bin_height = bin_height, bin_width
+    j_sq: Final[list[int]] = __cutsq(matrix)
+    return max(__lb_q(bin_width, bin_height, q, j_sq)
+               for q in range(0, (bin_height // 2) + 1))
+
+
 class Instance(Component, np.ndarray):
     """
     An instance of the 2D Bin Packing Problem.
@@ -342,7 +491,8 @@ class Instance(Component, np.ndarray):
         obj.n_different_items = n_different_items
         #: the total number of items, i.e., the number of different items
         #: multiplied with their repetition counts
-        obj.n_items = n_items
+        obj.n_items = check_int_range(
+            n_items, "n_items", n_different_items, 1_000_000_000_000)
         #: the height of the bins
         obj.bin_height = bin_height
         #: the width of the bins
@@ -353,12 +503,21 @@ class Instance(Component, np.ndarray):
 # We need at least as many bins such that their area is big enough
 # for the total area of the items.
         bin_area: int = bin_height * bin_width
-        min_size: int = item_area // bin_area
-        if (min_size * bin_area) < item_area:
-            min_size += 1
-        #: the lower bound for the number of bins needed
-        obj.lower_bound_bins = check_int_range(
-            min_size, "lower_bound_bins", 1, 1_000_000_000_000)
+        lower_bound_geo: int = item_area // bin_area
+        if (lower_bound_geo * bin_area) < item_area:
+            lower_bound_geo += 1
+        lower_bound_geo = check_int_range(
+            lower_bound_geo, "lower_bound_bins_geometric",
+            1, 1_000_000_000_000)
+
+# We now compute the lower bound by Dell'Amico et al.
+        lower_bound_damv = check_int_range(_lower_bound_damv(
+            bin_width, bin_height, obj), "lower_bound_bins_damv",
+            1, 1_000_000_000_000)
+
+# The overall computed lower bound is the maximum of the geometric and the
+# Dell'Amico lower bound.
+        obj.lower_bound_bins = max(lower_bound_damv, lower_bound_geo)
         return obj
 
     def __str__(self):

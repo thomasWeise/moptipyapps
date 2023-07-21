@@ -13,6 +13,18 @@ The following additional tools are implemented:
   different problems that are provided above.
 - :mod:`~moptipyapps.shared` offers shared constants and tools.
 """
-from moptipy.utils.sys_info import add_dependency
 
-add_dependency("moptipyapps")
+
+def __setup() -> None:
+    """Add `moptipyapps` to the dependencies unless called from pytest."""
+    import inspect  # noqa # pylint: disable=C0415
+    import moptipy.utils.sys_info  # noqa # pylint: disable=C0415
+
+    for s in inspect.stack():
+        if "pytest" in s.filename:
+            return
+    moptipy.utils.sys_info.add_dependency("moptipyapps")
+
+
+__setup()
+del __setup

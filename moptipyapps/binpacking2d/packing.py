@@ -79,8 +79,8 @@ class Packing(Component, np.ndarray):
         parser.parse_file(file)
         # noinspection PyProtectedMember
         res = parser._result
-        if res is None:
-            raise ValueError("Failed to load packing.")
+        if not isinstance(res, Packing):
+            raise type_error(res, f"packing from {file!r}", Packing)
         return res
 
 
@@ -105,6 +105,8 @@ class _PackingParser(LogParser):
         self.__packing_str: str | None = None
         #: the result packing
         self._result: Packing | None = None
+        #: the used objective, this is used for packing result parsing
+        self._used_objective: str | None = None
 
     def start_section(self, title: str) -> bool:
         """Start a section."""
@@ -126,13 +128,19 @@ class _PackingParser(LogParser):
             if self.__instance is not None:
                 raise ValueError(
                     f"instance is already set to {self.__instance}.")
-            key: Final[str] = "y.inst.name: "
+            key_1: Final[str] = "y.inst.name: "
+            key_2: Final[str] = "f.name: "
             for line in lines:
-                if line.startswith(key):
+                if line.startswith(key_1):
                     self.__instance = Instance.from_resource(
-                        line[len(key):].strip())
+                        line[len(key_1):].strip())
+                elif line.startswith(key_2):
+                    self._used_objective = line[len(key_2):].strip()
             if self.__instance is None:
-                raise ValueError(f"Did not find instance key {key!r} "
+                raise ValueError(f"Did not find instance key {key_1!r} "
+                                 f"in section {SECTION_SETUP}!")
+            if self._used_objective is None:
+                raise ValueError(f"Did not find instance key {key_2!r} "
                                  f"in section {SECTION_SETUP}!")
         elif self.__sec_mode == 2:
             self.__packing_str = " ".join(lines).strip()
