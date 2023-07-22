@@ -11,7 +11,6 @@ instances.
 import os.path
 from dataclasses import dataclass
 from math import isfinite
-from types import MappingProxyType
 from typing import Callable, Final, Iterable, Mapping, cast
 
 from moptipy.api.logging import (
@@ -41,7 +40,7 @@ from moptipy.utils.strings import (
     str_to_intfloatnone,
     str_to_intnone,
 )
-from moptipy.utils.types import check_int_range, type_error
+from moptipy.utils.types import check_int_range, immutable_mapping, type_error
 
 from moptipyapps.binpacking2d.bin_count import BIN_COUNT_NAME, BinCount
 from moptipyapps.binpacking2d.bin_count_and_last_empty import (
@@ -115,7 +114,7 @@ _OBJECTIVE_UPPER: Final[str] = ".upperBound"
 _BINS_START: Final[str] = f"bins{_OBJECTIVE_LOWER}"
 #: the default bounds
 _DEFAULT_BOUNDS: Final[Mapping[str, Callable[[Instance], int]]] = \
-    MappingProxyType({
+    immutable_mapping({
         _BINS_START: lambda i: i.lower_bound_bins,
         f"{_BINS_START}.geometric": __lb_geometric,
         f"{_BINS_START}.damv": lambda i: _lower_bound_damv(
@@ -126,7 +125,7 @@ _DEFAULT_BOUNDS: Final[Mapping[str, Callable[[Instance], int]]] = \
 @dataclass(frozen=True, init=False, order=True)
 class PackingResult:
     """
-    An immutable end result record of one run of one algorithm on one problem.
+    An end result record of one run of one packing algorithm on one problem.
 
     This record provides the information of the outcome of one application of
     one algorithm to one problem instance in an immutable way.
@@ -163,7 +162,7 @@ class PackingResult:
                  objective_bounds: Mapping[str, int | float],
                  bin_bounds: Mapping[str, int]):
         """
-        Create a consistent instance of :class:`EndResult`.
+        Create a consistent instance of :class:`PackingResult`.
 
         :param end_result: the end result
         :param n_items: the number of items
@@ -182,7 +181,7 @@ class PackingResult:
         if not isinstance(end_result, EndResult):
             raise type_error(end_result, "end_result", EndResult)
         if not isinstance(used_objective, str):
-            raise type_error(end_result, "used_objective", str)
+            raise type_error(used_objective, "used_objective", str)
         if end_result.best_f != objectives[used_objective]:
             raise ValueError(
                 f"end_result.best_f={end_result.best_f}, but objectives["
@@ -234,11 +233,11 @@ class PackingResult:
                     f"bound {name!r}={value}.")
 
         object.__setattr__(self, "end_result", end_result)
-        object.__setattr__(self, "objectives", MappingProxyType(objectives))
+        object.__setattr__(self, "objectives", immutable_mapping(objectives))
         object.__setattr__(self, "used_objective", used_objective)
         object.__setattr__(self, "objective_bounds",
-                           MappingProxyType(objective_bounds))
-        object.__setattr__(self, "bin_bounds", MappingProxyType(bin_bounds))
+                           immutable_mapping(objective_bounds))
+        object.__setattr__(self, "bin_bounds", immutable_mapping(bin_bounds))
         object.__setattr__(self, "n_different_items", check_int_range(
             n_different_items, "n_different_items", 1, 1_000_000_000_000))
         object.__setattr__(self, "n_items", check_int_range(
@@ -249,7 +248,7 @@ class PackingResult:
             bin_height, "bin_height", 1, 1_000_000_000_000))
 
     @staticmethod
-    def from_packing_and_end_result(
+    def from_packing_and_end_result(  # pylint: disable=W0102
             end_result: EndResult, packing: Packing, used_objective: str,
             objectives: Iterable[Callable[[Instance], Objective]] =
             _DEFAULT_OBJECTIVES,
@@ -301,7 +300,7 @@ class PackingResult:
                 obounds[f"{objf}{_OBJECTIVE_UPPER}"] = objf.upper_bound()
             row = ({key: bin_bounds[key](instance)
                     for key in sorted(bin_bounds.keys())}, objfs,
-                   MappingProxyType(obounds))
+                   immutable_mapping(obounds))
         if cache is not None:
             cache[instance.name] = row
         return PackingResult(
@@ -316,7 +315,7 @@ class PackingResult:
             bin_bounds=row[0])
 
     @staticmethod
-    def from_single_log(
+    def from_single_log(  # pylint: disable=W0102
             file: str,
             objectives: Iterable[Callable[[Instance], Objective]] =
             _DEFAULT_OBJECTIVES,
@@ -360,7 +359,7 @@ class PackingResult:
             bin_bounds=bin_bounds, cache=cache)
 
     @staticmethod
-    def from_logs(
+    def from_logs(  # pylint: disable=W0102
             directory: str,
             collector: Callable[["PackingResult"], None],
             objectives: Iterable[Callable[[Instance], Objective]] =
@@ -380,7 +379,7 @@ class PackingResult:
     @staticmethod
     def to_csv(results: Iterable["PackingResult"], file: str) -> Path:
         """
-        Write a sequence of packing to a file in CSV format.
+        Write a sequence of packing results to a file in CSV format.
 
         :param results: the end results
         :param file: the path
@@ -390,8 +389,14 @@ class PackingResult:
         logger(f"Writing packing results to CSV file {path!r}.")
         Path.path(os.path.dirname(path)).ensure_dir_exists()
 
+        # get a nicely sorted view on the results
         use_results = sorted(
-            results, key=lambda ppr: (ppr.end_result, ppr.used_objective))
+            results, key=lambda ppr: (
+                ppr.end_result.algorithm,
+                ppr.end_result.instance,
+                ppr.used_objective,
+                ppr.end_result.rand_seed,
+                ppr.end_result))
 
         # get the names of the bounds and objectives
         bin_bounds_set: set[str] = set()

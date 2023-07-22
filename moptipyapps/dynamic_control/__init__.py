@@ -10,7 +10,7 @@ from such more complicated systems, they are much faster and easier to
 simulate, though. So we can play with them much more easily and quickly.
 
 The initial starting point of the work here were conversations with
-Prof. Dr. Bernd NOACK and Guy Yoslan CORNJO MACEDA of the Harbin Institute
+Prof. Dr. Bernd NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute
 of Technology in Shenzhen, China (哈尔滨工业大学(深圳)) as well as the
 following two MSc theses and book:
 
@@ -22,7 +22,7 @@ following two MSc theses and book:
    Reinforcement Learning (基于深度强化学习方法的 1-2-3 流体弹球尾流控制).
    MSc Thesis. Harbin Institute of Technology in Shenzhen, China
    (哈尔滨工业大学(深圳)). January 2023.
-3. Guy Yoslan CORNJO MACEDA, François LUSSEYRAN, and Bernd R. NOACK.
+3. Guy Yoslan CORNEJO MACEDA, François LUSSEYRAN, and Bernd R. NOACK.
    xMLC: A Toolkit for Machine Learning Control, First Edition.
    Machine Learning Tools in Fluid Mechanics, Vol 2.
    Shenzhen & Paris; Universitätsbibliothek der Technischen Universität

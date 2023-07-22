@@ -10,10 +10,10 @@ from moptipyapps.dynamic_control.system import System
 
 
 @numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __cornejo_maeda(state: np.ndarray, _: float,
-                    params: np.ndarray, out: np.ndarray) -> None:
+def __cornejo_maceda(state: np.ndarray, _: float,
+                     params: np.ndarray, out: np.ndarray) -> None:
     """
-    Compute a parameterized version of Cornejo Maeda's Law.
+    Compute a parameterized version of Cornejo Maceda's Law.
 
     See page 16, chapter 3.3.
 
@@ -68,7 +68,7 @@ def predefined(system: System) -> tuple[Controller, ...]:
         raise ValueError("invalid controller dimensions "
                          f"{system.control_dims} for {system!r}.")
     if system.state_dims == 2:
-        return (Controller("cornejo_maeda", 2, 1, 3, __cornejo_maeda), )
+        return (Controller("cornejo_maceda", 2, 1, 3, __cornejo_maceda), )
     if system.state_dims == 3:
         return (Controller("table_3_1_ga", 3, 1, 2, __table_3_1_ga),
                 Controller("table_3_1_lgpc", 3, 1, 4, __table_3_1_lgpc))

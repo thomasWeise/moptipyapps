@@ -29,6 +29,7 @@ from moptipyapps.binpacking2d.ibl_encoding_2 import (
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing_result import PackingResult
 from moptipyapps.binpacking2d.packing_space import PackingSpace
+from moptipyapps.binpacking2d.packing_statistics import PackingStatistics
 
 #: the maximum permitted FEs
 __MAX_FES: Final[int] = 64
@@ -114,3 +115,12 @@ def test_packing_results_experiment() -> None:
             assert len(results_2) == len(results_1)
             results_2.sort()
             assert results_1 == results_2
+
+        end_stats_1: Final[list[PackingStatistics]] = []
+        PackingStatistics.from_packing_results(results_1, end_stats_1.append)
+        assert len(end_stats_1) == len(algorithms) * len(instance_factories)
+        end_stats_2: Final[list[PackingStatistics]] = []
+        PackingStatistics.from_packing_results(results_2, end_stats_2.append)
+        assert len(end_stats_1) == len(end_stats_2)
+        with TempFile.create() as tf2:
+            PackingStatistics.to_csv(end_stats_1, tf2)
