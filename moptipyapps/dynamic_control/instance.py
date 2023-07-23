@@ -1,4 +1,17 @@
-"""An instance of the dynamic control problem."""
+"""
+An instance of the dynamic control synthesis problem.
+
+An instance of the dynamic control synthesis problem is comprised of two
+components: a :mod:`~moptipyapps.dynamic_control.system` of differential
+equations governing how the state of a system changes over time and a
+:mod:`~moptipyapps.dynamic_control.controller` that uses the current system
+state as input and computes a controller value as output that influences the
+state change. Notice that the controller here is a parametric function. The
+goal of the dynamic system control is to find the right parameterization of
+the controller such that an :mod:`~moptipyapps.dynamic_control.objective` is
+minimized. The objective here usually has the goal to bring the dynamic system
+into a stable state while using as little controller "energy" as possible.
+"""
 
 from typing import Final
 

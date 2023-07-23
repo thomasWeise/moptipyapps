@@ -1,9 +1,19 @@
 """
 Examples of dynamic control problems.
 
-Here we have examples for dynamic control problems that are systems whose
-state is governed by differential system which can be influenced by the
-output of controllers.
+Here we have examples for dynamic control problems. An
+:mod:`~moptipyapps.dynamic_control.instance` of the dynamic control problem
+is composed of
+
+- a :mod:`~moptipyapps.dynamic_control.system` of differential equations that
+  govern the state of a system and that also incorporate the output of a
+  controller,
+- a :mod:`~moptipyapps.dynamic_control.controller` blueprint, i.e., a function
+  that can be parameterized and that computes a controller output from the
+  system state, and
+- an :mod:`~moptipyapps.dynamic_control.objective` that rates how well-behaved
+  the system driven by the controller is in a simulation.
+
 Such systems can serve as primitive testbeds of actual dynamic control
 scenarios such as flight control or other fluid dynamic systems. Different
 from such more complicated systems, they are much faster and easier to

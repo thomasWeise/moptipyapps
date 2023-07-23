@@ -1,4 +1,23 @@
-"""Synthesize some interesting starting points."""
+"""
+Synthesize some interesting starting points.
+
+Here we have some basic functionality to synthesize starting points, i.e.,
+training cases, for the dynamic systems control task.
+The points synthesized here by function
+:func:`make_interesting_starting_points` try to fulfill two goals:
+
+1. the points should be as far away from each other as possible in the state
+   space,
+2. there should be points of many different distances from the state space
+   origin.
+
+These two goals are slightly contradicting and are achieved by forcing the
+points to be located on rings of increasing distance from the origin via
+:func:`interesting_point_transform` while maximizing their mean distance
+to each other via :func:`interesting_point_objective`.
+Since :func:`make_interesting_starting_points` is a bit slow, it makes sense
+to pre-compute the points and then store them as array constants.
+"""
 
 from typing import Callable, Final, Iterable, cast
 

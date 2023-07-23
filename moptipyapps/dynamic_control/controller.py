@@ -1,4 +1,17 @@
-"""A base class for implementing controllers."""
+"""
+A base class for implementing controllers.
+
+A controller basically is a parameterizable function that receives the current
+state and time of a :mod:`~moptipyapps.dynamic_control.system` as input and
+computes one or multiple controller values as output. These controller values
+are then used to influence how the state of the system changes in the next
+iteration. In the dynamic systems control optimization task, the goal is to
+find the right parameterization for the controller such that an
+:mod:`~moptipyapps.dynamic_control.objective` is minimized.
+
+Examples for different controllers for dynamic systems are given in package
+:mod:`~moptipyapps.dynamic_control.controllers`.
+"""
 
 
 from typing import Callable, Final
@@ -11,7 +24,7 @@ from moptipy.utils.types import check_to_int_range, type_error
 
 
 class Controller(Component):
-    """A class for governing a system via differential system."""
+    """A class for governing a system via differential equations."""
 
     def __init__(self, name: str,
                  state_dims: int, control_dims: int, param_dims: int,

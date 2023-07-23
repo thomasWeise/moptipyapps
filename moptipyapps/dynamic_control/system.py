@@ -1,4 +1,19 @@
-"""Classes for representing a problem to be solved."""
+"""
+A class to model a dynamic system governed by differential equations.
+
+A system has a current state vector at any point in time. The state changes
+over time based on differential equations. These equations can be influenced
+by the output of a :mod:`~moptipyapps.dynamic_control.controller`. Our
+:class:`System` presents the state dimension and differential equations. It
+also presents several starting states for simulating the system. The starting
+states are divided into training and testing states. The training states can
+be used for, well, training controllers to learn how to handle the system.
+The testing states are then used to verify whether a synthesized controller
+actually works.
+
+Examples for different dynamic systems are given in package
+:mod:`~moptipyapps.dynamic_control.systems`.
+"""
 
 from typing import Any, Callable, Final, Iterable, TypeVar
 
