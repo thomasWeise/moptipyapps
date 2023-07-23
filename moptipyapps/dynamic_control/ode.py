@@ -243,11 +243,18 @@ def run_ode(starting_state: np.ndarray,
     differential into. This output array has the same dimension as the state
     vector.
 
-    The system will be simulated for exactly `steps` time steps. The length of
-    the time steps will automatically be determined based on a quick
-    preliminary simulation of the system and controller. A maximum time
-    index `max_time` can be provided. The system will automatically determine
-    the right length of the time steps.
+    The system will be simulated for exactly `steps` time steps. The system
+    will automatically determine the right length of the time steps. If the
+    differential equations tell our system to make a step of length `z`, then:
+
+    1. We never use the full step length `z` but pre-scale it to
+       `log(1 + z) * 0.6180339887498948`.
+    2. We limit the step length to the 1/128th of the distance of the current
+       system state to the center of coordinates.
+    3. We multiply the step length with a factor that exponentially decreases
+       with the angle between the current and the last differential.
+    4. We impose a hard limit on the step length based on the dimensionality
+       of the system.
 
     As result, this function returns a tuple of three components: First, the
     matrix `steps` rows, where each row corresponds to one system state
