@@ -1,4 +1,11 @@
-"""Peak functions."""
+"""
+Peak functions.
+
+Instead of synthesizing :mod:`~moptipyapps.dynamic_control.controllers.ann`
+with `arctan` as activation function, we here use `exp(-a²)` as activation
+function. This function does not represent a transition from -1 to 1, but a
+single peak around 0.
+"""
 
 from typing import Final, Iterable
 

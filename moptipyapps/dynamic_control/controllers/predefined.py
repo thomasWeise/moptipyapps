@@ -1,4 +1,26 @@
-"""A set of pre-defined controllers."""
+"""
+A set of pre-defined controllers.
+
+In this module, we provide a set of pre-defined controllers taken from the
+works of NOACK, CORNEJO MACEDA, LI, and SUN of the Harbin Institute of
+Technology in Shenzhen, China (哈尔滨工业大学(深圳)). We ignore the
+parameterizations offered in the original works and instead synthesize the
+parameter values by ourselves.
+
+1. Yuxiang LI (李宇翔). Jet Mixing Enhancement using Deep Reinforcement
+   Learning (基于深度强化学习的射流混合增强控制). MSc Thesis. Harbin Institute
+   of Technology in Shenzhen, China (哈尔滨工业大学(深圳)).
+   January 2023.
+2. Wei SUN (孙伟). Wake Control of 1-2-3 Fluidic Pinball using Deep
+   Reinforcement Learning (基于深度强化学习方法的 1-2-3 流体弹球尾流控制).
+   MSc Thesis. Harbin Institute of Technology in Shenzhen, China
+   (哈尔滨工业大学(深圳)). January 2023.
+3. Guy Yoslan CORNEJO MACEDA, François LUSSEYRAN, and Bernd R. NOACK.
+   xMLC: A Toolkit for Machine Learning Control, First Edition.
+   Machine Learning Tools in Fluid Mechanics, Vol 2.
+   Shenzhen & Paris; Universitätsbibliothek der Technischen Universität
+   Braunschweig. 2022 https://doi.org/10.24355/dbbs.084-202208220937-0
+"""
 
 from typing import Final
 

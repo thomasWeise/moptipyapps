@@ -2,8 +2,10 @@
 Partially linear controllers.
 
 Partially linear controllers are encoded as sets of linear controllers and
-anchor points. For each state, the linear controller with closest anchor
-point is used.
+anchor points. The anchors are coordinates in the state space. For each state,
+the linear controller with the closest anchor point is used. In other words,
+these controllers are basically choices among multiple
+:mod:`~moptipyapps.dynamic_control.controllers.linear` controllers.
 """
 
 from typing import Final, Iterable

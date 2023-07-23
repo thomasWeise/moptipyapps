@@ -4,7 +4,10 @@ Poor man's Artificial Neural Networks with minimized input.
 ANNs that include the state as input variable together with an additional
 variable, say `z`. The controller output is then the value `z*` for which
 the ANN takes on the smallest value (under the current state). In other
-words, the ANN is supposed to model the system's objective function.
+words, the ANN is supposed to model the system's objective function. The
+idea is similar to :mod:`~moptipyapps.dynamic_control.controllers.ann`, but
+instead of using the output of the ANNs as controller values, we use the value
+`z*` for which the output of the ANN becomes minimal as controller value.
 """
 
 from typing import Final, Iterable

@@ -1,4 +1,10 @@
-"""A linear controller."""
+"""
+A linear controller.
+
+In a linear controller, all values of the state vector enter only as-is,
+i.e., it is a linear combination of A and B if the state is composed of
+the two values A and B. We then optimize the weights of these coefficients.
+"""
 
 from typing import Final
 

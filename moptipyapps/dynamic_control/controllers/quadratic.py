@@ -1,4 +1,12 @@
-"""A quadratic controller."""
+"""
+A quadratic controller.
+
+A quadratic controller is a function where all value of the state vector enter
+the computation plainly and squared. The powers of their combinations do not
+exceed two, e.g., the controller is a linear combination of A, B, A², AB, and
+B² if the state has values A and B. The controller represents the multipliers
+for these coefficients.
+"""
 
 from typing import Final
 

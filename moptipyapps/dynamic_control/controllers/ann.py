@@ -1,4 +1,15 @@
-"""Poor man's Artificial Neural Networks."""
+"""
+Poor man's Artificial Neural Networks.
+
+Here, artificial neural networks (ANNs) are defined as plain mathematical
+functions which are parameterized by their weights. The weights are subject
+to black-box optimization and all together put into a single vector.
+In other words, we do not use proper back-propagation learning or any other
+sophisticated neural network specific training strategy. Instead, we treat the
+neural networks as black boxes that can be parameterized using the weight
+vector. Different ANN architectures have different weight vectors.
+As activation functions, we use `arctan`.
+"""
 
 from typing import Final, Iterable
 

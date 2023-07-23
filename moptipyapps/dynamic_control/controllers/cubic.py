@@ -1,4 +1,13 @@
-"""A cubic controller."""
+"""
+A cubic controller.
+
+A cubic controller is a function where all value of the state vector enter
+the computation plainly, squared, and raised to the third power. The powers
+of their combinations do not exceed the third power, e.g., the controller is
+a linear combination of A, B, A², AB, B², A³, A²B, B²A, and B³ if the state
+has values A and B. The controller represents the multipliers for these
+coefficients.
+"""
 
 from typing import Final
 
