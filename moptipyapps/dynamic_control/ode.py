@@ -433,10 +433,14 @@ def t_from_ode(ode: np.ndarray) -> float:
     If the system diverges, e.g., if some state variables would go to
     infinity, or if it often changes direction or has some larger steps, then
     the total simulation time shortens automatically. This prevents the system
-    from actually diverging.
+    from actually diverging. Notice that the time slice length of the very
+    last step in the ODE solution is ignored.
 
     :param ode: the ODE solution, as return from :func:`run_ode`.
     :return: the time sum
+
+    This adds up the last column in the ODE solution, ignoring the last time
+    slice. This means we get 0.1 + 0.2 + 0.3 = 0.6.
 
     >>> od = np.array([[1, 2, 3, 4, 0.1],
     ...                [5, 6, 7, 8, 0.2],
