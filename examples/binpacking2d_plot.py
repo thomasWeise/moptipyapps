@@ -17,14 +17,13 @@ In the file `binpacking2d_rls.py`, we plug `ImprovedBottomLeftEncoding2` into
 a simple randomized local search. This search runs for 1024 steps and finds a
 packing that only needs two bins.
 """
-import os
 from time import sleep
 from webbrowser import open_new_tab
 
 import numpy as np
-import psutil
 from moptipy.utils.nputils import rand_generator
 from moptipy.utils.plot_utils import save_figure
+from moptipy.utils.sys_info import is_make_build
 from moptipy.utils.temp import TempDir
 
 from moptipyapps.binpacking2d.ibl_encoding_1 import (
@@ -36,16 +35,6 @@ from moptipyapps.binpacking2d.ibl_encoding_2 import (
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 from moptipyapps.binpacking2d.plot_packing import plot_packing
-
-# We do not show the generated graphics in the browser if this script is
-# called from a "make" build. This small lambda checks whether there is any
-# process with "make" in its name anywhere in the parent hierarchy of the
-# current process.
-ns = lambda prc: False if prc is None else (  # noqa: E731
-    "make" in prc.name() or ns(prc.parent()))
-
-# should we show the plots?
-SHOW_PLOTS_IN_BROWSER = not ns(psutil.Process(os.getppid()))
 
 random = rand_generator(3)  # get a random number generator
 instance = Instance.from_resource("a10")  # pick instance a10
@@ -112,7 +101,7 @@ with TempDir.create() as td:  # create temporary directory `td`
 
 # OK, we have now generated and saved the plot in a file.
 # We will open it in the web browser if we are not in a make build.
-    if SHOW_PLOTS_IN_BROWSER:
+    if not is_make_build():
         for file in files:  # for each file we generated
             open_new_tab(f"file://{file}")  # open a browser tab
         sleep(10)  # sleep 10 seconds (enough time for the browser to load)
