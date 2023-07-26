@@ -602,7 +602,7 @@ class _LogParser(LogParser):
         if not isinstance(bin_bounds, Mapping):
             raise type_error(bin_bounds, "bin_bounds", Mapping)
         #: the internal collector
-        self.__collector: Final[Callable[["PackingResult"], None]] = collector
+        self.__collector: Final[Callable[[PackingResult], None]] = collector
         #: the objectives holder
         self.__objectives: Final[
             Iterable[Callable[[Instance], Objective]]] = objectives
