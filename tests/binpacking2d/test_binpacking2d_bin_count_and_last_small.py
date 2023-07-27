@@ -47,17 +47,39 @@ def __check_for_instance(inst: Instance, random: rnd.Generator) -> None:
     validate_objective(objective, solution_space, __make_valid)
 
 
-def test_bin_count_and_last_empty_objective() -> None:
-    """Test the makespan objective function."""
+def test_bin_count_and_last_small_objective() -> None:
+    """Test the last-bin-small-area objective function."""
     random: rnd.Generator = rnd.default_rng()
 
-    checks: set[str] = {"a01", "a10", "a20", "beng03", "beng10",
-                        "cl01_040_08", "cl04_100_10", "cl10_060_03"}
     choices = list(Instance.list_resources())
-    while len(checks) < 10:
+    checks: set[str] = {c for c in choices if c.startswith(("a", "b"))}
+    min_len: int = len(checks) + 10
+    while len(checks) < min_len:
         checks.add(choices.pop(random.integers(len(choices))))
 
     for s in checks:
         __check_for_instance(Instance.from_resource(s), random)
 
     validate_objective_on_2dbinpacking(BinCountAndLastSmall, random)
+
+
+def test_bin_count_and_last_small_objective_2() -> None:
+    """Test the last-bin-small-area objective function."""
+    random: rnd.Generator = rnd.default_rng()
+    for inst in Instance.list_resources():
+        if not inst.startswith(("a", "b")):
+            continue
+        instance = Instance.from_resource(inst)
+        search_space = SignedPermutations(
+            instance.get_standard_item_sequence())
+        solution_space = PackingSpace(instance)
+        encoding = (ImprovedBottomLeftEncoding1 if random.integers(2) == 0
+                    else ImprovedBottomLeftEncoding2)(instance)
+        objective = BinCountAndLastSmall(instance)
+        op0 = Op0ShuffleAndFlip(search_space)
+        x = search_space.create()
+        op0.op0(random, x)
+        y = solution_space.create()
+        encoding.decode(x, y)
+        assert 0 <= objective.lower_bound() <= objective.evaluate(y) \
+               <= objective.upper_bound() <= 1_000_000_000_000_000

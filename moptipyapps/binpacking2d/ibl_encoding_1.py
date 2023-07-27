@@ -88,7 +88,7 @@ from moptipyapps.binpacking2d.packing import (
 from moptipyapps.shared import SCOPE_INSTANCE
 
 
-@numba.njit(nogil=True, cache=True, inline="always")
+@numba.njit(nogil=True, cache=True, inline="always", boundscheck=False)
 def __move_down(packing: np.ndarray, bin_start: int, i1: int) -> bool:
     """
     Move the box at index `i1` down as far as possible in the current bin.
@@ -172,7 +172,7 @@ def __move_down(packing: np.ndarray, bin_start: int, i1: int) -> bool:
     return False
 
 
-@numba.njit(nogil=True, cache=True, inline="always")
+@numba.njit(nogil=True, cache=True, inline="always", boundscheck=False)
 def __move_left(packing: np.ndarray, bin_start: int, i1: int) -> bool:
     """
     Move the box at index `i1` left as far as possible in the current bin.
@@ -255,7 +255,7 @@ def __move_left(packing: np.ndarray, bin_start: int, i1: int) -> bool:
     return False
 
 
-@numba.njit(nogil=True, cache=True, inline="always")
+@numba.njit(nogil=True, cache=True, inline="always", boundscheck=False)
 def _decode(x: np.ndarray, y: np.ndarray, instance: np.ndarray,
             bin_width: int, bin_height: int) -> int:
     """

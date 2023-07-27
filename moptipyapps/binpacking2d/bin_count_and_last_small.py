@@ -101,10 +101,17 @@ class BinCountAndLastSmall(Objective):
             raise type_error(instance, "instance", Instance)
         #: the internal instance reference
         self.__instance: Final[Instance] = instance
-        self.evaluate = numba.njit(  # type: ignore
-            lambda y, z=instance.bin_width * instance.bin_height:
-            bin_count_and_last_small(y, z),
-            cache=False, inline="always", fastmath=True, boundscheck=False)
+        #: the bin size
+        self.__bin_size: Final[int] = instance.bin_width * instance.bin_height
+
+    def evaluate(self, x) -> int:
+        """
+        Evaluate the objective function.
+
+        :param x: the solution
+        :return: the bin size and last-bin-small-area factor
+        """
+        return bin_count_and_last_small(x, self.__bin_size)
 
     def lower_bound(self) -> int:
         """

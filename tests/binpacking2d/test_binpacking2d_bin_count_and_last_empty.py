@@ -48,7 +48,7 @@ def __check_for_instance(inst: Instance, random: rnd.Generator) -> None:
 
 
 def test_bin_count_and_last_empty_objective() -> None:
-    """Test the makespan objective function."""
+    """Test the last-bin-empty objective function."""
     random: rnd.Generator = rnd.default_rng()
 
     checks: set[str] = {"a01", "a10", "a20", "beng03", "beng10",
