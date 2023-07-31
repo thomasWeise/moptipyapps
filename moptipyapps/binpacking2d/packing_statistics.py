@@ -2,7 +2,7 @@
 import os.path
 from dataclasses import dataclass
 from math import isfinite
-from typing import Callable, Final, Iterable, Mapping, cast
+from typing import Any, Callable, Final, Iterable, Mapping, cast
 
 from moptipy.api.logging import (
     KEY_ALGORITHM,
@@ -17,7 +17,10 @@ from moptipy.api.logging import (
     KEY_TOTAL_TIME_MILLIS,
 )
 from moptipy.evaluation.base import (
+    KEY_ENCODING,
     KEY_N,
+    KEY_OBJECTIVE_FUNCTION,
+    EvaluationDataElement,
 )
 from moptipy.evaluation.end_results import EndResult
 from moptipy.evaluation.end_statistics import (
@@ -49,13 +52,12 @@ from moptipyapps.binpacking2d.packing_result import (
     KEY_BIN_WIDTH,
     KEY_N_DIFFERENT_ITEMS,
     KEY_N_ITEMS,
-    KEY_USED_OBJECTIVE,
     PackingResult,
 )
 
 
-@dataclass(frozen=True, init=False, order=True)
-class PackingStatistics:
+@dataclass(frozen=True, init=False, order=False, eq=False)
+class PackingStatistics(EvaluationDataElement):
     """
     An end statistics record of one run of one algorithm on one problem.
 
@@ -75,8 +77,6 @@ class PackingStatistics:
     bin_height: int
     #: the objective values evaluated after the optimization
     objectives: Mapping[str, Statistics]
-    #: the objective function used for optimization
-    used_objective: str
     #: the bounds for the objective values (append ".lowerBound" and
     #: ".upperBound" to all objective function names)
     objective_bounds: Mapping[str, int]
@@ -84,13 +84,12 @@ class PackingStatistics:
     bin_bounds: Mapping[str, int]
 
     def __init__(self,
+                 end_statistics: EndStatistics,
                  n_items: int,
                  n_different_items: int,
                  bin_width: int,
                  bin_height: int,
-                 end_statistics: EndStatistics,
                  objectives: Mapping[str, Statistics],
-                 used_objective: str,
                  objective_bounds: Mapping[str, int | float],
                  bin_bounds: Mapping[str, int]):
         """
@@ -103,7 +102,6 @@ class PackingStatistics:
         :param bin_height: the bin height
         :param objectives: the objective values computed after the
             optimization
-        :param used_objective: the objective function used
         :param bin_bounds: the different bounds for the number of bins
         :param objective_bounds: the bounds for the objective functions
         :raises TypeError: if any parameter has a wrong type
@@ -112,12 +110,11 @@ class PackingStatistics:
         super().__init__()
         if not isinstance(end_statistics, EndStatistics):
             raise type_error(end_statistics, "end_statistics", EndResult)
-        if not isinstance(used_objective, str):
-            raise type_error(used_objective, "used_objective", str)
-        if end_statistics.best_f != objectives[used_objective]:
+        if end_statistics.best_f != objectives[end_statistics.objective]:
             raise ValueError(
-                f"end_statistics.best_f={end_statistics.best_f}, but objecti"
-                f"ves[{used_objective!r}]={objectives[used_objective]}.")
+                f"end_statistics.best_f={end_statistics.best_f}, but "
+                f"objectives[{end_statistics.objective!r}]="
+                f"{objectives[end_statistics.objective]}.")
         if not isinstance(objectives, Mapping):
             raise type_error(objectives, "objectives", Mapping)
         if not isinstance(objective_bounds, Mapping):
@@ -164,7 +161,6 @@ class PackingStatistics:
 
         object.__setattr__(self, "end_statistics", end_statistics)
         object.__setattr__(self, "objectives", immutable_mapping(objectives))
-        object.__setattr__(self, "used_objective", used_objective)
         object.__setattr__(self, "objective_bounds",
                            immutable_mapping(objective_bounds))
         object.__setattr__(self, "bin_bounds", immutable_mapping(bin_bounds))
@@ -176,6 +172,16 @@ class PackingStatistics:
             bin_width, "bin_width", 1, 1_000_000_000_000))
         object.__setattr__(self, "bin_height", check_int_range(
             bin_height, "bin_height", 1, 1_000_000_000_000))
+
+    def _tuple(self) -> tuple[Any, ...]:
+        """
+        Create a tuple with all the data of this data class for comparison.
+
+        :returns: a tuple with all the data of this class, where `None` values
+            are masked out
+        """
+        # noinspection PyProtectedMember
+        return self.end_statistics._tuple()
 
     @staticmethod
     def from_packing_results(
@@ -192,14 +198,16 @@ class PackingStatistics:
             raise type_error(results, "results", Iterable)
         if not callable(collector):
             raise type_error(collector, "collector", call=True)
-        groups: Final[dict[tuple[str, str, str], list[PackingResult]]] = {}
+        groups: Final[dict[tuple[str, str, str, str], list[PackingResult]]] \
+            = {}
         objectives_set: set[str] = set()
         for i, pr in enumerate(results):
             if not isinstance(pr, PackingResult):
                 raise type_error(pr, f"end_results[{i}]", PackingResult)
-            setting: tuple[str, str, str] = \
-                pr.end_result.algorithm, pr.end_result.instance, \
-                pr.used_objective
+            setting: tuple[str, str, str, str] = \
+                (pr.end_result.algorithm, pr.end_result.instance,
+                 pr.end_result.objective, "" if pr.end_result.encoding is None
+                 else pr.end_result.encoding)
             if setting in groups:
                 groups[setting].append(pr)
             else:
@@ -221,14 +229,19 @@ class PackingStatistics:
             n_different_items: int = pr0.n_different_items
             bin_width: int = pr0.bin_width
             bin_height: int = pr0.bin_height
-            used_objective: str = pr0.used_objective
+            used_objective: str = pr0.end_result.objective
+            encoding: str | None = pr0.end_result.encoding
             if used_objective not in objectives_set:
                 raise ValueError(
                     f"{used_objective!r} not in {objectives_set!r}.")
             if used_objective != key[2]:
                 raise ValueError(
-                    f"used_objective={used_objective!r} different "
-                    f"from key={key[2]}!?")
+                    f"used objective={used_objective!r} different "
+                    f"from key[2]={key[2]}!?")
+            if (encoding is not None) and (encoding != key[3]):
+                raise ValueError(
+                    f"used encoding={encoding!r} different "
+                    f"from key[3]={key[3]}!?")
             objective_bounds: Mapping[str, int | float] = pr0.objective_bounds
             bin_bounds: Mapping[str, int] = pr0.bin_bounds
             for i, pr in enumerate(data):
@@ -247,10 +260,10 @@ class PackingStatistics:
                     raise ValueError(
                         f"bin_height={bin_height} for data[0] "
                         f"but {pr.bin_height} for data[{i}]?")
-                if used_objective != pr.used_objective:
+                if used_objective != pr.end_result.objective:
                     raise ValueError(
-                        f"used_objective={used_objective!r} for data[0] "
-                        f"but {pr.used_objective!r} for data[{i}]?")
+                        f"used objective={used_objective!r} for data[0] "
+                        f"but {pr.end_result.objective!r} for data[{i}]?")
                 if objective_bounds != pr.objective_bounds:
                     raise ValueError(
                         f"objective_bounds={objective_bounds!r} for data[0] "
@@ -266,16 +279,15 @@ class PackingStatistics:
                 raise ValueError(f"got {end_stats} from {data}?")
 
             collector(PackingStatistics(
+                end_statistics=end_stats[0],
                 n_items=n_items,
                 n_different_items=n_different_items,
                 bin_width=bin_width,
                 bin_height=bin_height,
-                end_statistics=end_stats[0],
                 objectives={
                     o: Statistics.create([pr.objectives[o] for pr in data])
                     for o in objectives
                 },
-                used_objective=used_objective,
                 objective_bounds=objective_bounds,
                 bin_bounds=bin_bounds,
             ))
@@ -295,60 +307,75 @@ class PackingStatistics:
         Path.path(os.path.dirname(path)).ensure_dir_exists()
 
         # get a nicely sorted view on the statistics
-        use_stats = sorted(
-            results, key=lambda ppr: (
-                ppr.end_statistics.algorithm,
-                ppr.end_statistics.instance,
-                ppr.used_objective,
-                ppr.end_statistics))
+        use_stats = sorted(results)
 
-        has_goal_f: int = 0  # 1
-        has_best_f_scaled: bool = False  # 2
-        has_n_success: bool = False  # 4
-        has_success_fes: bool = False  # 8
-        has_success_time_millis: bool = False  # 16
-        has_ert_fes: bool = False  # 32
-        has_ert_time_millis: bool = False  # 64
-        has_max_fes: int = 0  # 128
-        has_max_time_millis: int = 0  # 256
-        checker: int = 511
+        has_algorithm: bool = False  # 1
+        has_instance: bool = False  # 2
+        has_objective: bool = False  # 4
+        has_encoding: bool = False  # 8
+        has_goal_f: int = 0  # 16
+        has_best_f_scaled: bool = False  # 32
+        has_n_success: bool = False  # 64
+        has_success_fes: bool = False  # 128
+        has_success_time_millis: bool = False  # 256
+        has_ert_fes: bool = False  # 512
+        has_ert_time_millis: bool = False  # 1024
+        has_max_fes: int = 0  # 2048
+        has_max_time_millis: int = 0  # 4096
+        checker: int = 8191
 
         for ess in use_stats:
             es = ess.end_statistics
+            if es.algorithm is not None:
+                has_algorithm = True
+                checker &= ~1
+            if es.instance is not None:
+                has_instance = True
+                checker &= ~2
+            if es.objective is not None:
+                has_objective = True
+                checker &= ~4
+            if es.encoding is not None:
+                has_encoding = True
+                checker &= ~8
             if es.goal_f is not None:
-                if isinstance(es.goal_f, Statistics):
+                if isinstance(es.goal_f, Statistics) \
+                        and (es.goal_f.maximum > es.goal_f.minimum):
                     has_goal_f = 2
-                    checker &= ~1
+                    checker &= ~16
                 elif has_goal_f == 0:
                     has_goal_f = 1
             if es.best_f_scaled is not None:
                 has_best_f_scaled = True
-                checker &= ~2
+                checker &= ~32
             if es.n_success is not None:
                 has_n_success = True
-                checker &= ~4
+                checker &= ~64
             if es.success_fes is not None:
                 has_success_fes = True
-                checker &= ~8
+                checker &= ~128
             if es.success_time_millis is not None:
                 has_success_time_millis = True
-                checker &= ~16
+                checker &= ~256
             if es.ert_fes is not None:
                 has_ert_fes = True
-                checker &= ~32
+                checker &= ~512
             if es.ert_time_millis is not None:
                 has_ert_time_millis = True
-                checker &= ~64
+                checker &= ~1024
             if es.max_fes is not None:
-                if isinstance(es.max_fes, Statistics):
+                if isinstance(es.max_fes, Statistics) \
+                        and (es.max_fes.maximum > es.max_fes.minimum):
                     has_max_fes = 2
-                    checker &= ~128
+                    checker &= ~2048
                 elif has_max_fes == 0:
                     has_max_fes = 1
             if es.max_time_millis is not None:
-                if isinstance(es.max_time_millis, Statistics):
+                if isinstance(es.max_time_millis, Statistics) \
+                        and (es.max_time_millis.maximum
+                             > es.max_time_millis.minimum):
                     has_max_time_millis = 2
-                    checker &= ~256
+                    checker &= ~4096
                 elif has_max_time_millis == 0:
                     has_max_time_millis = 1
             if checker == 0:
@@ -366,12 +393,18 @@ class PackingStatistics:
         with path.open_for_write() as out:
             wrt: Final[Callable] = out.write
             sep: Final[str] = CSV_SEPARATOR
-            wrt(KEY_ALGORITHM)
-            wrt(sep)
-            wrt(KEY_INSTANCE)
-            wrt(sep)
-            wrt(KEY_USED_OBJECTIVE)
-            wrt(sep)
+            if has_algorithm:
+                wrt(KEY_ALGORITHM)
+                wrt(sep)
+            if has_instance:
+                wrt(KEY_INSTANCE)
+                wrt(sep)
+            if has_objective:
+                wrt(KEY_OBJECTIVE_FUNCTION)
+                wrt(sep)
+            if has_encoding:
+                wrt(KEY_ENCODING)
+                wrt(sep)
             wrt(KEY_N_ITEMS)
             wrt(sep)
             wrt(KEY_N_DIFFERENT_ITEMS)
@@ -452,12 +485,22 @@ class PackingStatistics:
 
             for rec in use_stats:
                 er = rec.end_statistics
-                wrt(er.algorithm)
-                wrt(sep)
-                wrt(er.instance)
-                wrt(sep)
-                wrt(rec.used_objective)
-                wrt(sep)
+                if has_algorithm:
+                    if er.algorithm is not None:
+                        wrt(er.algorithm)
+                    wrt(sep)
+                if has_instance:
+                    if er.instance is not None:
+                        wrt(er.instance)
+                    wrt(sep)
+                if has_objective:
+                    if er.objective is not None:
+                        wrt(er.objective)
+                    wrt(sep)
+                if has_encoding:
+                    if er.encoding is not None:
+                        wrt(er.encoding)
+                    wrt(sep)
                 wrt(str(rec.n_items))
                 wrt(sep)
                 wrt(str(rec.n_different_items))
@@ -492,7 +535,8 @@ class PackingStatistics:
                 if has_goal_f == 1:
                     wrt(sep)
                     if er.goal_f is not None:
-                        wrt(num(er.goal_f))
+                        wrt(num(er.goal_f.median if isinstance(
+                            er.goal_f, Statistics) else er.goal_f))
                 elif has_goal_f == 2:
                     wrt(sep)
                     if isinstance(er.goal_f, Statistics):
@@ -534,7 +578,8 @@ class PackingStatistics:
                 if has_max_fes == 1:
                     wrt(sep)
                     if er.max_fes is not None:
-                        wrt(str(er.max_fes))
+                        wrt(str(er.max_fes.median if isinstance(
+                            er.max_fes, Statistics) else er.max_fes))
                 elif has_max_fes == 2:
                     wrt(sep)
                     if isinstance(er.max_fes, Statistics):
@@ -546,7 +591,9 @@ class PackingStatistics:
                 if has_max_time_millis == 1:
                     wrt(sep)
                     if er.max_time_millis is not None:
-                        wrt(str(er.max_time_millis))
+                        wrt(str(er.max_time_millis.median if isinstance(
+                            er.max_time_millis, Statistics)
+                            else er.max_time_millis))
                 elif has_max_time_millis == 2:
                     wrt(sep)
                     if isinstance(er.max_time_millis, Statistics):

@@ -105,7 +105,7 @@ def test_packing_results_experiment() -> None:
         for res in results_1:
             assert res.end_result.instance in all_instances
             assert res.end_result.max_fes == __MAX_FES
-            all_objectives.add(res.used_objective)
+            all_objectives.add(res.end_result.objective)
             all_algorithms.add(res.end_result.algorithm)
         assert len(all_algorithms) == len(algorithms)
         assert len(all_objectives) == 2

@@ -11,7 +11,7 @@ instances.
 import os.path
 from dataclasses import dataclass
 from math import isfinite
-from typing import Callable, Final, Iterable, Mapping, cast
+from typing import Any, Callable, Final, Iterable, Mapping, cast
 
 from moptipy.api.logging import (
     KEY_ALGORITHM,
@@ -27,6 +27,11 @@ from moptipy.api.logging import (
     KEY_TOTAL_TIME_MILLIS,
 )
 from moptipy.api.objective import Objective
+from moptipy.evaluation.base import (
+    KEY_ENCODING,
+    KEY_OBJECTIVE_FUNCTION,
+    EvaluationDataElement,
+)
 from moptipy.evaluation.end_results import EndResult
 from moptipy.evaluation.log_parser import LogParser
 from moptipy.utils.console import logger
@@ -50,10 +55,8 @@ from moptipyapps.binpacking2d.bin_count_and_last_small import (
     BinCountAndLastSmall,
 )
 from moptipyapps.binpacking2d.instance import Instance, _lower_bound_damv
-from moptipyapps.binpacking2d.packing import Packing, _PackingParser
+from moptipyapps.binpacking2d.packing import Packing
 
-#: the name of the objective function
-KEY_USED_OBJECTIVE: Final[str] = "objective"
 #: the number of items
 KEY_N_ITEMS: Final[str] = "nItems"
 #: the number of different items
@@ -63,27 +66,23 @@ KEY_BIN_WIDTH: Final[str] = "binWidth"
 #: the bin height
 KEY_BIN_HEIGHT: Final[str] = "binHeight"
 
-#: The internal CSV header part 1, after which the bounds are inserted
+#: The internal CSV header part 1, after which the encoding may come
 _HEADER_1: Final[str] = (f"{KEY_ALGORITHM}{CSV_SEPARATOR}"
                          f"{KEY_INSTANCE}{CSV_SEPARATOR}"
-                         f"{KEY_USED_OBJECTIVE}{CSV_SEPARATOR}"
-                         f"{KEY_N_ITEMS}{CSV_SEPARATOR}"
+                         f"{KEY_OBJECTIVE_FUNCTION}")
+#: The internal CSV header part 2, after which the bounds are inserted
+_HEADER_2: Final[str] = (f"{KEY_N_ITEMS}{CSV_SEPARATOR}"
                          f"{KEY_N_DIFFERENT_ITEMS}{CSV_SEPARATOR}"
                          f"{KEY_BIN_WIDTH}{CSV_SEPARATOR}"
                          f"{KEY_BIN_HEIGHT}")
-
-
-#: The internal CSV header part 2, after which the objective values are listed
-_HEADER_2: Final[str] = (f"{KEY_RAND_SEED}{CSV_SEPARATOR}"
+#: The internal CSV header part 3, after which the objective values are listed
+_HEADER_3: Final[str] = (f"{KEY_RAND_SEED}{CSV_SEPARATOR}"
                          f"{KEY_BEST_F}{CSV_SEPARATOR}"
                          f"{KEY_LAST_IMPROVEMENT_FE}{CSV_SEPARATOR}"
                          f"{KEY_LAST_IMPROVEMENT_TIME_MILLIS}"
                          f"{CSV_SEPARATOR}"
                          f"{KEY_TOTAL_FES}{CSV_SEPARATOR}"
-                         f"{KEY_TOTAL_TIME_MILLIS}{CSV_SEPARATOR}"
-                         f"{KEY_GOAL_F}{CSV_SEPARATOR}"
-                         f"{KEY_MAX_FES}{CSV_SEPARATOR}"
-                         f"{KEY_MAX_TIME_MILLIS}")
+                         f"{KEY_TOTAL_TIME_MILLIS}")
 
 
 #: the default objective functions
@@ -122,8 +121,8 @@ _DEFAULT_BOUNDS: Final[Mapping[str, Callable[[Instance], int]]] = \
     })
 
 
-@dataclass(frozen=True, init=False, order=True)
-class PackingResult:
+@dataclass(frozen=True, init=False, order=False, eq=False)
+class PackingResult(EvaluationDataElement):
     """
     An end result record of one run of one packing algorithm on one problem.
 
@@ -143,8 +142,6 @@ class PackingResult:
     bin_height: int
     #: the objective values evaluated after the optimization
     objectives: Mapping[str, int]
-    #: the objective function used for optimization
-    used_objective: str
     #: the bounds for the objective values (append ".lowerBound" and
     #: ".upperBound" to all objective function names)
     objective_bounds: Mapping[str, int]
@@ -152,13 +149,12 @@ class PackingResult:
     bin_bounds: Mapping[str, int]
 
     def __init__(self,
+                 end_result: EndResult,
                  n_items: int,
                  n_different_items: int,
                  bin_width: int,
                  bin_height: int,
-                 end_result: EndResult,
                  objectives: Mapping[str, int | float],
-                 used_objective: str,
                  objective_bounds: Mapping[str, int | float],
                  bin_bounds: Mapping[str, int]):
         """
@@ -171,7 +167,6 @@ class PackingResult:
         :param bin_height: the bin height
         :param objectives: the objective values computed after the
             optimization
-        :param used_objective: the objective function used
         :param bin_bounds: the different bounds for the number of bins
         :param objective_bounds: the bounds for the objective functions
         :raises TypeError: if any parameter has a wrong type
@@ -180,12 +175,11 @@ class PackingResult:
         super().__init__()
         if not isinstance(end_result, EndResult):
             raise type_error(end_result, "end_result", EndResult)
-        if not isinstance(used_objective, str):
-            raise type_error(used_objective, "used_objective", str)
-        if end_result.best_f != objectives[used_objective]:
+        if end_result.best_f != objectives[end_result.objective]:
             raise ValueError(
                 f"end_result.best_f={end_result.best_f}, but objectives["
-                f"{used_objective!r}]={objectives[used_objective]}.")
+                f"{end_result.objective!r}]="
+                f"{objectives[end_result.objective]}.")
         if not isinstance(objectives, Mapping):
             raise type_error(objectives, "objectives", Mapping)
         if not isinstance(objective_bounds, Mapping):
@@ -234,7 +228,6 @@ class PackingResult:
 
         object.__setattr__(self, "end_result", end_result)
         object.__setattr__(self, "objectives", immutable_mapping(objectives))
-        object.__setattr__(self, "used_objective", used_objective)
         object.__setattr__(self, "objective_bounds",
                            immutable_mapping(objective_bounds))
         object.__setattr__(self, "bin_bounds", immutable_mapping(bin_bounds))
@@ -247,9 +240,19 @@ class PackingResult:
         object.__setattr__(self, "bin_height", check_int_range(
             bin_height, "bin_height", 1, 1_000_000_000_000))
 
+    def _tuple(self) -> tuple[Any, ...]:
+        """
+        Create a tuple with all the data of this data class for comparison.
+
+        :returns: a tuple with all the data of this class, where `None` values
+            are masked out
+        """
+        # noinspection PyProtectedMember
+        return self.end_result._tuple()
+
     @staticmethod
     def from_packing_and_end_result(  # pylint: disable=W0102
-            end_result: EndResult, packing: Packing, used_objective: str,
+            end_result: EndResult, packing: Packing,
             objectives: Iterable[Callable[[Instance], Objective]] =
             _DEFAULT_OBJECTIVES,
             bin_bounds: Mapping[str, Callable[[Instance], int]] =
@@ -262,7 +265,6 @@ class PackingResult:
 
         :param end_result: the end results record
         :param packing: the packing
-        :param used_objective: the used objective function
         :param bin_bounds: the bounds computing functions
         :param objectives: the objective function factories
         :param cache: a cache that can store stuff if this function is to be
@@ -273,8 +275,6 @@ class PackingResult:
             raise type_error(end_result, "end_result", EndResult)
         if not isinstance(packing, Packing):
             raise type_error(packing, "packing", Packing)
-        if not isinstance(used_objective, str):
-            raise type_error(used_objective, "used_objective", str)
         if not isinstance(objectives, Iterable):
             raise type_error(objectives, "objectives", Iterable)
         if not isinstance(bin_bounds, Mapping):
@@ -304,13 +304,12 @@ class PackingResult:
         if cache is not None:
             cache[instance.name] = row
         return PackingResult(
+            end_result=end_result,
             n_items=instance.n_items,
             n_different_items=instance.n_different_items,
             bin_width=instance.bin_width, bin_height=instance.bin_height,
-            end_result=end_result,
             objectives={str(objf): cast(Objective, objf).evaluate(packing)
                         for objf in row[1]},
-            used_objective=used_objective,
             objective_bounds=row[2],
             bin_bounds=row[0])
 
@@ -342,21 +341,12 @@ class PackingResult:
                 f"needs one end result record in file {file_path!r}, "
                 f"but got {end_results}.")
 
-        parser: Final[_PackingParser] = _PackingParser()
-        parser.parse_file(file)
-        # noinspection PyProtectedMember
-        packing = parser._result
+        packing = Packing.from_log(file_path)
         if not isinstance(packing, Packing):
             raise type_error(packing, f"packing from {file!r}", Packing)
-        # noinspection PyProtectedMember
-        used_objective = parser._used_objective
-        if not isinstance(used_objective, str):
-            raise type_error(
-                used_objective, f"used_objective from {file!r}", str)
         return PackingResult.from_packing_and_end_result(
             end_result=end_results[0], packing=packing,
-            used_objective=used_objective, objectives=objectives,
-            bin_bounds=bin_bounds, cache=cache)
+            objectives=objectives, bin_bounds=bin_bounds, cache=cache)
 
     @staticmethod
     def from_logs(  # pylint: disable=W0102
@@ -390,29 +380,45 @@ class PackingResult:
         Path.path(os.path.dirname(path)).ensure_dir_exists()
 
         # get a nicely sorted view on the results
-        use_results = sorted(
-            results, key=lambda ppr: (
-                ppr.end_result.algorithm,
-                ppr.end_result.instance,
-                ppr.used_objective,
-                ppr.end_result.rand_seed,
-                ppr.end_result))
+        use_results = sorted(results)
 
         # get the names of the bounds and objectives
         bin_bounds_set: set[str] = set()
         objectives_set: set[str] = set()
+        needs_encoding: bool = False
+        needs_max_fes: bool = False
+        needs_max_ms: bool = False
+        needs_goal_f: bool = False
         for pr in use_results:
             bin_bounds_set.update(pr.bin_bounds.keys())
             objectives_set.update(pr.objectives.keys())
+            er = pr.end_result
+            if er.encoding is not None:
+                needs_encoding = True
+            if er.max_fes is not None:
+                needs_max_fes = True
+            if er.max_time_millis is not None:
+                needs_max_ms = True
+            if (er.goal_f is not None) and (isfinite(er.goal_f)):
+                needs_goal_f = True
         bin_bounds: Final[list[str]] = sorted(bin_bounds_set)
         objectives: Final[list[str]] = sorted(objectives_set)
 
         line: list[str] = [_HEADER_1]
+        if needs_encoding:
+            line.append(KEY_ENCODING)
+        line.append(_HEADER_2)
         line.extend(bin_bounds)
         for ob in objectives:
             line.append(f"{ob}{_OBJECTIVE_LOWER}{CSV_SEPARATOR}"
                         f"{ob}{_OBJECTIVE_UPPER}")
-        line.append(_HEADER_2)
+        line.append(_HEADER_3)
+        if needs_goal_f:
+            line.append(KEY_GOAL_F)
+        if needs_max_fes:
+            line.append(KEY_MAX_FES)
+        if needs_max_ms:
+            line.append(KEY_MAX_TIME_MILLIS)
         line.extend(objectives)
 
         with path.open_for_write() as out:
@@ -421,15 +427,14 @@ class PackingResult:
             out.write("\n")
             for pr in use_results:
                 e: EndResult = pr.end_result
-                line.append(
-                    f"{e.algorithm}{CSV_SEPARATOR}"
-                    f"{e.instance}{CSV_SEPARATOR}"
-                    f"{pr.used_objective}{CSV_SEPARATOR}"
-                    f"{pr.n_items}{CSV_SEPARATOR}"
-                    f"{pr.n_different_items}{CSV_SEPARATOR}"
-                    f"{pr.bin_width}{CSV_SEPARATOR}"
-                    f"{pr.bin_height}",
-                )
+                line.append(f"{e.algorithm}{CSV_SEPARATOR}"
+                            f"{e.instance}{CSV_SEPARATOR}{e.objective}")
+                if needs_encoding:
+                    line.append("" if e.encoding is None else e.encoding)
+                line.append(f"{pr.n_items}{CSV_SEPARATOR}"
+                            f"{pr.n_different_items}{CSV_SEPARATOR}"
+                            f"{pr.bin_width}{CSV_SEPARATOR}"
+                            f"{pr.bin_height}")
                 for bb in bin_bounds:
                     line.append(
                         str(pr.bin_bounds[bb]) if bb in pr.bin_bounds else "")
@@ -446,10 +451,13 @@ class PackingResult:
                     f"{e.last_improvement_fe}{CSV_SEPARATOR}"
                     f"{e.last_improvement_time_millis}{CSV_SEPARATOR}"
                     f"{e.total_fes}{CSV_SEPARATOR}"
-                    f"{e.total_time_millis}{CSV_SEPARATOR}"
-                    f"{intfloatnone_to_str(e.goal_f)}{CSV_SEPARATOR}"
-                    f"{intnone_to_str(e.max_fes)}{CSV_SEPARATOR}"
-                    f"{intnone_to_str(e.max_time_millis)}")
+                    f"{e.total_time_millis}")
+                if needs_goal_f:
+                    line.append(intfloatnone_to_str(e.goal_f))
+                if needs_max_fes:
+                    line.append(intnone_to_str(e.max_fes))
+                if needs_max_ms:
+                    line.append(intnone_to_str(e.max_time_millis))
                 for ob in objectives:
                     line.append(num_to_str(pr.objectives[ob])
                                 if ob in pr.objectives else "")
@@ -473,110 +481,193 @@ class PackingResult:
         if not callable(collector):
             raise type_error(collector, "collector", call=True)
 
-        with path.open_for_read() as stream:
-            header = stream.readline().strip()
-            if not header.startswith(_HEADER_1):
-                raise ValueError(f"expect header to start with {_HEADER_1!r}"
-                                 f", but got {header!r}")
-            idx = header.find(_HEADER_2)
-            if idx <= 0:
-                raise ValueError(f"expect header to contain {_HEADER_2!r}"
-                                 f", but got {header!r}")
-            bounds_str = header[len(_HEADER_1) + 1:idx - 1]
-            if len(bounds_str) <= 0:
-                raise ValueError(f"no bounds in header {header!r}.")
-            bounds_strs = bounds_str.split(CSV_SEPARATOR)
-            bounds: list[str] = []
-            objectives: list[str] = []
-            in_bin_bounds: bool = True
-            is_lower: bool = True
-            for ss in bounds_strs:
-                if in_bin_bounds and ss.startswith(_BINS_START):
-                    bounds.append(ss)
+        with (path.open_for_read() as stream):
+            header = stream.readline()
+            if not isinstance(header, str):
+                raise type_error(header, f"{file!r}[0]", str)
+
+            idx_algorithm: int = -1
+            idx_instance: int = -1
+            idx_objective: int = -1
+            idx_encoding: int = -1
+            idx_seed: int = -1
+            idx_li_fe: int = -1
+            idx_li_ms: int = -1
+            idx_best_f: int = -1
+            idx_tt_fe: int = -1
+            idx_tt_ms: int = -1
+            idx_goal_f: int = -1
+            idx_max_fes: int = -1
+            idx_max_ms: int = -1
+            idx_n_items: int = -1
+            idx_n_different: int = -1
+            idx_bin_width: int = -1
+            idx_bin_height: int = -1
+            idx_bounds: dict[str, int] = {}
+            idx_objective_bounds: dict[str, int] = {}
+            idx_objectives: dict[str, int] = {}
+
+            for i, cellstr in enumerate(header.strip().split(CSV_SEPARATOR)):
+                cell = cellstr.strip()
+                if cell == KEY_N_ITEMS:
+                    idx_n_items = i
+                elif cell == KEY_N_DIFFERENT_ITEMS:
+                    idx_n_different = i
+                elif cell == KEY_BIN_WIDTH:
+                    idx_bin_width = i
+                elif cell == KEY_BIN_HEIGHT:
+                    idx_bin_height = i
+                elif cell == KEY_ALGORITHM:
+                    idx_algorithm = i
+                elif cell == KEY_INSTANCE:
+                    idx_instance = i
+                elif cell == KEY_OBJECTIVE_FUNCTION:
+                    idx_objective = i
+                elif cell == KEY_ENCODING:
+                    idx_encoding = i
+                elif cell == KEY_RAND_SEED:
+                    idx_seed = i
+                elif cell == KEY_LAST_IMPROVEMENT_FE:
+                    idx_li_fe = i
+                elif cell == KEY_LAST_IMPROVEMENT_TIME_MILLIS:
+                    idx_li_ms = i
+                elif cell == KEY_BEST_F:
+                    idx_best_f = i
+                elif cell == KEY_TOTAL_FES:
+                    idx_tt_fe = i
+                elif cell == KEY_TOTAL_TIME_MILLIS:
+                    idx_tt_ms = i
+                elif cell == KEY_GOAL_F:
+                    idx_goal_f = i
+                elif cell == KEY_MAX_FES:
+                    idx_max_fes = i
+                elif cell == KEY_MAX_TIME_MILLIS:
+                    idx_max_ms = i
+                elif cell.startswith(_BINS_START):
+                    idx_bounds[cell] = i
+                elif cell.endswith((_OBJECTIVE_LOWER, _OBJECTIVE_UPPER)):
+                    idx_objective_bounds[cell] = i
                 else:
-                    in_bin_bounds = False
-                    end = _OBJECTIVE_LOWER if is_lower else _OBJECTIVE_UPPER
-                    if not ss.endswith(end):
-                        raise ValueError(
-                            f"expected {ss!r} to end with {end!r}.")
-                    if is_lower:
-                        objectives.append(ss[:-len(end)])
-                    is_lower = not is_lower
-            end = CSV_SEPARATOR.join(objectives)
-            if not header.endswith(end):
-                raise ValueError(f"expected header to end with {end!r} but"
-                                 f" got {header!r}.")
+                    idx_objectives[cell] = i
+
+            if idx_n_items < 0:
+                raise ValueError(
+                    f"Missing key {KEY_N_ITEMS!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_n_different < 0:
+                raise ValueError(
+                    f"Missing key {KEY_N_DIFFERENT_ITEMS!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_bin_width < 0:
+                raise ValueError(
+                    f"Missing key {KEY_BIN_WIDTH!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_bin_height < 0:
+                raise ValueError(
+                    f"Missing key {KEY_BIN_HEIGHT!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_algorithm < 0:
+                raise ValueError(
+                    f"Missing key {KEY_ALGORITHM!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_instance < 0:
+                raise ValueError(
+                    f"Missing key {KEY_INSTANCE!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_objective < 0:
+                raise ValueError(
+                    f"Missing key {KEY_OBJECTIVE_FUNCTION!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_seed < 0:
+                raise ValueError(
+                    f"Missing key {KEY_RAND_SEED!r} in "
+                    f"header {header!r} of file {file!r}.")
+            if idx_li_fe < 0:
+                raise ValueError(
+                    f"Missing key {KEY_LAST_IMPROVEMENT_FE!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_li_ms < 0:
+                raise ValueError(
+                    f"Missing key {KEY_LAST_IMPROVEMENT_TIME_MILLIS!r} in "
+                    f"header {header!r} of file {file!r}.")
+            if idx_best_f < 0:
+                raise ValueError(
+                    f"Missing key {KEY_BEST_F!r} in header "
+                    f"{header!r} of file {file!r}.")
+            if idx_tt_fe < 0:
+                raise ValueError(
+                    f"Missing key {KEY_TOTAL_FES!r} in "
+                    f"header {header!r} of file {file!r}.")
+            if idx_tt_ms < 0:
+                raise ValueError(
+                    f"Missing key {KEY_TOTAL_TIME_MILLIS!r} in "
+                    f"header {header!r} of file {file!r}.")
+
+            objectives: list[str] = sorted(idx_objectives.keys())
+            if len(objectives) <= 0:
+                raise ValueError(f"no objectives found in file {file!r}.")
+            for kk in objectives:
+                if f"{kk}{_OBJECTIVE_LOWER}" not in idx_objective_bounds:
+                    raise ValueError(
+                        f"objective {kk!r} has no lower bound in header "
+                        f"{header} of file {file!r}.")
+                if f"{kk}{_OBJECTIVE_UPPER}" not in idx_objective_bounds:
+                    raise ValueError(
+                        f"objective {kk!r} has no upper bound in header "
+                        f"{header} of file {file!r}.")
+            if len(idx_objective_bounds) != (2 * len(objectives)):
+                raise ValueError(
+                    f"inconsistent bounds {idx_objective_bounds.keys()} in "
+                    f"header {header} of file {file!r}.")
+
+            bounds: list[str] = sorted(idx_bounds.keys())
+            if len(bounds) <= 0:
+                raise ValueError(f"no bounds found in file {file!r}.")
 
             for line in stream:
-                data = line.strip().split(CSV_SEPARATOR)
-                index: int = 0
-                algorithm = data[index]
-                index += 1
-                instance = data[index]
-                index += 1
-                used_objective = data[index]
-                index += 1
-                n_items = int(data[index])
-                index += 1
-                n_different_items = int(data[index])
-                index += 1
-                bin_width = int(data[index])
-                index += 1
-                bin_height = int(data[index])
-                index += 1
-                the_bin_bounds: dict[str, int] = {}
-                for bb in bounds:
-                    the_bin_bounds[bb] = int(data[index])
-                    index += 1
-                the_objective_bounds: dict[str, int | float] = {}
-                for oo in objectives:
-                    the_objective_bounds[f"{oo}{_OBJECTIVE_LOWER}"] \
-                        = str_to_intfloat(data[index])
-                    index += 1
-                    the_objective_bounds[f"{oo}{_OBJECTIVE_UPPER}"] \
-                        = str_to_intfloat(data[index])
-                    index += 1
-                rand_seed = int((data[index])[2:], 16)  # rand seed
-                index += 1
-                best_f = str_to_intfloat(data[index])  # best_f
-                index += 1
-                last_improvement_fe = int(data[index])  # last_improvement_fe
-                index += 1
-                litm = int(data[index])
-                index += 1
-                total_fes = int(data[index])
-                index += 1
-                total_time_millis = int(data[index])  # total_time_millis
-                index += 1
-                goal_f = str_to_intfloatnone(data[index])  # goal_f
-                index += 1
-                max_fes = str_to_intnone(data[index])  # max_fes
-                index += 1
-                max_time_millis = str_to_intnone(data[index])
-                index += 1
-                the_objectives: dict[str, int | float] = {}
-                for oo in objectives:
-                    the_objectives[oo] = str_to_intfloat(data[index])
-                    index += 1
+                splt = line.strip().split(CSV_SEPARATOR)
+                encoding: str | None
+                if idx_encoding < 0:
+                    encoding = None
+                else:
+                    encoding = splt[idx_encoding].strip()
+                    if len(encoding) <= 0:
+                        encoding = None
+
+                er = EndResult(
+                    splt[idx_algorithm].strip(),  # algorithm
+                    splt[idx_instance].strip(),  # instance
+                    splt[idx_objective].strip(),  # objective
+                    encoding,  # encoding
+                    int((splt[idx_seed])[2:], 16),  # rand seed
+                    str_to_intfloat(splt[idx_best_f]),  # best_f
+                    int(splt[idx_li_fe]),  # last_improvement_fe
+                    int(splt[idx_li_ms]),  # last_improvement_time_millis
+                    int(splt[idx_tt_fe]),  # total_fes
+                    int(splt[idx_tt_ms]),  # total_time_millis
+                    None if idx_goal_f < 0 else
+                    str_to_intfloatnone(splt[idx_goal_f]),  # goal_f
+                    None if idx_max_fes < 0 else
+                    str_to_intnone(splt[idx_max_fes]),  # max_fes
+                    None if idx_max_ms < 0 else
+                    str_to_intnone(splt[idx_max_ms]))  # max_time_millis
+
+                the_objectives: dict[str, int | float] = {
+                    on: str_to_intfloat(splt[idx_objectives[on]])
+                    for on in objectives}
+                the_bin_bounds: dict[str, int] = {
+                    on: int(splt[idx_bounds[on]]) for on in bounds}
+                the_objective_bounds: dict[str, int | float] = {
+                    on: str_to_intfloat(splt[idxx])
+                    for on, idxx in idx_objective_bounds.items()}
+
                 collector(PackingResult(
-                    n_items=n_items,
-                    n_different_items=n_different_items,
-                    bin_width=bin_width,
-                    bin_height=bin_height,
-                    end_result=EndResult(
-                        algorithm=algorithm,
-                        instance=instance,
-                        rand_seed=rand_seed,
-                        best_f=best_f,
-                        last_improvement_fe=last_improvement_fe,
-                        last_improvement_time_millis=litm,
-                        total_fes=total_fes,
-                        total_time_millis=total_time_millis,
-                        goal_f=goal_f,
-                        max_fes=max_fes,
-                        max_time_millis=max_time_millis),
+                    n_items=int(splt[idx_n_items]),
+                    n_different_items=int(splt[idx_n_different]),
+                    bin_width=int(splt[idx_bin_width]),
+                    bin_height=int(splt[idx_bin_height]),
+                    end_result=er,
                     objectives=the_objectives,
-                    used_objective=used_objective,
                     objective_bounds=the_objective_bounds,
                     bin_bounds=the_bin_bounds))
 
