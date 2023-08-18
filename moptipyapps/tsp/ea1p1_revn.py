@@ -120,7 +120,7 @@ class TSPEA1p1revn(Algorithm):
 
         y: int = cast(int, process.evaluate(x))  # get length of first tour
         nm1: Final[int] = n - 1  # need n-1 in the loop for the random numbers
-        nm2: Final[int] = n - 12  # we need this to check the move indices
+        nm2: Final[int] = n - 2  # we need this to check the move indices
         while not should_terminate():
             i = ri(nm1)  # get the first index
             j = ri(nm1)  # get the second index
