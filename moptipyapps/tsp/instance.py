@@ -739,6 +739,26 @@ def _from_stream(
     return inst
 
 
+def ncities_from_tsplib_name(name: str) -> int:
+    """
+    Compute the instance scale from the instance name.
+
+    :param name: the instance name
+    :return: the instance scale
+    """
+    if name == "kro124p":
+        return 100
+    if name == "ry48p":
+        return 48
+    idx: int = len(name)
+    while name[idx - 1] in "0123456789":
+        idx -= 1
+    scale: Final[int] = int(name[idx:])
+    if name.startswith("ftv"):
+        return scale + 1
+    return scale
+
+
 class Instance(Component, np.ndarray):
     """An instance of the Traveling Salesperson Problem."""
 
@@ -799,11 +819,11 @@ class Instance(Component, np.ndarray):
                         raise ValueError(
                             f"if i=j={i}, then dist must be zero "
                             f"but is {dist}.")
-                else:
-                    if dist > farthest_neighbor:
-                        farthest_neighbor = dist
-                    if dist < nearest_neighbor:
-                        nearest_neighbor = dist
+                    continue
+                if dist > farthest_neighbor:
+                    farthest_neighbor = dist
+                if dist < nearest_neighbor:
+                    nearest_neighbor = dist
                 if dist != matrix[j, i]:
                     is_symmetric = False
             if farthest_neighbor <= 0:
@@ -819,10 +839,16 @@ class Instance(Component, np.ndarray):
                         tour_length_lower_bound, 1_000_000_000_000_001)
 
         # create the object
+        limit: Final[int] = max(upper_bound, n_cities)
         obj: Final[Instance] = super().__new__(
             cls, use_shape, int_range_to_dtype(
-                min_value=0, max_value=max(upper_bound, n_cities)))
+                min_value=-limit, max_value=limit))
         np.copyto(obj, matrix, "unsafe")
+        for i in range(n_cities):
+            for j in range(n_cities):
+                if obj[i, j] != matrix[i, j]:
+                    raise ValueError(
+                        f"error when copying: {obj[i, j]} != {matrix[i, j]}")
 
         #: the name of the instance
         obj.name = use_name
@@ -912,13 +938,18 @@ symmetric: T@dtype: i@END_I'
         suffix: Final[str] = ".tsp" if is_symmetric else ".atsp"
         with open_resource_stream(f"{name}{suffix}") as stream:
             inst: Final[Instance] = _from_stream(stream)
-            if inst.name != name:
-                raise ValueError(f"got {inst.name!r} for instance {name!r}?")
-            if is_symmetric and (not inst.is_symmetric):
-                raise ValueError(f"{name!r} should be symmetric but is not?")
-            if inst.n_cities <= 1000:
-                setattr(container, inst_attr, inst)
-            return inst
+
+        if inst.name != name:
+            raise ValueError(f"got {inst.name!r} for instance {name!r}?")
+        sc: int = ncities_from_tsplib_name(name)
+        if sc != inst.n_cities:
+            raise ValueError(f"expected to get n_cities={sc} from name "
+                             f"{name!r} but got {inst.n_cities}.")
+        if is_symmetric and (not inst.is_symmetric):
+            raise ValueError(f"{name!r} should be symmetric but is not?")
+        if inst.n_cities <= 1000:
+            setattr(container, inst_attr, inst)
+        return inst
 
     @staticmethod
     def list_resources(symmetric: bool = True,

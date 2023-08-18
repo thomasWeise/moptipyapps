@@ -80,7 +80,7 @@ from moptipyapps.shared import SCOPE_INSTANCE
 from moptipyapps.tsp.instance import Instance
 
 
-@numba.njit(cache=True, inline="always")
+@numba.njit(cache=True, inline="always", fastmath=False, boundscheck=False)
 def tour_length(instance: np.ndarray, x: np.ndarray) -> int:
     """
     Compute the length of a tour.

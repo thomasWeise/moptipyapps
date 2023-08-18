@@ -160,7 +160,7 @@ def validate_algorithm_on_2dbinpacking(
                              Objective], Algorithm],
         max_fes: int = 100, random: Generator = __RANDOM) -> None:
     """
-    Validate an algorithm on a set of JSSP instances.
+    Validate an algorithm on a set of bin packing instances.
 
     :param algorithm: the algorithm factory
     :param max_fes: the maximum FEs

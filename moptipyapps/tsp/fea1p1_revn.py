@@ -45,7 +45,8 @@ from moptipyapps.shared import SCOPE_INSTANCE
 from moptipyapps.tsp.instance import Instance
 
 
-@numba.njit(nogil=True, cache=True, inline="always")
+@numba.njit(nogil=True, cache=True, inline="always", fastmath=False,
+            boundscheck=False)
 def rev_if_h_not_worse(i: int, j: int, n_cities: int, dist: np.ndarray,
                        h: np.ndarray, x: np.ndarray, y: int) -> int:
     """
@@ -60,7 +61,7 @@ def rev_if_h_not_worse(i: int, j: int, n_cities: int, dist: np.ndarray,
     :param y: the tour length
     """
     xi: Final[int] = x[i]  # the value of x at index i
-    xim1: Final[int] = x[((i - 1) + n_cities) % n_cities]  # x[i - 1]
+    xim1: Final[int] = x[i - 1]  # the value of x at index i-1, wraps at 0
     xj: Final[int] = x[j]  # the value of x at index j
     xjp1: Final[int] = x[(j + 1) % n_cities]  # x[j + 1], but index wrapped
 
@@ -119,7 +120,7 @@ class TSPFEA1p1revn(Algorithm):
 
         y: int = cast(int, process.evaluate(x))  # get length of first tour
         nm1: Final[int] = n - 1  # need n-1 in the loop for the random numbers
-        nm2: Final[int] = n - 12  # we need this to check the move indices
+        nm2: Final[int] = n - 2  # we need this to check the move indices
         while not should_terminate():
             i = ri(nm1)  # get the first index
             j = ri(nm1)  # get the second index
