@@ -11,255 +11,94 @@ vector. Different ANN architectures have different weight vectors.
 As activation functions, we use `arctan`.
 """
 
-from typing import Final, Iterable
+from typing import Callable, Final, Iterable, cast
 
-import numba  # type: ignore
 import numpy as np
+from moptipy.utils.types import check_int_range, type_error
 
 from moptipyapps.dynamic_control.controller import Controller
+from moptipyapps.dynamic_control.controllers.codegen import CodeGenerator
 from moptipyapps.dynamic_control.system import System
 
 
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_2d_1o_1(state: np.ndarray, _: float,
-                  params: np.ndarray, out: np.ndarray) -> None:
+def make_ann(state_dims: int, control_dims: int, layers: list[int]) \
+        -> Controller:
     """
-    Compute a man's ANN for 2d-spaces with one layer containing 1 node.
+    Dynamically create an ANN.
 
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
+    :param state_dims: the state or input dimension
+    :param control_dims: the output dimension
+    :param layers: the sizes of the hidden layers
+    :returns: the controller
     """
-    out[0] = params[0] * np.arctan(params[1] + (params[2] * state[0])
-                                   + (params[3] * state[1]))
+    state_dims = check_int_range(state_dims, "state_dims", 1, 100)
+    control_dims = check_int_range(control_dims, "state_dims", 1, 100)
+    if not isinstance(layers, list):
+        raise type_error(layers, "layers", list)
+    for layer in layers:
+        check_int_range(layer, "layer", 1, 64)
 
+    # we also try to cache the generated controllers
+    description = "_".join(map(str, ([state_dims, control_dims, *layers])))
+    description = f"__cache_{description}"
+    if hasattr(make_ann, description):
+        return cast(Controller, getattr(make_ann, description))
 
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_3d_1o_1(state: np.ndarray, _: float,
-                  params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 3d-spaces with one layer containing 1 node.
+    code: Final[CodeGenerator] = CodeGenerator(
+        "state: np.ndarray, _: float, params: np.ndarray, out: np.ndarray")
+    params: int = 0  # the number of parameters
+    var_count: int = 0  # the number of variables
+    vars_in: list[str] = []  # the variables forming the current layer input
+    vars_out: list[str] = []  # the variables forming the current layer output
+    vars_cached: list[str] = []  # the variables cached for re-use
+    write: Final[Callable[[str], None]] = code.write  # fast call
+    writeln: Final[Callable[[str], None]] = code.writeln  # fast call
 
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
+    # first, we cache the state vector into local variables
+    for i in range(state_dims):
+        vv = f"s{i}"
+        vars_in.append(vv)
+        writeln(f"{vv} = state[{i}]")
 
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    out[0] = params[0] * np.arctan(
-        params[1] + (params[2] * state[0]) + (params[3] * state[1])
-        + (params[4] * state[2]))
+    # now we build the hidden layers of the network
+    for layer in layers:
+        for _ in range(layer):
+            # allocate a variable for storing the current neuron's output
+            if len(vars_cached) > 0:
+                var = vars_cached.pop(-1)
+            else:
+                var_count += 1
+                var = f"v{var_count}"
+            vars_out.append(var)  # remember the variable
+            write(f"{var} = np.arctan(params[{params}]")  # the bias
+            params += 1
+            for vv in vars_in:
+                write(f" + params[{params}] * {vv}")  # input * weight
+                params += 1
+            writeln(")")
+        vars_cached.extend(vars_in)  # old inputs ready for reuse
+        vars_in.clear()  # inputs are no longer used
+        vars_in, vars_out = vars_out, vars_in  # outputs become inputs
 
+    # now we construct the output layer
+    for i in range(control_dims):
+        write(f"out[{i}] = params[{params}] * ")  # the multiplier
+        params += 1
+        write(f"np.arctan(params[{params}]")  # the bias
+        params += 1
+        for vv in vars_in:
+            write(f" + params[{params}] * {vv}")  # input * weight
+            params += 1
+        writeln(")")
 
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_2d_1o_2(state: np.ndarray, _: float,
-                  params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 2d-spaces with one layer containing 2 nodes.
-
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    s0: Final[float] = state[0]
-    s1: Final[float] = state[1]
-    hl_1_1 = np.arctan(params[0] + (params[1] * s0) + (params[2] * s1))
-    hl_1_2 = np.arctan(params[3] + (params[4] * s0) + (params[5] * s1))
-    out[0] = (params[6] * hl_1_1) + (params[7] * hl_1_2)
-
-
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_3d_1o_2(state: np.ndarray, _: float,
-                  params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 3d-spaces with one layer containing 2 nodes.
-
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    s0: Final[float] = state[0]
-    s1: Final[float] = state[1]
-    s2: Final[float] = state[2]
-    hl_1_1 = np.arctan(params[0] + (params[1] * s0) + (params[2] * s1)
-                       + (params[3] * s2))
-    hl_1_2 = np.arctan(params[4] + (params[5] * s0) + (params[6] * s1)
-                       + (params[7] * s2))
-    out[0] = (params[8] * hl_1_1) + (params[9] * hl_1_2)
-
-
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_2d_1o_3(state: np.ndarray, _: float,
-                  params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 2d-spaces with one layer containing 3 nodes.
-
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    s0: Final[float] = state[0]
-    s1: Final[float] = state[1]
-    hl_1_1 = np.arctan(params[0] + (params[1] * s0) + (params[2] * s1))
-    hl_1_2 = np.arctan(params[3] + (params[4] * s0) + (params[5] * s1))
-    hl_1_3 = np.arctan(params[6] + (params[7] * s0) + (params[8] * s1))
-    out[0] = (params[9] * hl_1_1) + (params[10] * hl_1_2) \
-        + (params[11] * hl_1_3)
-
-
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_3d_1o_3(state: np.ndarray, _: float,
-                  params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 3d-spaces with one layer containing 3 nodes.
-
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    s0: Final[float] = state[0]
-    s1: Final[float] = state[1]
-    s2: Final[float] = state[2]
-    hl_1_1 = np.arctan(params[0] + (params[1] * s0) + (params[2] * s1)
-                       + (params[3] * s2))
-    hl_1_2 = np.arctan(params[4] + (params[5] * s0) + (params[6] * s1)
-                       + (params[7] * s2))
-    hl_1_3 = np.arctan(params[8] + (params[9] * s0) + (params[10] * s1)
-                       + (params[11] * s2))
-    out[0] = (params[12] * hl_1_1) + (params[13] * hl_1_2) \
-        + (params[14] * hl_1_3)
-
-
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_2d_1o_2_2(state: np.ndarray, _: float,
-                    params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 2d-spaces with 2 layers with 2 nodes each.
-
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    s0: Final[float] = state[0]
-    s1: Final[float] = state[1]
-    hl_1_1 = np.arctan(params[0] + (params[1] * s0) + (params[2] * s1))
-    hl_1_2 = np.arctan(params[3] + (params[4] * s0) + (params[5] * s1))
-    hl_2_1 = np.arctan(params[6] + (params[7] * hl_1_1)
-                       + (params[8] * hl_1_2))
-    hl_2_2 = np.arctan(params[9] + (params[10] * hl_1_1)
-                       + (params[11] * hl_1_2))
-    out[0] = (params[12] * hl_2_1) + (params[13] * hl_2_2)
-
-
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_3d_1o_2_2(state: np.ndarray, _: float,
-                    params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 3d-spaces with 2 layers with 2 nodes each.
-
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    s0: Final[float] = state[0]
-    s1: Final[float] = state[1]
-    s2: Final[float] = state[2]
-    hl_1_1 = np.arctan(params[0] + (params[1] * s0) + (params[2] * s1)
-                       + (params[3] * s2))
-    hl_1_2 = np.arctan(params[4] + (params[5] * s0) + (params[6] * s1)
-                       + (params[7] * s2))
-    hl_2_1 = np.arctan(params[8] + (params[9] * hl_1_1)
-                       + (params[10] * hl_1_2))
-    hl_2_2 = np.arctan(params[11] + (params[12] * hl_1_1)
-                       + (params[13] * hl_1_2))
-    out[0] = (params[14] * hl_2_1) + (params[15] * hl_2_2)
-
-
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_2d_1o_3_2(state: np.ndarray, _: float,
-                    params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 2d-spaces with 2 layers with 3 and 2 nodes.
-
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    s0: Final[float] = state[0]
-    s1: Final[float] = state[1]
-    hl_1_1 = np.arctan(params[0] + (params[1] * s0) + (params[2] * s1))
-    hl_1_2 = np.arctan(params[3] + (params[4] * s0) + (params[5] * s1))
-    hl_1_3 = np.arctan(params[6] + (params[7] * s0) + (params[8] * s1))
-    hl_2_1 = np.arctan(params[9] + (params[10] * hl_1_1)
-                       + (params[11] * hl_1_2) + (params[12] * hl_1_3))
-    hl_2_2 = np.arctan(params[13] + (params[14] * hl_1_1)
-                       + (params[15] * hl_1_2) + (params[16] * hl_1_2))
-    out[0] = (params[17] * hl_2_1) + (params[18] * hl_2_2)
-
-
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __ann_3d_1o_3_2(state: np.ndarray, _: float,
-                    params: np.ndarray, out: np.ndarray) -> None:
-    """
-    Compute a poor man's ANN for 3d-spaces with 2 layers with 3 and 2 nodes.
-
-    We use :func:`numpy.arctan` as activation function. The output layer
-    is just a weighted sum of the hidden layer and no other transformation
-    is performed.
-
-    :param state: the current state of the system
-    :param params: the weight vector for the neurons.
-    :param out: the control vector, receiving one single element
-    """
-    s0: Final[float] = state[0]
-    s1: Final[float] = state[1]
-    s2: Final[float] = state[2]
-    hl_1_1 = np.arctan(params[0] + (params[1] * s0) + (params[2] * s1)
-                       + (params[3] * s2))
-    hl_1_2 = np.arctan(params[4] + (params[5] * s0) + (params[6] * s1)
-                       + (params[7] * s2))
-    hl_1_3 = np.arctan(params[8] + (params[9] * s0) + (params[10] * s1)
-                       + (params[11] * s2))
-    hl_2_1 = np.arctan(params[12] + (params[13] * hl_1_1)
-                       + (params[14] * hl_1_2) + (params[15] * hl_1_3))
-    hl_2_2 = np.arctan(params[16] + (params[17] * hl_1_1)
-                       + (params[18] * hl_1_2) + (params[19] * hl_1_2))
-    out[0] = (params[20] * hl_2_1) + (params[21] * hl_2_2) \
-        + (params[22] * hl_2_2)
+    result: Final[Controller] = Controller(
+        f"ann_{'_'.join(map(str, layers))}" if len(layers) > 0 else "ann",
+        state_dims, control_dims, params, code.build())
+    # perform one test invocation
+    result.controller(np.zeros(state_dims), 0.0, np.zeros(params),
+                      np.empty(control_dims))
+    setattr(make_ann, description, result)  # cache the controller
+    return result
 
 
 def anns(system: System) -> Iterable[Controller]:
@@ -276,20 +115,11 @@ def anns(system: System) -> Iterable[Controller]:
     :param system: the equations object
     :return: the ANNs
     """
-    if system.control_dims != 1:
-        raise ValueError("invalid controller dimensions "
-                         f"{system.control_dims} for {system!r}.")
-    if system.state_dims == 2:
-        return (Controller("ann_1", 2, 1, 4, __ann_2d_1o_1),
-                Controller("ann_2", 2, 1, 8, __ann_2d_1o_2),
-                Controller("ann_3", 2, 1, 12, __ann_2d_1o_3),
-                Controller("ann_2_2", 2, 1, 14, __ann_2d_1o_2_2),
-                Controller("ann_3_2", 2, 1, 19, __ann_2d_1o_3_2))
-    if system.state_dims == 3:
-        return (Controller("ann_1", 3, 1, 5, __ann_3d_1o_1),
-                Controller("ann_2", 3, 1, 10, __ann_3d_1o_2),
-                Controller("ann_3", 3, 1, 15, __ann_3d_1o_3),
-                Controller("ann_2_2", 3, 1, 16, __ann_3d_1o_2_2),
-                Controller("ann_3_2", 3, 1, 23, __ann_3d_1o_3_2))
-    raise ValueError("invalid state dimensions "
-                     f"{system.state_dims} for {system!r}.")
+    state_dims: Final[int] = system.state_dims
+    control_dims: Final[int] = system.control_dims
+    return (make_ann(state_dims, control_dims, []),
+            make_ann(state_dims, control_dims, [1]),
+            make_ann(state_dims, control_dims, [2]),
+            make_ann(state_dims, control_dims, [3]),
+            make_ann(state_dims, control_dims, [2, 2]),
+            make_ann(state_dims, control_dims, [3, 2]))

@@ -20,6 +20,7 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.spaces.vectorspace import VectorSpace
 from moptipy.utils.logger import KeyValueLogSection
+from moptipy.utils.strings import sanitize_name
 from moptipy.utils.types import check_to_int_range, type_error
 
 
@@ -41,11 +42,15 @@ class Controller(Component):
         super().__init__()
         if not isinstance(name, str):
             raise type_error(name, "name", str)
+        nn: Final[str] = sanitize_name(name)
+        if nn != name:
+            raise ValueError(
+                f"sanitized name {nn!r} is different from name {name!r}.")
         #: the controller name
         self.name: Final[str] = name
         #: the dimensions of the state variable
         self.state_dims: Final[int] = check_to_int_range(
-            state_dims, "state_dims", 2, 3)
+            state_dims, "state_dims", 2, 100)
         #: the dimensions of the controller output
         self.control_dims: Final[int] = check_to_int_range(
             control_dims, "control_dims", 1, 100)

@@ -505,7 +505,8 @@ def multi_run_ode(
 
     :param test_starting_states: the iterable of test starting states
     :param training_starting_states: the iterable of training starting states
-    :param collector: the destination to receive the results
+    :param collector: the destination to receive the results, in the form of
+        index, ode array, j, and t.
     :param equations: the differential system
     :param controller: the controller function
     :param parameters: the controller parameters

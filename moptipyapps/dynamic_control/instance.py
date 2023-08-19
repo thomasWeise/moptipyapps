@@ -19,6 +19,7 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.path import Path
+from moptipy.utils.strings import sanitize_name
 from moptipy.utils.types import type_error
 
 from moptipyapps.dynamic_control.controller import Controller
@@ -28,12 +29,14 @@ from moptipyapps.dynamic_control.system import System
 class Instance(Component):
     """An instance of the dynamic control problem."""
 
-    def __init__(self, system: System, controller: Controller) -> None:
+    def __init__(self, system: System, controller: Controller,
+                 name_base: str | None = None) -> None:
         """
         Create an instance of the dynamic control problem.
 
         :param system: the system of equations governing the dynamic system
         :param controller: the controller applied to the system
+        :param name_base: the name base
         """
         super().__init__()
         if not isinstance(system, System):
@@ -55,13 +58,25 @@ class Instance(Component):
         #: the controller applied to the system
         self.controller: Final[Controller] = controller
 
+        name: str = f"{self.system}_{self.controller}"
+        if name_base is not None:
+            if not isinstance(name_base, str):
+                raise type_error(name_base, "name_base", (str, None))
+            nn = sanitize_name(name_base)
+            if nn != name_base:
+                raise ValueError(f"sanitized name base {nn!r} different "
+                                 f"from original {name_base!r}.")
+            name = f"{name}_{name_base}"
+        #: the name of this instance
+        self.name: Final[str] = name
+
     def __str__(self) -> str:
         """
         Get the name of this instance.
 
         :return: a combination of the equation name and the controller name
         """
-        return f"{self.system}_{self.controller}"
+        return self.name
 
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
         """
