@@ -550,7 +550,28 @@ def diff_from_ode(ode: np.ndarray, state_dim: int) \
     works reasonably well, then we could essentially plug this model into
     :func:`run_ode` instead of the original `equations` parameter.
 
-    :param ode: the result of :func:`ode_run`
+    What this function does to compute the differential is to basically
+    "invert" the dynamic weighting done by :func:`run_ode`. :func:`run_ode`
+    starts in a given starting state `s`. It then computes the control vector
+    `c` as a function of `s`, i.e., `c(s)`. Then, the equations of the dynamic
+    system (see module :mod:`~moptipyapps.dynamic_control.system`) to compute
+    the state differential `D=ds/dt` as a function of `c(s)` and `s`, i.e., as
+    something like `D(s, c(s))`. The next step would be to update the state,
+    i.e., to set `s=s+D(s, c(s))`. Unfortunately, this can make `s` go to
+    infinity. So :func:`run_ode` will compute a dynamic weight `w` and do
+    `s=s+w*D(s, c(s))`, where `w` is chosen such that the state vector `s`
+    does not grow unboundedly. While `s` and `c(s)` and `w` are stored in one
+    row of the result matrix of :func:`run_ode`, `s+w*D(s,c(s))` is stored as
+    state `s` in the next row. So what this function here basically does is to
+    subtract the old state from the next state and divide the result by `w` to
+    get `D(s, c(s))`. `s` and `c(s)` are already available directly in the ODE
+    result and `w` is not needed anymore.
+
+    We then get the rows `s, c(s)` and `D(s, c(s))` in the first and second
+    result matrix, respectively. This can then be used to train a system model
+    as proposed in model :mod:`~moptipyapps.dynamic_control.system_model`.
+
+    :param ode: the result of :func:`run_ode`
     :param state_dim: the state dimensions
     :returns: a tuple of the state+control vectors and the resulting
         state differential vectors

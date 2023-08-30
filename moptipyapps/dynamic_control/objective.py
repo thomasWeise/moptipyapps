@@ -8,7 +8,7 @@ figure of merit.
 
 We offer two different approaches for this:
 
-- :class:`FigureOfMerit` computes the arithmetic mean `z `  over the separate
+- :class:`FigureOfMerit` computes the arithmetic mean `z` over the separate
   figures of merit of the training cases.
 - :class:`FigureOfMeritLE` tries to smooth out the impact of bad starting
   states by computing `exp(mean[log(z + 1)]) - 1`.

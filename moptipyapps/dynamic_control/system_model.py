@@ -6,8 +6,11 @@ model receives as input the current system state vector `state` and the
 controller output `control` for the state vector `state`. It will return
 the differential of the system state, i.e., `dstate/dT`. In other words,
 the constructed model can replace the `equations` parameter in
-:func:`~moptipyapps.dynamic_control.ode.run_ode`. The idea is here to
-re-use the same function models as used in controllers
+:func:`~moptipyapps.dynamic_control.ode.run_ode`. The input used for
+training is provided by
+:func:`~moptipyapps.dynamic_control.ode.diff_from_ode`.
+
+The idea here is to re-use the same function models as used in controllers
 (:mod:`~moptipyapps.dynamic_control.controller`), learn their
 parameterizations from the observed data, and wrap everything together
 into a callable.
