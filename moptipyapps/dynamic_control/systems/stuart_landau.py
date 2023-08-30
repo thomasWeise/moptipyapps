@@ -26,7 +26,11 @@ from typing import Final
 
 import numba  # type: ignore
 import numpy as np
+from moptipy.utils.types import check_int_range
 
+from moptipyapps.dynamic_control.starting_points import (
+    make_interesting_starting_points,
+)
 from moptipyapps.dynamic_control.system import System
 
 
@@ -60,14 +64,15 @@ def __beautify(f: float) -> float:
     return f
 
 
-def __make_stuart_landau() -> System:
+def make_stuart_landau(n_points: int) -> System:
     """
     Create the Stuart-Landau system.
 
+    :param n_points: the number of training points
     :return: the Stuart-Landau system
     """
     tests: Final[np.ndarray] = np.array([[0.1, 0.0], [sqrt(0.1), 0.0]], float)
-    # similar to training = make_interesting_starting_points(111, tests)
+    check_int_range(n_points, "n_points", 1, 1_000)
     training: Final[np.ndarray] = np.array(
         [[-0.0038209, -0.00240577],
          [0.00307569, 0.00849048],
@@ -179,22 +184,12 @@ def __make_stuart_landau() -> System:
          [0.45711698, 0.16981881],
          [0.17358843, 0.46052731],
          [-0.39398933, 0.30241613],
-         [0.47669529, -0.15475867]])
-
-    # x n_rotations: Final[int] = 32
-    # x training: Final[np.ndarray] = np.empty(
-    # x     (n_rotations * len(tests), 2), float)
-    # x n_interesting: Final[int] = len(tests)
-    # x total_angles: Final[int] = n_interesting * n_rotations
-    # x dest_i: int = 0
-    # x for index, a_raw in enumerate(tests):
-    # x     a = complex(a_raw[0], a_raw[1])
-    # x     for i in range(n_rotations):
-    # x             * pi / total_angles
-    # x         point: complex = a * complex(cos(angle), sin(angle))
-    # x         training[dest_i, 0] = __beautify(point.real)
-    # x         training[dest_i, 1] = __beautify(point.imag)
-    # x         dest_i = dest_i + 1
+         [0.47669529, -0.15475867]]) if n_points == 111 else (
+        np.array([[-0.11744545, 0.04365611],
+                  [-0.05513875, -0.2444522],
+                  [-0.13321976, 0.35149126],
+                  [-0.47720217, -0.15318856]]) if n_points == 4 else
+        make_interesting_starting_points(n_points, tests))
 
     system: Final[System] = System(
         "stuart_landau", 2, 1, tests, training, 5000, 5000, (0, 1))
@@ -202,5 +197,8 @@ def __make_stuart_landau() -> System:
     return system
 
 
-#: The Stuart-Landau system.
-STUART_LANDAU: Final[System] = __make_stuart_landau()
+#: The Stuart-Landau system with 111 training points.
+STUART_LANDAU_111: Final[System] = make_stuart_landau(111)
+
+#: The Stuart-Landau system with 4 training points.
+STUART_LANDAU_4: Final[System] = make_stuart_landau(4)

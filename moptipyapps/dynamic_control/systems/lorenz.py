@@ -25,7 +25,11 @@ from typing import Final
 
 import numba  # type: ignore
 import numpy as np
+from moptipy.utils.types import check_int_range
 
+from moptipyapps.dynamic_control.starting_points import (
+    make_interesting_starting_points,
+)
 from moptipyapps.dynamic_control.system import System
 
 
@@ -52,12 +56,14 @@ def __lorenz_equations(state: np.ndarray, _: float,
     out[2] = x * y - (2.6666666666666665 * z)
 
 
-def __make_lorenz() -> System:
+def make_lorenz(n_points: int) -> System:
     """
     Create the Lorenz system.
 
+    :param n_points: the number of training points
     :return: the Lorenz system
     """
+    check_int_range(n_points, "n_points", 1, 1_000)
     tests: Final[np.ndarray] = \
         np.array([[-1.0, 1.0, 3.0], [0.0, 1.0, 22.0]], float)
     # similar to training = make_interesting_starting_points(111, tests)
@@ -172,7 +178,14 @@ def __make_lorenz() -> System:
          [-1.66896882e+1, -1.74937806e+1, -1.63577116e+1],
          [2.72013507e+1, -1.05512055e+1, -4.09451211],
          [-1.68644649e+1, 1.27734462e+1, 2.08910298e+1],
-         [-1.36658517e+1, 1.36662584e+1, -2.29484206e+1]])
+         [-1.36658517e+1, 1.36662584e+1, -2.29484206e+1]]) \
+        if n_points == 111 else (
+            np.array([[-0.75900911, 3.40732601, -6.63879075],
+                      [10.95019756, -9.9362743, -2.53014984],
+                      [-17.32322703, -10.12101153, -10.18854763],
+                      [13.282736, 14.93163678, -22.37782999]])
+            if n_points == 4 else make_interesting_starting_points(
+                n_points, tests))
 
     lorenz: Final[System] = System(
         "lorenz", 3, 1, tests, training, 5000, 5000,
@@ -181,5 +194,8 @@ def __make_lorenz() -> System:
     return lorenz
 
 
-#: The Lorenz system.
-LORENZ: Final[System] = __make_lorenz()
+#: The Lorenz system with 111 training points.
+LORENZ_111: Final[System] = make_lorenz(111)
+
+#: The Lorenz system with 4 training points.
+LORENZ_4: Final[System] = make_lorenz(4)

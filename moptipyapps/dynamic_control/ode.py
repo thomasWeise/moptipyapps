@@ -374,8 +374,8 @@ def __j_from_ode_compute(ode: np.ndarray, state_dim: int,
     figure of merit computation. It does make sense to include the control
     output at that moment, though, because it contributes to the next state.
     It also makes no sense to count in the last row of the ODE computation,
-    because this is the final system state whose weight will not actually
-    be computed.
+    because this is the final system state and the system will not spend any
+    time in it in the simulation, so its weight will be 0.
 
     :param ode: the output array from the ODE simulation
     :param state_dim: the state dimension
@@ -529,3 +529,46 @@ def multi_run_ode(
         for c in collector:
             c(index, ode, j_from_ode(ode, len(sp)), t_from_ode(ode))
         index += 1
+
+
+def diff_from_ode(ode: np.ndarray, state_dim: int) \
+        -> tuple[np.ndarray, np.ndarray]:
+    """
+    Compute all the state+control vectors and the resulting differentials.
+
+    This function returns two matrices. Each row of both matrices corresponds
+    to a time slot. Each row in the first matrix holds the state vector and
+    the control vector (that was computed by the controller). The
+    corresponding row in the second matrix then holds the state differential
+    resulting from the control vector being applied in the differential
+    equations that govern the system state change.
+
+    The idea is that this function basically provides the data that we would
+    like to learn when training a surrogate model for a system: From the
+    current state and the computed control vector, we want that our model can
+    give us the resulting system differential. If we have such a model and it
+    works reasonably well, then we could essentially plug this model into
+    :func:`run_ode` instead of the original `equations` parameter.
+
+    :param ode: the result of :func:`ode_run`
+    :param state_dim: the state dimensions
+    :returns: a tuple of the state+control vectors and the resulting
+        state differential vectors
+
+    >>> od = np.array([
+    ...     [0, 0, 0, 0, 0, 1],  # state 0,0,0; control 0,0; weight 1
+    ...     [1, 2, 3, 4, 5, 1],  # state 1,2,3; control 4,5; weight 1
+    ...     [2, 3, 4, 5, 6, 0.5],  # state 2,3,4; control 5,6; weight 0.5
+    ...     [4, 6, 8, 7, 7, 0]])    # state 4,6,8; control 7,7, weight 0
+    >>> res = diff_from_ode(od, 3)
+    >>> res[0]  # state and control vectors, weight col and last row removed
+    array([[0., 0., 0., 0., 0.],
+           [1., 2., 3., 4., 5.],
+           [2., 3., 4., 5., 6.]])
+    >>> res[1]  # (state[i + 1] - state[i]) / weight[i]
+    array([[1., 2., 3.],
+           [1., 1., 1.],
+           [4., 6., 8.]])
+    """
+    return (ode[0:-1, 0:-1],
+            np.diff(ode[:, 0:state_dim], 1, 0) / ode[0:-1, -1][:, None])

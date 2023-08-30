@@ -23,9 +23,9 @@ from moptipyapps.dynamic_control.controllers.peaks import peaks
 from moptipyapps.dynamic_control.controllers.predefined import predefined
 from moptipyapps.dynamic_control.controllers.quadratic import quadratic
 from moptipyapps.dynamic_control.instance import Instance
-from moptipyapps.dynamic_control.objective_le import FigureOfMeritLE
-from moptipyapps.dynamic_control.systems.lorenz import LORENZ
-from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU
+from moptipyapps.dynamic_control.objective import FigureOfMeritLE
+from moptipyapps.dynamic_control.systems.lorenz import LORENZ_111
+from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_111
 
 
 def make_instances() -> Iterable[Callable[[], Instance]]:
@@ -35,7 +35,7 @@ def make_instances() -> Iterable[Callable[[], Instance]]:
     :return: the instances to be used in the dynamic control experiment.
     """
     res: list[Callable[[], Instance]] = []
-    for system in (STUART_LANDAU, LORENZ):
+    for system in (STUART_LANDAU_111, LORENZ_111):
         controllers = [linear(system), quadratic(system), cubic(system)]
         controllers.extend(anns(system))
         controllers.extend(min_anns(system))
