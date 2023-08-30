@@ -1,18 +1,50 @@
 """
 A surrogate system model-based CMA-ES approach.
 
+In the real world, we want to synthesize a controller `c(s, p)` that can
+drive a dynamic system into a good state. The controller receives as input
+the current state `s`, say, from sensor readings. It can also be
+parameterized by a vector `p`, imagine `c` to be, for example, an artificial
+neural network and then `p` would be its weight vector. The output of `c` will
+influence the system in some way. In our example experiments, this is done
+by becoming part of the state differential `ds/dt`. Anyway, in the real world,
+the controller may steer the rotation speed of a rotor or the angles of rotor
+blades or whatever. Now you can imagine that doing real-world experiments is
+costly and takes a long time. Everytime we want to test a parameterization
+`p`, some form experiment, maybe in a wind tunnel, has to be done.
+
+So it would be beneficial if we could replace the actual experiment by a
+simulation. This would mean that we learn a model `M` that can compute the
+state change `ds/dt` based on the current state `s` and controller output `c`
+at reasonable accuracy. If we had such a computational model, then we could
+run the controller optimization process on that model. Once finished, we could
+apply and evaluate the best controller that we have discovered in a real
+experiment. With the observed behavior of the actual controller system, we may
+even be able to update and improve our system model to become more accurate.
+So we could alternate between real experiments and optimization runs on the
+simulation. Of course, we would always need to do some real experiments at
+first to gather the data to obtain our initial model `M`. But if we can get
+this to work, then we could probably get much better controllers with fewer
+actual experiments.
+
+This here is an algorithm that tries to implement the above pattern. For the
+model and controller optimization, it uses the BiPop-CMA-ES offered by
+`moptipy` (:class:`~moptipy.algorithms.so.vector.cmaes_lib.BiPopCMAES`). But
+it uses two instances of this algorithm, namely one to optimize the controller
+parameters and one that optimizes the model parameters.
+
 The idea is that we divide the computational budget into a warmup and a
 model-based phase. In the warmup phase, we use CMA-ES to normally optimize
 the controller based on the actual simulation of the dynamic system.
 However, while doing so, for every time step in the simulation, we collect
 three things: The current state vector `s`, the control vector `c`, and the
 resulting state differential `ds/dt`. Now if we have such data, we can look
-at the dynamic system as a function `F(s, c) = ds/dt`. If we consider the
+at the dynamic system as a function `D(s, c) = ds/dt`. If we consider the
 dynamic system to be such a function and we have collected the vectors
 `(s, c)` and `ds/dt`, then we may as well attempt to *learn* this system.
 So after the warmup phase, our algorithm does the following: In a loop (for
 the rest of the computational budget), it first tries to learn a model `M` of
-`F`. Then, it replaces the actual differential equations of the system in ODE
+`D`. Then, it replaces the actual differential equations of the system in ODE
 solution approach of the objective function with `M`. In other words, we kick
 out the actual system and instead use the learned system model `M`. We replace
 the differential equations that describe the system using `M`. We can now
@@ -23,8 +55,8 @@ a new heap of `(s, c)` and `ds/dt` vectors). With this new data, we again
 learn a new and hopefully more accurate model `M`. This process is iterated
 until the rest of the computational budget is exhausted.
 
-This approach allows us to learn a model of a dynamic system while
-synthesizing a controller for it. Since we can have infinite more time to
+This approach hopefully allows us to learn a model of a dynamic system while
+synthesizing a controller for it. Since we can have infinitely more time to
 synthesize the controller on a learned system model compared to an actual
 model, this may give us much better results.
 """

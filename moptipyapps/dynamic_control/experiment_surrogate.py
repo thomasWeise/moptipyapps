@@ -1,4 +1,17 @@
-"""An example experiment for dynamic control."""
+"""
+An example experiment for dynamic control using surrogate system models.
+
+In this experiment, we again try to synthesize (i.e., parameterize)
+controllers (:mod:`~moptipyapps.dynamic_control.controller`) that steer a
+dynamic system (:mod:`~moptipyapps.dynamic_control.system`) into a state by
+using a figure of merit (:mod:`~moptipyapps.dynamic_control.objective`) which
+minimizes both the squared system state and controller effort.
+
+The difference compared to :mod:`~moptipyapps.dynamic_control.experiment_raw`
+is that we also try to synthesize a system model at the same time. We employ
+the procedure detailed in :mod:`~moptipyapps.dynamic_control.surrogate_cma`
+for this purpose.
+"""
 
 import argparse
 from os.path import basename, dirname

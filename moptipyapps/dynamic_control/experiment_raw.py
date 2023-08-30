@@ -1,4 +1,15 @@
-"""An example experiment for dynamic control."""
+"""
+An example experiment for dynamic control.
+
+In this experiment, we try to synthesize (i.e., parameterize) controllers
+(:mod:`~moptipyapps.dynamic_control.controller`) that steer a dynamic system
+(:mod:`~moptipyapps.dynamic_control.system`) into a state by using a figure
+of merit (:mod:`~moptipyapps.dynamic_control.objective`) which minimizes both
+the squared system state and controller effort.
+
+A model-based experiment variant is given in
+:mod:`~moptipyapps.dynamic_control.experiment_surrogate`.
+"""
 
 import argparse
 from os.path import basename, dirname

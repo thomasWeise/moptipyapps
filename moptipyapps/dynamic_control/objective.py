@@ -9,9 +9,9 @@ figure of merit.
 We offer two different approaches for this:
 
 - :class:`FigureOfMerit` computes the arithmetic mean `z` over the separate
-  figures of merit of the training cases.
+  figures of merit `J` of the training cases.
 - :class:`FigureOfMeritLE` tries to smooth out the impact of bad starting
-  states by computing `exp(mean[log(z + 1)]) - 1`.
+  states by computing `exp(mean[log(J + 1)]) - 1`.
 
 These objective functions also offer a way to collect the state+control and
 corresponding differential vectors.
@@ -40,7 +40,8 @@ class FigureOfMerit(Objective):
         :param instance: the instance
         :param supports_model_mode: `True` if this objective is supposed to
             support alternating actual and model-based runs, `False` if it is
-            just applied to the actual instance
+            just applied to the actual instance (see :meth:`set_model` and
+            :meth:`get_differentials`).
         """
         super().__init__()
         if not isinstance(instance, Instance):
@@ -79,13 +80,30 @@ class FigureOfMerit(Objective):
         self.set_raw()
 
     def set_raw(self) -> None:
-        """Let this objective work on the raw original equations."""
+        """
+        Let this objective work on the original system equations.
+
+        The objective function here can be used in two modi: a) based on the
+        original systems model, as given in
+        :attr:`~moptipyapps.dynamic_control.instance.Instance.system`, or b)
+        on a learned model of the system. This function here toggles to the
+        former mode, i.e., to the actual system mode. In this modus, training
+        data for training the system model will be gathered if the objective
+        function is configured to do so. In that case, you can toggle to model
+        mode via :meth:`set_model`.
+        """
         self.__equations = self.instance.system.equations
         self.__collect = self.__collection is not None
 
     def get_differentials(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Get the collected differentials.
+
+        If `supports_model_mode` was set to `True` in the creating of this
+        objective function, then the system will gather tuples `(s, c)` and
+        `ds/dt` when in raw mode (see :meth:`set_raw`) and make them available
+        here to train system models (see :meth:`set_model`). Notice that
+        gathering training data is a very memory intense process.
 
         :returns: the collected differentials
         """
@@ -106,8 +124,25 @@ class FigureOfMerit(Objective):
         """
         Set the model-driven mode for the evaluation.
 
-        :param equations: the equations to be used
+        In this modus, the internal system equations are replaced by the
+        callable `equations` passed into this function and the data collection
+        is stopped. The idea is that `equations` could be a model synthesized
+        on the data gathered (see :meth:`get_differentials`) and thus does not
+        represent the actual dynamic system but a model thereof. We could
+        synthesize a controller for this model and for this purpose would use
+        the exactly same objective function -- just instead of using the
+        actual system equations, we use the system model. Of course, we then
+        need to deactivate the data gathering mechanism (see again
+        :meth:`get_differentials`), because the data would then not be real
+        system data. You can toggle back to the actual system using
+        :meth:`set_raw`.
+
+        :param equations: the equations to be used instead of the actual
+            system's differential equations.
         """
+        if self.__collection is None:
+            raise ValueError("Cannot go into model mode without gathering "
+                             "model training data!")
         self.__equations = equations
         self.__collect = False
 
@@ -153,6 +188,16 @@ class FigureOfMerit(Objective):
         """
         Compute the final objective value from several single `J` values.
 
+        When synthesizing controllers, we do not just apply them to a single
+        simulation run. Instead, we use multiple training cases (see
+        :attr:`~moptipyapps.dynamic_control.system.System.\
+training_starting_states`) and perform :attr:`~moptipyapps.dynamic_control\
+.system.System.training_steps` simulation steps on each of them. Each such
+        training starting state will result in a single `J` value, which is
+        the sum of squared state and control values. We now compute the end
+        objective value from these different `J` values by using this
+        function here.
+
         This will *destroy* the contents of `results`.
 
         :param results: the array of `J` values
@@ -195,7 +240,7 @@ class FigureOfMeritLE(FigureOfMerit):
     very far out and expensive starting states that require lots of control
     efforts to be corrected. If we simply average over all states, then these
     expensive states will dominate whatever good we are doing in the cheap
-    states. Averaging over the `log(z+1)` reduces such impact. We then compute
+    states. Averaging over the `log(J+1)` reduces such impact. We then compute
     `exp[...]-1` of the result as cosmetics to get back into the original
     range of the figure of merits.
     """
@@ -211,6 +256,9 @@ class FigureOfMeritLE(FigureOfMerit):
     def sum_up_results(self, results: np.ndarray) -> float:
         """
         Compute the final objective value from several single `J` values.
+
+        For each training case, there is one basic figure of merit `J` and
+        here we compute `exp(mean[log(J + 1)]) - 1` over all of these values.
 
         :param results: the array of `J` values
         :return: the final result

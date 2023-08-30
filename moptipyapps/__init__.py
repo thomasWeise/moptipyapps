@@ -4,7 +4,12 @@ Applications of Metaheuristic Optimization in Python.
 Currently, the following applications are implemented:
 
 - :mod:`~moptipyapps.binpacking2d` provides methods to solve two-dimensional
-  bin packing instances.
+  bin packing instances,
+- :mod:`~moptipyapps.dynamic_control` can simulate controlled dynamic systems
+  of differential equations and our goal is to synthesize controllers that can
+  steer such systems into beneficial states,
+- mod:`~moptipyapps.tsp` offers instances of the well-known Traveling
+  Salesperson Problem (TSP) and some very basic algorithms to tackle it.
 
 The following additional tools are implemented:
 
