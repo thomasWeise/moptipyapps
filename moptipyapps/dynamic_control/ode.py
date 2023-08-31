@@ -35,9 +35,7 @@ import numba  # type: ignore
 import numpy as np
 
 
-@numba.njit(numba.float64(numba.float64[:], numba.float64[:],
-                          numba.float64[:], numba.float64[:], numba.float64),
-            cache=True, inline="always", fastmath=False, boundscheck=False)
+@numba.njit(cache=True, inline="always", fastmath=False, boundscheck=False)
 def __diff_update(cur_diff: np.ndarray, cur_row: np.ndarray,
                   last_diff: np.ndarray, next_row: np.ndarray,
                   max_dist: float) -> float:

@@ -33,9 +33,7 @@ from moptipyapps.dynamic_control.starting_points import (
 from moptipyapps.dynamic_control.system import System
 
 
-@numba.njit(numba.none(numba.float64[:], numba.float64, numba.float64[:],
-                       numba.float64[:]),
-            cache=True, inline="always", fastmath=True, boundscheck=False)
+@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
 def __lorenz_equations(state: np.ndarray, _: float,
                        control: np.ndarray, out: np.ndarray) -> None:
     """

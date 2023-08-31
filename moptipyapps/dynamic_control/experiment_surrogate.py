@@ -66,42 +66,51 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
 MAX_FES: Final[int] = 64
 
 
-def base_setup(instance: Instance) -> tuple[
+def base_setup(instance: Instance, max_fes: int) -> tuple[
         Execution, FigureOfMerit, VectorSpace]:
     """
     Create the basic setup.
 
     :param instance: the instance to use
+    :param max_fes: the maximum FEs
     :return: the basic execution
     """
     objective: Final[FigureOfMerit] = FigureOfMeritLE(
         instance, isinstance(instance, SystemModel))
     space = instance.controller.parameter_space()
-    return Execution().set_max_fes(MAX_FES).set_log_all_fes(True)\
+    return Execution().set_max_fes(max_fes).set_log_all_fes(True)\
         .set_objective(objective).set_solution_space(space), objective, space
 
 
-def cmaes_raw(instance: Instance) -> Execution:
+def cmaes_raw(instance: Instance, max_fes: int = MAX_FES) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
     :param instance: the problem instance
+    :param max_fes: the maximum FEs
     :return: the setup
     """
-    execution, _, space = base_setup(instance)
+    execution, _, space = base_setup(instance, max_fes)
     return execution.set_algorithm(BiPopCMAES(space))
 
 
-def cmaes_surrogate(instance: SystemModel) -> Execution:
+def cmaes_surrogate(instance: SystemModel,
+                    max_fes: int = MAX_FES,
+                    fes_for_training: int = 1024,
+                    fes_per_model_run: int = 2024) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
     :param instance: the problem instance
+    :param max_fes: the maximum FEs
+    :param fes_for_training: the FEs for training
+    :param fes_per_model_run: the FEs per model run
     :return: the setup
     """
-    execution, objective, space = base_setup(instance)
+    execution, objective, space = base_setup(instance, max_fes)
     return execution.set_solution_space(space).set_algorithm(SurrogateCmaEs(
-        instance, space, objective, MAX_FES // 4, 1024, 2048))
+        instance, space, objective, max_fes // 4,
+        fes_for_training, fes_per_model_run))
 
 
 def on_completion(instance: Any, log_file: Path, process: Process) -> None:

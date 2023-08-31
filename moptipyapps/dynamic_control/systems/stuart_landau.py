@@ -34,9 +34,7 @@ from moptipyapps.dynamic_control.starting_points import (
 from moptipyapps.dynamic_control.system import System
 
 
-@numba.njit(numba.none(numba.float64[:], numba.float64, numba.float64[:],
-                       numba.float64[:]),
-            cache=True, inline="always", fastmath=True, boundscheck=False)
+@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
 def __stuart_landau_equations(state: np.ndarray, _: float,
                               control: np.ndarray, out: np.ndarray) -> None:
     """
@@ -50,18 +48,6 @@ def __stuart_landau_equations(state: np.ndarray, _: float,
     sigma: Final[float] = 0.1 - state[0]**2 - state[1]**2
     out[0] = sigma * state[0] - state[1]
     out[1] = sigma * state[1] + state[0] + control[0]
-
-
-def __beautify(f: float) -> float:
-    """
-    Beautify a floating point number.
-
-    :param f: the original value
-    :return: the beautified one.
-    """
-    if abs(f) < 1e-16:
-        return 0.0
-    return f
 
 
 def make_stuart_landau(n_points: int) -> System:

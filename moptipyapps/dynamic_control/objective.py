@@ -17,6 +17,7 @@ These objective functions also offer a way to collect the state+control and
 corresponding differential vectors.
 """
 
+from math import expm1
 from typing import Callable, Final
 
 import numpy as np
@@ -177,6 +178,15 @@ class FigureOfMerit(Objective):
         state_dim: Final[int] = len(training[0])
 
         for i, start in enumerate(training):
+            # The following line makes no sense at all. It creates a copy of
+            # the flattened version of the (already flat) start. The copy is
+            # stored nowhere, so it is immediately discarded. The value of
+            # start is not changed. However, the numpy array container
+            # changes, for an unclear reason. This is required and it must
+            # happen exactly here, for an unclear reason. Otherwise, the
+            # results of the objective function are inconsistent. For an
+            # unclear reason.
+            np.copy(start.flatten())  # <--- This should make no sense...
             ode = run_ode(
                 start, equations, controller, x, controller_dim, steps)
             results[i] = j_from_ode(ode, state_dim)
@@ -263,4 +273,4 @@ class FigureOfMeritLE(FigureOfMerit):
         :param results: the array of `J` values
         :return: the final result
         """
-        return float(np.expm1(np.log1p(results, results).mean()))
+        return float(expm1(np.log1p(results, results).mean()))
