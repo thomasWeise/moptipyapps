@@ -141,7 +141,56 @@ class SurrogateCmaEs(Algorithm):
             objective, system_model.model)
 
     def solve(self, process: Process) -> None:
-        """Solve the modelling problem."""
+        """
+        Solve the modelling problem.
+
+        This function begins by spending :attr:`fes_for_warmup` objective
+        function evaluations (FEs) on the actual problem, i.e., by trying to
+        synthesize controllers for the "real" system, using `process` to
+        evaluate the controller performance. The objective function passed to
+        the constructor (an instance of
+        :class:`~moptipyapps.dynamic_control.objective.FigureOfMerit`) must be
+        used by `process` as well. This way, during the warm-up phase, we can
+        collect tuples of the (system state, controller output) and the
+        resulting system differential for each simulated time step. This is
+        done via
+        :meth:`~moptipyapps.dynamic_control.objective.FigureOfMerit.set_raw`.
+
+        After the warm-up phase, we can obtain these collected data via
+        :meth:`~moptipyapps.dynamic_control.objective.FigureOfMerit.\
+get_differentials`. The data is then used to train a model via the model
+        objective function
+        :mod:`~moptipyapps.dynamic_control.model_objective`. The system model
+        is again basically a
+        :class:`~moptipyapps.dynamic_control.controller.Controller` which is
+        parameterized appropriately. For this, we use a CMA-ES algorithm for
+        :attr:`fes_for_training` FEs.
+
+        Once the model training is completed, we switch the objective function
+        to use the model instead of the actual system for evaluating
+        controllers, which is done via :meth:`~moptipyapps.dynamic_control.\
+objective.FigureOfMerit.set_model`. We then train a completely new controller
+        on the model objective function. Notice that now, the actual system is
+        not involved at all. We do this again using a CMA-ES algorithm for
+        :attr:`fes_per_model_run` FEs.
+
+        After training the controller, we can evaluate it on the real system
+        using the :meth:`~moptipy.api.process.Process.evaluate` method
+        of the actual `process` (after switching back to the real model via
+        :meth:`~moptipyapps.dynamic_control.objective.FigureOfMerit.set_raw`).
+        This nets us a) the actual controller performance and b) a new set of
+        (system state, controller output) + system state differential tuples.
+
+        Since we now have more data, we can go back and train a new system
+        model and then use this model for another model-based optimization
+        run. And so on, and so on. Until the budget is exhausted.
+
+        :param process: the original optimization process, which must use
+            the `objective` function (an instance of
+            :class:`~moptipyapps.dynamic_control.objective.FigureOfMerit`) as
+            its objective function.
+        """
+        # First, we set up the local variables and fast calls.
         should_terminate: Final[Callable[[], bool]] = process.should_terminate
         model_space: Final[VectorSpace] = self.__model_space
         model_objective: Final[ModelObjective] = self.__model_objective
@@ -167,7 +216,7 @@ class SurrogateCmaEs(Algorithm):
         result: Final[np.ndarray] = self.__control_cma.space.create()
 
 
-# First, we do the setup run that creates some basic results and
+# Now we do the setup run that creates some basic results and
 # gathers the initial information for modelling the system.
         with for_fes(process, self.fes_for_warmup) as prc:
             self.__control_cma.solve(prc)
@@ -176,10 +225,10 @@ class SurrogateCmaEs(Algorithm):
 
             # We now train a model on the data that was gathered.
             training_execute.set_rand_seed(rand_seed_generate(random))
-            model_objective.begin()
-            with training_execute.execute() as sub:
-                sub.get_copy_of_best_y(model)
-            model_objective.end()
+            model_objective.begin()  # get the collected data
+            with training_execute.execute() as sub:  # train model
+                sub.get_copy_of_best_y(model)  # get best model
+            model_objective.end()  # dispose the collected data
 
 # The trained model is wrapped into an equation function that can be passed to
 # the ODE integrator.
@@ -195,11 +244,11 @@ class SurrogateCmaEs(Algorithm):
                 _eq(_merged, time, _params, out)
 
 # OK, now that we got the model, we can perform the model optimization run.
-            raw.set_model(__new_model)
+            raw.set_model(__new_model)  # switch to use the model
             on_model_execute.set_rand_seed(rand_seed_generate(random))
             with on_model_execute.execute() as ome:
-                ome.get_copy_of_best_y(result)
-            raw.set_raw()
+                ome.get_copy_of_best_y(result)  # get best controller
+            raw.set_raw()  # switch to the actual problem and data collection
 
 # Finally, we re-evaluate the result that we got from the model run on the
 # actual objective function.

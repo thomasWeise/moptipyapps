@@ -11,6 +11,9 @@ The difference compared to :mod:`~moptipyapps.dynamic_control.experiment_raw`
 is that we also try to synthesize a system model at the same time. We employ
 the procedure detailed in :mod:`~moptipyapps.dynamic_control.surrogate_cma`
 for this purpose.
+
+Word of advice: This experiment takes **extremely long** and needs
+**a lot of memory**!
 """
 
 import argparse

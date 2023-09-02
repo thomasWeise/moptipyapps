@@ -9,6 +9,13 @@ sophisticated neural network specific training strategy. Instead, we treat the
 neural networks as black boxes that can be parameterized using the weight
 vector. Different ANN architectures have different weight vectors.
 As activation functions, we use `arctan`.
+
+The neural networks here are automatically generated via code generation
+provided by module :mod:`~moptipyapps.dynamic_control.controllers.codegen`.
+This allows us to have networks of arbitrary shape for arbitrary input and
+output dimensions. Since code generation followed by on-the-fly compilation
+via numba is time and memory consuming, we cache all neural network-based
+instances of :class:`~moptipyapps.dynamic_control.controller.Controller`.
 """
 
 from typing import Callable, Final, Iterable, cast
