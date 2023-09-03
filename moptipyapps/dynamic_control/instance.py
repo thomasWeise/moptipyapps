@@ -11,6 +11,17 @@ goal of the dynamic system control is to find the right parameterization of
 the controller such that an :mod:`~moptipyapps.dynamic_control.objective` is
 minimized. The objective here usually has the goal to bring the dynamic system
 into a stable state while using as little controller "energy" as possible.
+
+An instance of the simultaneous control and model synthesis problem is an
+instance of the class :class:`~moptipyapps.dynamic_control.system_\
+model.SystemModel`, which is a subclass of :class:`~moptipyapps.\
+dynamic_control.instance.Instance`. It also adds a controller blueprint for
+modelling the systems response (state differential) based on the system state
+and controller output.
+
+The starting point of the work here were conversations with Prof. Dr. Bernd
+NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute of Technology in
+Shenzhen, China (哈尔滨工业大学(深圳)).
 """
 
 from typing import Final

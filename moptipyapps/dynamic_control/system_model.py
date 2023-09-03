@@ -52,6 +52,10 @@ system in order to synthesize controllers is given as the
 Examples for different dynamic systems controllers (which we here also use to
 model the systems themselves) are given in package
 :mod:`~moptipyapps.dynamic_control.controllers`.
+
+The starting points of the work here were conversations with Prof. Dr. Bernd
+NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute of Technology in
+Shenzhen, China (哈尔滨工业大学(深圳)).
 """
 from typing import Final
 

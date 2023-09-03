@@ -59,6 +59,10 @@ This approach hopefully allows us to learn a model of a dynamic system while
 synthesizing a controller for it. Since we can have infinitely more time to
 synthesize the controller on a learned system model compared to an actual
 model, this may give us much better results.
+
+The starting points of the work here were conversations with Prof. Dr. Bernd
+NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute of Technology in
+Shenzhen, China (哈尔滨工业大学(深圳)).
 """
 
 

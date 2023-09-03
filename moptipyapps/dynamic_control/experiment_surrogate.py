@@ -14,6 +14,10 @@ for this purpose.
 
 Word of advice: This experiment takes **extremely long** and needs
 **a lot of memory**!
+
+The starting points of the work here were conversations with Prof. Dr. Bernd
+NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute of Technology in
+Shenzhen, China (哈尔滨工业大学(深圳)).
 """
 
 import argparse
