@@ -774,7 +774,8 @@ class Instance(Component, np.ndarray):
     is_symmetric: bool
 
     def __new__(cls, name: str, tour_length_lower_bound: int,
-                matrix: np.ndarray) -> "Instance":
+                matrix: np.ndarray,
+                upper_bound_range_multiplier: int = 1) -> "Instance":
         """
         Create an instance of the Traveling Salesperson Problem.
 
@@ -782,6 +783,8 @@ class Instance(Component, np.ndarray):
         :param name: the name of the instance
         :param tour_length_lower_bound: the lower bound of the tour length
         :param matrix: the matrix with the data (will be copied)
+        :param upper_bound_range_multiplier: a multiplier for the upper bound
+            to fix the data range, by default `1`
         """
         use_name: Final[str] = sanitize_name(name)
         if name != use_name:
@@ -838,8 +841,11 @@ class Instance(Component, np.ndarray):
         check_int_range(upper_bound, "upper_bound",
                         tour_length_lower_bound, 1_000_000_000_000_001)
 
-        # create the object
-        limit: Final[int] = max(upper_bound, n_cities)
+        # create the object and ensure that the backing integer type is
+        # large enough to accommodate all possible tour lengths
+        limit: Final[int] = (check_int_range(
+            upper_bound_range_multiplier, "upper_bound_range_multiplier", 1)
+            * max(upper_bound, n_cities))
         obj: Final[Instance] = super().__new__(
             cls, use_shape, int_range_to_dtype(
                 min_value=-limit, max_value=limit))
@@ -907,6 +913,11 @@ symmetric: T@dtype: i@END_I'
         :param lower_bound_getter: a function returning a lower bound for an
             instance name, or `None` to use a simple lower bound approximation
         :return: the instance
+
+        >>> from os.path import dirname
+        >>> inst = Instance.from_file(dirname(__file__) + "/tsplib/br17.atsp")
+        >>> inst.name
+        'br17'
         """
         file: Final[Path] = Path.file(path)
         with file.open_for_read() as stream:
@@ -919,7 +930,7 @@ symmetric: T@dtype: i@END_I'
     @staticmethod
     def from_resource(name: str) -> "Instance":
         """
-        Load an instance from a resource.
+        Load a TSP instance from a resource.
 
         :param name: the name string
         :return: the instance
@@ -955,7 +966,7 @@ symmetric: T@dtype: i@END_I'
     def list_resources(symmetric: bool = True,
                        asymmetric: bool = True) -> tuple[str, ...]:
         """
-        Get a tuple of all the instances available as resource.
+        Get a tuple of all the TSP instances available as resource.
 
         :param symmetric: include the symmetric instances
         :param asymmetric: include the asymmetric instances

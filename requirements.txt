@@ -43,3 +43,5 @@ scipy == 1.11.1
 urllib3 == 1.26.16
 certifi == 2023.7.22
 
+# defusedxml is used as safe alternative for XML parsing the TTP data
+defusedxml == 0.7.1
