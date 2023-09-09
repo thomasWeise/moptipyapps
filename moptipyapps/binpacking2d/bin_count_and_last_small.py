@@ -90,7 +90,7 @@ def bin_count_and_last_small(y: np.ndarray, bin_area: int) -> int:
 class BinCountAndLastSmall(Objective):
     """Compute the number of bins and the area in the last one."""
 
-    def __init__(self, instance: Instance) -> None:  # +book
+    def __init__(self, instance: Instance) -> None:
         """
         Initialize the number of bins objective function.
 

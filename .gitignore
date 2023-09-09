@@ -217,4 +217,5 @@ build
 dist
 .idea
 .ruff_cache
+**/.ruff_cache
 .pytype

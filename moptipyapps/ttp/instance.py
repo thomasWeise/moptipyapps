@@ -40,7 +40,7 @@ from typing import Callable, Final, Iterable, TextIO, cast
 import numpy as np
 from defusedxml import ElementTree  # type: ignore
 from moptipy.utils.logger import KeyValueLogSection
-from moptipy.utils.nputils import DEFAULT_INT
+from moptipy.utils.nputils import DEFAULT_INT, int_range_to_dtype
 from moptipy.utils.path import Path
 from moptipy.utils.strings import sanitize_name
 from moptipy.utils.types import check_int_range, check_to_int_range, type_error
@@ -242,6 +242,8 @@ class Instance(TSPInstance):
     separation_min: int
     #: the maximum number of games between a repetition of a game setup
     separation_max: int
+    #: the data type to be used for plans
+    game_plan_dtype: np.dtype
 
     def __new__(cls, name: str, matrix: np.ndarray, teams: Iterable[str],
                 rounds: int, home_streak_min: int, home_streak_max: int,
@@ -272,9 +274,11 @@ class Instance(TSPInstance):
         """
         names: Final[tuple[str, ...]] = tuple(map(str.strip, teams))
         n: Final[int] = len(names)
+        if (n % 2) != 0:
+            raise ValueError(f"the number of teams must be even, but is {n}.")
         if n != len(set(names)):
             raise ValueError(f"some team name appears twice in {teams!r} "
-                             f"after fixing it to {names!r}")
+                             f"after fixing it to {names!r}.")
         for nn in names:
             for char in nn:
                 if char.isspace():
@@ -310,6 +314,8 @@ class Instance(TSPInstance):
         #: the maximum number of games between a repetition of a game setup
         obj.separation_max = check_int_range(
             separation_max, "separation_max", separation_min, ll)
+        #: the data type to be used for the game plans
+        obj.game_plan_dtype = int_range_to_dtype(-n, n)
         return obj
 
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
@@ -326,7 +332,8 @@ class Instance(TSPInstance):
         'BEGIN_I@name: gal4@class: moptipyapps.ttp.instance.Instance@\
 nCities: 4@tourLengthLowerBound: 67@tourLengthUpperBound: 160@symmetric: T@\
 dtype: h@rounds: 2@homeStreakMin: 1@homeStreakMax: 3@\
-awayStreakMin: 1@awayStreakMax: 3@separationMin: 1@separationMax: 6@END_I'
+awayStreakMin: 1@awayStreakMax: 3@separationMin: 1@separationMax: 6@\
+gamePlanDtype: b@END_I'
         """
         super().log_parameters_to(logger)
         logger.key_value("rounds", self.rounds)
@@ -336,6 +343,7 @@ awayStreakMin: 1@awayStreakMax: 3@separationMin: 1@separationMax: 6@END_I'
         logger.key_value("awayStreakMax", self.away_streak_max)
         logger.key_value("separationMin", self.separation_min)
         logger.key_value("separationMax", self.separation_max)
+        logger.key_value("gamePlanDtype", self.game_plan_dtype.char)
 
     @staticmethod
     def from_file(path: str, lower_bound_getter: Callable[[

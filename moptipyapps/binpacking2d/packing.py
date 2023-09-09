@@ -41,7 +41,7 @@ class Packing(Component, np.ndarray):
 
     def __new__(cls, instance: Instance) -> "Packing":
         """
-        Create an solution record for the 2D bin packing problem.
+        Create a solution record for the 2D bin packing problem.
 
         :param cls: the class
         :param instance: the solution record

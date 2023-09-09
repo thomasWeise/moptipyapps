@@ -57,7 +57,6 @@ class PackingSpace(Space):
             raise type_error(instance, "instance", Instance)
         #: The instance to which the packings apply.
         self.instance: Final[Instance] = instance
-        #: fast call function forward
 
     def copy(self, dest: Packing, source: Packing) -> None:
         """
@@ -118,8 +117,8 @@ class PackingSpace(Space):
         """
         Check if two bin packings have the same contents.
 
-        :param x1: the first chart
-        :param x2: the second chart
+        :param x1: the first packing
+        :param x2: the second packing
         :return: `True` if both packings are for the same instance and have the
             same structure
 
@@ -190,8 +189,9 @@ class PackingSpace(Space):
           steps of `1`
 
         :param x: the packing
-        :raises TypeError: if any component of the chart is of the wrong type
-        :raises ValueError: if the packing chart is not feasible
+        :raises TypeError: if any component of the packing is of the wrong
+            type
+        :raises ValueError: if the packing is not feasible
         """
         if not isinstance(x, Packing):
             raise type_error(x, "x", Packing)

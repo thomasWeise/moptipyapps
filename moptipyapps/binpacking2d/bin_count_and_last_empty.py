@@ -72,7 +72,7 @@ def bin_count_and_last_empty(y: np.ndarray) -> int:
 class BinCountAndLastEmpty(Objective):
     """Compute the number of bins and the emptiness of the last one."""
 
-    def __init__(self, instance: Instance) -> None:  # +book
+    def __init__(self, instance: Instance) -> None:
         """
         Initialize the number of bins objective function.
 
