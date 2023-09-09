@@ -8,6 +8,15 @@ teams. Given a value `v` from `0..n(n-1)-1`, we can get the zero-based index
 of the home team as `home_idx = (game // (n - 1)) % n`. The away index is
 computed in two steps, first we set `away_idx = game % (n - 1)` and if
 `away_idx >= home_idx`, we do `away_idx = away_idy + 1`.
+
+A game schedule for any round-robin tournament with any given number of rounds
+can then be represented as permutation (potentially with repetitions) of these
+game values. In the decoding procedure, it is processed from beginning to end
+each game is then placed into the earliest slot not already occupied by
+another game. In other words, it is placed at the earliest day at which both
+involved teams do not yet have other games. If no such slot is available, this
+game is not placed at all. In this case, there will be some zeros in the game
+plan after the encoding. No other constraint is considered at this stage.
 """
 
 
