@@ -3,7 +3,6 @@
 import argparse
 from typing import Callable, Final, Iterable, cast
 
-from moptipy.algorithms.so.fea1plus1 import FEA1plus1
 from moptipy.algorithms.so.rls import RLS
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import Parallelism, run_experiment
@@ -55,17 +54,6 @@ def rls(instance: Instance) -> Execution:
     return exe.set_algorithm(RLS(Op0Shuffle(space), Op1Swap2()))
 
 
-def fea(instance: Instance) -> Execution:
-    """
-    Create the FEA execution.
-
-    :param instance: the problem instance
-    :return: the setup
-    """
-    space, exe = base_setup(instance)
-    return exe.set_algorithm(FEA1plus1(Op0Shuffle(space), Op1Swap2()))
-
-
 def run(base_dir: str, n_runs: int = 5) -> None:
     """
     Run the experiment.
@@ -79,7 +67,7 @@ def run(base_dir: str, n_runs: int = 5) -> None:
     run_experiment(
         base_dir=use_dir,
         instances=make_instances(),
-        setups=[rls, fea],
+        setups=[rls],
         n_runs=n_runs,
         n_threads=Parallelism.PERFORMANCE)
 
