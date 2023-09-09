@@ -12,7 +12,7 @@
   - [Two-Dimensional Bin Packing Problem](#31-two-dimensional-bin-packing-problem)
   - [Traveling Salesperson Problem (TSP)](#32-the-traveling-salesperson-problem-tsp)
   - [Dynamic Controller Synthesis](#33-dynamic-controller-synthesis)
-  - [Traveling Tournament Problem (TTP)](#34-the-traveling-tournament-problem-tsp)
+  - [Traveling Tournament Problem (TTP)](#34-the-traveling-tournament-problem-ttp)
 - [Unit Tests and Static Analysis](#4-unit-tests-and-static-analysis)
 - [License](#5-license)
 - [Contact](#6-contact)
@@ -121,7 +121,7 @@ We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/softw
 
 Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 
-The Traveling Tournament Problem ([TTP](#34-the-traveling-tournament-problem-tsp)) is related to the TTP.
+The Traveling Tournament Problem ([TTP](#34-the-traveling-tournament-problem-ttp)) is related to the TTP.
 
 
 ### 3.3. Dynamic Controller Synthesis
@@ -151,7 +151,7 @@ dy/dt = sigma * y + x + c
 What we try to find is the controller which can bring move object to the origin `(0, 0)` as quickly as possible while expending the least amount of force, i.e., having the smallest aggregated `c` values over time.
 
 
-### 3.4. The Traveling Tournament Problem (TSP)
+### 3.4. The Traveling Tournament Problem (TTP)
 
 In the package [`moptipyapps.ttp`](https://thomasweise.github.io/moptipyapps/moptipyapps.ttp.html#module-moptipyapps.ttp), we provide a set of classes and tools to explore the *Traveling Tournament Problem (TTP)*.
 In a TTP, we have an even number of `n` teams.
