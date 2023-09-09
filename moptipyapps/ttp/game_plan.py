@@ -40,6 +40,17 @@ class GamePlan(Component, np.ndarray):
         """
         Convert the game plan to a compact string.
 
+        The first line of the output is a flattened version of this matrix
+        with the values being separated by `;`. Then we place an empty line.
+
+        We then put a more easy-to-read representation and follow the pattern
+        given at https://robinxval.ugent.be/RobinX/travelRepo.php, which is
+        based upon the notation by Easton et al. Here, first, a row with the
+        team names separated by spaces is generated. Then, each row contains
+        the opponents of these teams, again separated by spaces. If an
+        opponent plays at their home, this is denoted by an `@`.
+        If a team has no scheduled opponent, then this is denoted as `-`.
+
         :return: the compact string
         """
         csv: Final[str] = CSV_SEPARATOR
@@ -67,11 +78,11 @@ class GamePlan(Component, np.ndarray):
                 for d in row:
                     sio.write(sep)
                     if d < 0:
-                        idx = -d - 1
-                        sio.write("@")
+                        sio.write(f"@{teams[-d - 1]}")
+                    elif d > 0:
+                        sio.write(teams[d - 1])
                     else:
-                        idx = d - 1
-                    sio.write(teams[idx])
+                        sio.write("-")
                     sep = " "
 
             return sio.getvalue()

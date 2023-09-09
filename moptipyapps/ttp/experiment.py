@@ -38,7 +38,7 @@ def base_setup(instance: Instance) -> tuple[Permutations, Execution]:
     """
     ge: Final[GameEncoding] = GameEncoding(instance)
     perms: Final[Permutations] = ge.search_space()
-    return (perms, Execution().set_max_fes(16_777_216).set_log_improvements(
+    return (perms, Execution().set_max_fes(1000000000).set_log_improvements(
         True).set_objective(Errors(instance)).set_search_space(perms)
         .set_solution_space(GamePlanSpace(instance)).set_encoding(
         GameEncoding(instance)))
