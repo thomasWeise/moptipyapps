@@ -1,4 +1,12 @@
-"""An objective that counts constraint violations."""
+"""
+An objective that counts constraint violations.
+
+The idea is that we will probably not be able to always produce game plans
+that adhere to all the constraints imposed by a TTP
+:mod:`~moptipyapps.ttp.instance`, so we will instead generate game plans
+that may contain errors. Then we apply this objective function here to get rid
+of them.
+"""
 
 
 from typing import Final
@@ -73,11 +81,13 @@ def count_errors(y: np.ndarray, home_streak_min: int,
     9.  If team `A` plays team `B` at home `a` times, then team `B` must play
         team `A` at home at least `a-1` and at most `a+1` times.
         In total, we have `D*n` games. There cannot be more than `(D*n) - 1`
-        such errors.
+        such errors. Notice that this kind of error can never occur if we use
+        our :mod:`~moptipyapps.ttp.game_encoding` as representation.
     10. Each pairing of teams occurs as same as often, namely `rounds` times,
         with `rounds = 2` for double-round robin.
         In total, we have `D*n` games. There cannot be more than `D*n` such
-        errors.
+        errors. Notice that this kind of error can never occur if we use
+        our :mod:`~moptipyapps.ttp.game_encoding` as representation.
 
     The violations are counted on a per-day basis. For example, if
     `home_streak_max` is `3` and a team has a home streak of length `5`, then
@@ -271,7 +281,13 @@ def count_errors(y: np.ndarray, home_streak_min: int,
 
 
 class Errors(Objective):
-    """Compute the errors in a game plan."""
+    """
+    Compute the errors in a game plan.
+
+    This objective function encompasses all the constraints imposed on
+    standard TTP instances in one summarizing number. See the documentation
+    of :func:`count_errors` for more information.
+    """
 
     def __init__(self, instance: Instance) -> None:
         """
@@ -296,7 +312,7 @@ class Errors(Objective):
 
     def evaluate(self, x: GamePlan) -> int:
         """
-        Evaluate a game plan.
+        Count the errors in a game plan as objective value.
 
         :param x: the game plan
         :return: the number of errors in the plan
@@ -309,7 +325,7 @@ class Errors(Objective):
 
     def lower_bound(self) -> int:
         """
-        Obtain the lower bound for errors: `0`.
+        Obtain the lower bound for errors: `0`, which means error-free.
 
         :return: `0`
         """

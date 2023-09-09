@@ -11,6 +11,8 @@
 - [Applications](#3-applications)
   - [Two-Dimensional Bin Packing Problem](#31-two-dimensional-bin-packing-problem)
   - [Traveling Salesperson Problem (TSP)](#32-the-traveling-salesperson-problem-tsp)
+  - [Dynamic Controller Synthesis](#33-dynamic-controller-synthesis)
+  - [Traveling Tournament Problem (TTP)](#34-the-traveling-tournament-problem-tsp)
 - [Unit Tests and Static Analysis](#4-unit-tests-and-static-analysis)
 - [License](#5-license)
 - [Contact](#6-contact)
@@ -59,6 +61,8 @@ The additional dependencies for a [full `make` build](https://thomasweise.github
 ## 3. Applications
 
 Here we list the applications of [`moptipy`](https://thomasweise.github.io/moptipy).
+Step by step, we will add more and more interesting optimization problems.
+For each problem, we provide means to load the problem instances and a basic infrastructure to construct optimization algorithms for solving them.
 
 
 ### 3.1. Two-Dimensional Bin Packing Problem
@@ -117,6 +121,8 @@ We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/softw
 
 Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 
+The Traveling Tournament Problem ([TTP](#34-the-traveling-tournament-problem-tsp)) is related to the TTP.
+
 
 ### 3.3. Dynamic Controller Synthesis
 
@@ -143,6 +149,24 @@ dy/dt = sigma * y + x + c
 ```
 
 What we try to find is the controller which can bring move object to the origin `(0, 0)` as quickly as possible while expending the least amount of force, i.e., having the smallest aggregated `c` values over time.
+
+
+### 3.4. The Traveling Tournament Problem (TSP)
+
+In the package [`moptipyapps.ttp`](https://thomasweise.github.io/moptipyapps/moptipyapps.ttp.html#module-moptipyapps.ttp), we provide a set of classes and tools to explore the *Traveling Tournament Problem (TTP)*.
+In a TTP, we have an even number of `n` teams.
+Each team plays a tournament against every other team.
+If the tournament is a single round-robin tournament, each team plays exactly once against every other team.
+In the more common double round-robin tournament, each team plays twice against every other team &mdash; once at home and once at the place of the other team.
+A tournament takes `(n - 1) * rounds` days in total, where `rounds = 2` for double round-robin.
+Now additionally to the basic constraints dictated by logic (if team `A` plays at home against team `B` on day `d`, then team `B` has an "away" game against team `A` on that day `d` and so on), there are also additional constraints.
+For instance, no team should play a continuous streak of home (or away) games longer than `m` days, where `m` usually is `m = 3`.
+Also, if teams `A` and `B` play against each other, then there must be at least `p` games in between before they play each other again, usually with `p = 1`.
+
+Now the first hurdle is to find a game plan that has `n / 2` games on each day (since there are `n` teams and each plays against one other team) that satisfies the above constraints.
+The second problem is that this is not all:
+For each TTP, a distance matrix is defined, very much like for the [TSP](#32-the-traveling-salesperson-problem-tsp).
+The goal is to find a feasible game schedule where the overall travel distances are minimal.
 
 
 ## 4. Unit Tests and Static Analysis
