@@ -3,10 +3,10 @@ import numpy as np
 from moptipy.tests.space import validate_space
 from numpy.random import default_rng
 
-from moptipyapps.binpacking2d.ibl_encoding_1 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
 )
-from moptipyapps.binpacking2d.ibl_encoding_2 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import IDX_REPETITION, Instance

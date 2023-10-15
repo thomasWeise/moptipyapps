@@ -18,16 +18,16 @@ from moptipy.tests.space import validate_space
 from moptipy.utils.types import type_error
 from numpy.random import Generator, default_rng
 
-from moptipyapps.binpacking2d.bin_count_and_last_empty import (
-    BinCountAndLastEmpty,
-)
-from moptipyapps.binpacking2d.ibl_encoding_1 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
 )
-from moptipyapps.binpacking2d.ibl_encoding_2 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_empty import (
+    BinCountAndLastEmpty,
+)
 from moptipyapps.binpacking2d.packing import Packing
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 

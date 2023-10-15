@@ -12,7 +12,7 @@ progresses.
 from contextlib import AbstractContextManager
 from math import isfinite, sqrt
 from os.path import basename, dirname
-from typing import Any, Collection, Final
+from typing import Any, Collection, Final, cast
 
 import matplotlib as mpl  # type: ignore
 import moptipy.utils.plot_utils as pu
@@ -73,7 +73,8 @@ def _get_colors(alen: int, cm: str = "plasma") -> list:
         setattr(obj, cm, the_colors)
     if alen in the_colors:
         return the_colors[alen]
-    colors = mpl.colormaps[cm].resampled(alen).colors
+    colors: list = cast(list, cast(mpl.colors.ListedColormap,
+                                   mpl.colormaps[cm]).resampled(alen).colors)
     the_colors[alen] = colors
     return colors
 
@@ -112,7 +113,7 @@ def _plot_2d(state: np.ndarray, axes: Axes,
 def _plot_3d(state: np.ndarray, axes: Axes,
              colors: list, z: int, ranges: list[float]) -> int:
     """
-    Plot a figure in 2D.
+    Plot a figure in 3D.
 
     :param state: the state matrix
     :param axes: the plot
@@ -121,7 +122,8 @@ def _plot_3d(state: np.ndarray, axes: Axes,
     :param ranges: the axes ranges
     :returns: the new z index
     """
-    axes.force_zorder = True
+    if hasattr(axes, "force_zorder"):
+        axes.force_zorder = True
 
     for i in range(len(state) - 1):
         z += 1
@@ -255,7 +257,7 @@ class ResultsPlot(AbstractContextManager):
                 axes.set_aspect("equal")
             axes.set_xlim(state_min[0], state_max[0])
             axes.set_ylim(state_min[1], state_max[1])
-            if state_dim > 2:
+            if (state_dim > 2) and hasattr(axes, "set_zlim"):
                 axes.set_zlim(state_min[2], state_max[2])
             colors: Final[list] = _get_colors(len(ode) - 1)
 

@@ -1,10 +1,10 @@
 """
-An objective function for minimizing the number of bins of packings.
+An objective function indirectly minimizing the number of bins in packings.
 
-This objective function first computes the number of bins used. Let's call it
-`n_bins`. We know the area bin_area of a bin as well.
-Now we return `(bin_area * (n_bins - 1)) + area_of_items_in_last_bin`,
-where `area_of_items_in_last_bin` is, well, the area covered by items in the
+This objective function computes the number of bins used. Let's call it
+`n_bins`. We know the area `bin_area` of a bin as well. Now we return
+`(bin_area * (n_bins - 1)) + area_of_items_in_last_bin`, where
+`area_of_items_in_last_bin` is, well, the area covered by items in the
 very last bin.
 
 The idea behind this is: If one of two packings has the smaller number of
@@ -13,6 +13,11 @@ packings have the same number of bins, but one requires less space in the very
 last bin, then that one is better. With this mechanism, we drive the search
 towards "emptying" the last bin. If the number of items in the last bin would
 reach `0`, that last bin would disappear - and we have one bin less.
+
+This objective is similar to :mod:`~moptipyapps.binpacking2d.objectives.\
+bin_count_and_small`, with the difference that it focuses on the *last* bin
+whereas :mod:`~moptipyapps.binpacking2d.objectives.bin_count_and_small` tries
+to minimize the area in *any* bin.
 """
 from typing import Final
 
@@ -74,7 +79,7 @@ def bin_count_and_last_small(y: np.ndarray, bin_area: int) -> int:
     n_items: Final[int] = len(y)  # the number of rows in the matrix
 
     for i in range(n_items):  # iterate over all packed items
-        bin_idx: int = y[i, IDX_BIN]  # get the bin index of the item
+        bin_idx: int = int(y[i, IDX_BIN])  # get the bin index of the item
         if bin_idx < current_bin:
             continue
         area: int = int(y[i, IDX_RIGHT_X] - y[i, IDX_LEFT_X]) \
@@ -92,7 +97,7 @@ class BinCountAndLastSmall(Objective):
 
     def __init__(self, instance: Instance) -> None:
         """
-        Initialize the number of bins objective function.
+        Initialize the objective function.
 
         :param instance: the instance to load the bounds from
         """
@@ -102,7 +107,7 @@ class BinCountAndLastSmall(Objective):
         #: the internal instance reference
         self.__instance: Final[Instance] = instance
         #: the bin size
-        self.__bin_size: Final[int] = instance.bin_width * instance.bin_height
+        self._bin_size: Final[int] = instance.bin_width * instance.bin_height
 
     def evaluate(self, x) -> int:
         """
@@ -111,11 +116,11 @@ class BinCountAndLastSmall(Objective):
         :param x: the solution
         :return: the bin size and last-bin-small-area factor
         """
-        return bin_count_and_last_small(x, self.__bin_size)
+        return bin_count_and_last_small(x, self._bin_size)
 
     def lower_bound(self) -> int:
         """
-        Get the lower bound of the number of bins and emptiness objective.
+        Get the lower bound of the number of bins and small-size objective.
 
         We know from the instance (:attr:`~moptipyapps.binpacking2d\
 .instance.Instance.lower_bound_bins`) that we require at least as many bins

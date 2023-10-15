@@ -1,10 +1,10 @@
 """
-Here we provide a :class:`~moptipy.api.space.Space` of bin packings.
+Here we provide a :class:`~moptipy.api.space.Space` of bin game plans.
 
-The bin packing object is defined in module
-:mod:`~moptipyapps.binpacking2d.packing`. Basically, it is a
-two-dimensional numpy array holding, for each item, its ID, its bin ID, as
-well as its location defined by four coordinates.
+The bin game plans object is defined in module
+:mod:`~moptipyapps.ttp.game_plan`. Basically, it is a
+two-dimensional numpy array holding, for each day (or time slot) for each team
+the opposing team.
 """
 from typing import Final
 

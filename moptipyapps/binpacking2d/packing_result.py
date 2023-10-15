@@ -8,6 +8,7 @@ bounds for the number of bins and for the objective functions. It also
 includes the problem-specific information of two-dimensional bin packing
 instances.
 """
+import argparse
 import os.path
 from dataclasses import dataclass
 from math import isfinite
@@ -35,6 +36,7 @@ from moptipy.evaluation.base import (
 from moptipy.evaluation.end_results import EndResult
 from moptipy.evaluation.log_parser import LogParser
 from moptipy.utils.console import logger
+from moptipy.utils.help import argparser
 from moptipy.utils.logger import CSV_SEPARATOR
 from moptipy.utils.path import Path
 from moptipy.utils.strings import (
@@ -47,14 +49,26 @@ from moptipy.utils.strings import (
 )
 from moptipy.utils.types import check_int_range, immutable_mapping, type_error
 
-from moptipyapps.binpacking2d.bin_count import BIN_COUNT_NAME, BinCount
-from moptipyapps.binpacking2d.bin_count_and_last_empty import (
+from moptipyapps.binpacking2d.instance import Instance, _lower_bound_damv
+from moptipyapps.binpacking2d.objectives.bin_count import (
+    BIN_COUNT_NAME,
+    BinCount,
+)
+from moptipyapps.binpacking2d.objectives.bin_count_and_empty import (
+    BinCountAndEmpty,
+)
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_empty import (
     BinCountAndLastEmpty,
 )
-from moptipyapps.binpacking2d.bin_count_and_last_small import (
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_small import (
     BinCountAndLastSmall,
 )
-from moptipyapps.binpacking2d.instance import Instance, _lower_bound_damv
+from moptipyapps.binpacking2d.objectives.bin_count_and_lowest_skyline import (
+    BinCountAndLowestSkyline,
+)
+from moptipyapps.binpacking2d.objectives.bin_count_and_small import (
+    BinCountAndSmall,
+)
 from moptipyapps.binpacking2d.packing import Packing
 
 #: the number of items
@@ -86,8 +100,9 @@ _HEADER_3: Final[str] = (f"{KEY_RAND_SEED}{CSV_SEPARATOR}"
 
 
 #: the default objective functions
-_DEFAULT_OBJECTIVES: Final[tuple[Callable[[Instance], Objective], ...]] = (
+DEFAULT_OBJECTIVES: Final[tuple[Callable[[Instance], Objective], ...]] = (
     BinCount, BinCountAndLastEmpty, BinCountAndLastSmall,
+    BinCountAndLowestSkyline, BinCountAndEmpty, BinCountAndSmall,
 )
 
 
@@ -254,7 +269,7 @@ class PackingResult(EvaluationDataElement):
     def from_packing_and_end_result(  # pylint: disable=W0102
             end_result: EndResult, packing: Packing,
             objectives: Iterable[Callable[[Instance], Objective]] =
-            _DEFAULT_OBJECTIVES,
+            DEFAULT_OBJECTIVES,
             bin_bounds: Mapping[str, Callable[[Instance], int]] =
             _DEFAULT_BOUNDS,
             cache: Mapping[str, tuple[Mapping[str, int], tuple[
@@ -317,7 +332,7 @@ class PackingResult(EvaluationDataElement):
     def from_single_log(  # pylint: disable=W0102
             file: str,
             objectives: Iterable[Callable[[Instance], Objective]] =
-            _DEFAULT_OBJECTIVES,
+            DEFAULT_OBJECTIVES,
             bin_bounds: Mapping[str, Callable[[Instance], int]] =
             _DEFAULT_BOUNDS,
             cache: Mapping[str, tuple[Mapping[str, int], tuple[
@@ -353,7 +368,7 @@ class PackingResult(EvaluationDataElement):
             directory: str,
             collector: Callable[["PackingResult"], None],
             objectives: Iterable[Callable[[Instance], Objective]] =
-            _DEFAULT_OBJECTIVES,
+            DEFAULT_OBJECTIVES,
             bin_bounds: Mapping[str, Callable[[Instance], int]]
             = _DEFAULT_BOUNDS) -> None:
         """
@@ -715,3 +730,25 @@ class _LogParser(LogParser):
         self.__collector(PackingResult.from_single_log(
             path, self.__objectives, self.__bin_bounds, self.__cache))
         return True
+
+
+# Evaluate an experiment from the command line
+
+# Run log files to end results if executed as script
+if __name__ == "__main__":
+    parser: Final[argparse.ArgumentParser] = argparser(
+        __file__,
+        "Convert log files for the bin packing experiment to a CSV file.",
+        "Re-evaluate all results based on different objective functions.")
+    parser.add_argument(
+        "source", nargs="?", default="./results",
+        help="the location of the experimental results, i.e., the root folder "
+             "under which to search for log files", type=Path.path)
+    parser.add_argument(
+        "dest", help="the path to the end results CSV file to be created",
+        type=Path.path, nargs="?", default="./evaluation/end_results.txt")
+    args: Final[argparse.Namespace] = parser.parse_args()
+
+    packing_results: Final[list[PackingResult]] = []
+    PackingResult.from_logs(args.source, packing_results.append)
+    PackingResult.to_csv(packing_results, args.dest)

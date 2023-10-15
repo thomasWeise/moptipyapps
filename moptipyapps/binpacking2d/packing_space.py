@@ -98,8 +98,8 @@ class PackingSpace(Space):
         >>> y = space.create()
         >>> xx = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         ...                1, 2, 2, 2, 2, 2, 2])
-        >>> from moptipyapps.binpacking2d.ibl_encoding_1 import _decode
-        >>> _decode(xx, y, inst, inst.bin_width, inst.bin_height)
+        >>> import moptipyapps.binpacking2d.encodings.ibl_encoding_1 as e
+        >>> e._decode(xx, y, inst, inst.bin_width, inst.bin_height)
         5
         >>> space.to_str(y)
         '1;1;0;0;463;386;1;1;463;0;926;386;1;1;926;0;1389;386;\
@@ -150,8 +150,9 @@ class PackingSpace(Space):
         >>> y1 = space.create()
         >>> xx = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         ...                1, 2, 2, 2, 2, 2, 2])
-        >>> from moptipyapps.binpacking2d.ibl_encoding_1 import _decode
-        >>> y1.n_bins = _decode(xx, y1, inst, inst.bin_width, inst.bin_height)
+        >>> import moptipyapps.binpacking2d.encodings.ibl_encoding_1 as e
+        >>> y1.n_bins = e._decode(
+        ...     xx, y1, inst, inst.bin_width, inst.bin_height)
         >>> y2 = space.from_str(space.to_str(y1))
         >>> space.is_equal(y1, y2)
         True

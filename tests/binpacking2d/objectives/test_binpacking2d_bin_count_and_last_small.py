@@ -6,16 +6,16 @@ from moptipy.operators.signed_permutations.op0_shuffle_and_flip import (
 from moptipy.spaces.signed_permutations import SignedPermutations
 from moptipy.tests.objective import validate_objective
 
-from moptipyapps.binpacking2d.bin_count_and_last_small import (
-    BinCountAndLastSmall,
-)
-from moptipyapps.binpacking2d.ibl_encoding_1 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
 )
-from moptipyapps.binpacking2d.ibl_encoding_2 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_small import (
+    BinCountAndLastSmall,
+)
 from moptipyapps.binpacking2d.packing import Packing
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 from moptipyapps.tests.on_binpacking2d import (

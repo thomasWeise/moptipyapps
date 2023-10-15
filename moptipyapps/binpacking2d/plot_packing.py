@@ -113,8 +113,9 @@ def plot_packing(packing: Packing | str,
     # get the transforms needed to obtain text dimensions
     renderers: Final[list] = [
         pu.get_renderer(axes) for axes, _, _, _, _, _ in bin_figures]
-    inverse: Final[list] = [axes.transData.inverted()  # pylint: disable=E1101
-                            for axes, _, _, _, _, _ in bin_figures]
+    inverse: Final[list] = [
+        axes.transData.inverted()  # type: ignore  # pylint: disable=E1101
+        for axes, _, _, _, _, _ in bin_figures]
 
     z_order: int = 0  # the z-order of all drawing elements
 

@@ -9,16 +9,16 @@ import psutil
 from moptipy.utils.nputils import rand_generator
 from moptipy.utils.types import type_name
 
-from moptipyapps.binpacking2d.ibl_encoding_1 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
 )
-from moptipyapps.binpacking2d.ibl_encoding_2 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 
-# Check if prcs is a sub-process of make?
+# Check if process is a sub-process of make?
 ns = lambda prc: False if prc is None else (  # noqa: E731
     "make" in prc.name() or ns(prc.parent()))
 # Is this a make build?

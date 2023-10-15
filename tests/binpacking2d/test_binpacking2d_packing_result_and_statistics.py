@@ -17,16 +17,16 @@ from moptipy.spaces.signed_permutations import SignedPermutations
 from moptipy.utils.temp import TempDir, TempFile
 from numpy.random import Generator, default_rng
 
-from moptipyapps.binpacking2d.bin_count_and_last_empty import (
-    BinCountAndLastEmpty,
-)
-from moptipyapps.binpacking2d.bin_count_and_last_small import (
-    BinCountAndLastSmall,
-)
-from moptipyapps.binpacking2d.ibl_encoding_2 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_empty import (
+    BinCountAndLastEmpty,
+)
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_small import (
+    BinCountAndLastSmall,
+)
 from moptipyapps.binpacking2d.packing_result import PackingResult
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 from moptipyapps.binpacking2d.packing_statistics import PackingStatistics

@@ -1,4 +1,5 @@
 """An extended end result statistics record to represent packings."""
+import argparse
 import os.path
 from dataclasses import dataclass
 from math import isfinite
@@ -37,6 +38,7 @@ from moptipy.evaluation.statistics import (
     Statistics,
 )
 from moptipy.utils.console import logger
+from moptipy.utils.help import argparser
 from moptipy.utils.logger import CSV_SEPARATOR
 from moptipy.utils.path import Path
 from moptipy.utils.strings import (
@@ -44,7 +46,7 @@ from moptipy.utils.strings import (
 )
 from moptipy.utils.types import check_int_range, immutable_mapping, type_error
 
-from moptipyapps.binpacking2d.bin_count import BIN_COUNT_NAME
+from moptipyapps.binpacking2d.objectives.bin_count import BIN_COUNT_NAME
 from moptipyapps.binpacking2d.packing_result import (
     _OBJECTIVE_LOWER,
     _OBJECTIVE_UPPER,
@@ -609,3 +611,36 @@ class PackingStatistics(EvaluationDataElement):
 
         # finally, return the path to the generated file
         return path
+
+
+# Run packing-results to stat file if executed as script
+if __name__ == "__main__":
+    parser: Final[argparse.ArgumentParser] = argparser(
+        __file__, "Build an end-results statistics CSV file.",
+        "This program computes statistics over packing results")
+    def_src: str = "./evaluation/end_results.txt"
+    if not os.path.isfile(def_src):
+        def_src = "./results"
+    parser.add_argument(
+        "source", nargs="?", default=def_src,
+        help="either the directory with moptipy log files or the path to the "
+             "end-results CSV file", type=Path.path)
+    parser.add_argument(
+        "dest", type=Path.path, nargs="?",
+        default="./evaluation/end_statistics.txt",
+        help="the path to the end results statistics CSV file to be created")
+    args: Final[argparse.Namespace] = parser.parse_args()
+
+    src_path: Final[Path] = args.source
+    packing_results: Final[list[PackingResult]] = []
+    if src_path.is_file():
+        logger(f"{src_path!r} identifies as file, load as end-results csv")
+        PackingResult.from_csv(src_path, packing_results.append)
+    else:
+        logger(f"{src_path!r} identifies as directory, load it as log files")
+        PackingResult.from_logs(src_path, packing_results.append)
+
+    packing_stats: Final[list[PackingStatistics]] = []
+    PackingStatistics.from_packing_results(
+        results=packing_results, collector=packing_stats.append)
+    PackingStatistics.to_csv(packing_stats, args.dest)

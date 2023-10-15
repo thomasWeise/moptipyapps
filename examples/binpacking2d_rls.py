@@ -29,13 +29,13 @@ from moptipy.spaces.signed_permutations import SignedPermutations
 from moptipy.utils.plot_utils import save_figure
 from moptipy.utils.temp import TempDir
 
-from moptipyapps.binpacking2d.bin_count_and_last_empty import (
-    BinCountAndLastEmpty,
-)
-from moptipyapps.binpacking2d.ibl_encoding_2 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_empty import (
+    BinCountAndLastEmpty,
+)
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 from moptipyapps.binpacking2d.plot_packing import plot_packing
 

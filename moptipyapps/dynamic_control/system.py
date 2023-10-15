@@ -173,8 +173,10 @@ class System(Component):
         if self.state_dims == 3:
             axes = figure.add_subplot(projection="3d")
             axes.set_aspect("equal")
-            axes.force_zorder = True
-            axes.set_zlabel("z")
+            if hasattr(axes, "force_zorder"):
+                axes.force_zorder = True
+            if hasattr(axes, "set_zlabel"):
+                axes.set_zlabel("z")
 
             axes.scatter(self.training_starting_states[:, 0],
                          self.training_starting_states[:, 1],
@@ -186,8 +188,13 @@ class System(Component):
                          self.test_starting_states[:, 2],
                          color=_TEST_COLOR, marker="o", zorder=2)
             axes.scatter(0, 0, 0, color="black", marker="+", zorder=3)
-            zlim = axes.get_zlim()
-            axes.set_zlim(1.1 * zlim[0], 1.1 * zlim[1])
+
+            if hasattr(axes, "set_zlim"):
+                if not hasattr(axes, "get_zlim"):
+                    raise ValueError("Axes is invalid, does not have "
+                                     "'get_zlim' but 'set_zlim'.")
+                zlim = axes.get_zlim()  # type: ignore
+                axes.set_zlim(1.1 * zlim[0], 1.1 * zlim[1])
         elif self.state_dims == 2:
             axes = pu.get_axes(figure)
             axes.set_aspect("equal")

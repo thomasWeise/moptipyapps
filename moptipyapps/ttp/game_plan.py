@@ -1,4 +1,31 @@
-"""A two-dimensional packing."""
+"""
+A game plan assigns teams to games.
+
+A game plan is a two-dimensional matrix `G`. The rows are the time slots.
+There is one column for each time. If `G` has value `v` at row `i` and
+column `j`, then this means:
+
+- at the time slot `i` ...
+- the team with name `j+1` plays
+    + no team if `v == 0`,
+    + *at home* against the team `v` if `v > 0`, i.e., team `v` travels
+      to the home stadium of team `j+1`
+    + *away* against the team `-v` if `v < 0`, i.e., team `j+1` travels
+      to the home stadium of team `-v` and plays against them there
+
+Indices in matrices are zero-based, i.e., the lowest index for a row `i` is
+`0` and the lowest index for a column `j` is also `0`. However, team names
+are one-based, i.e., that with `1`. Therefore, we need to translate the
+zero-based column index `j` to a team name by adding `1` to it.
+
+This is just a numerical variant of the game plan representation given at
+<https://robinxval.ugent.be/RobinX/travelRepo.php>.
+
+Of course, if `G[i, j] = v`, then `G[i, v - 1] = -(j + 1)` should hold if
+`v > 0`, for example. Vice versa, if `v < 0` and `G[i, j] = v`, then
+`G[i, (-v) - 1] = j + 1` should hold. Such constraints are checked by the
+:mod:`~moptipyapps.ttp.errors` objective function.
+"""
 
 from io import StringIO
 from typing import Final

@@ -1,12 +1,12 @@
-"""Test the first realization of the improved bottom left encoding-."""
+"""Test the second realization of the improved bottom left encoding-."""
 import numpy as np
 import numpy.random as rnd
 from moptipy.spaces.signed_permutations import SignedPermutations
 from moptipy.tests.encoding import validate_encoding
 from moptipy.tests.space import validate_space
 
-from moptipyapps.binpacking2d.ibl_encoding_1 import (
-    ImprovedBottomLeftEncoding1,
+from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
+    ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing_space import PackingSpace
@@ -25,7 +25,7 @@ def __check_for_instance(instance: str,
     y_space = PackingSpace(inst)
     validate_space(y_space, make_element_valid=None)
 
-    g = ImprovedBottomLeftEncoding1(inst)
+    g = ImprovedBottomLeftEncoding2(inst)
     validate_encoding(g, x_space, y_space)
 
     x = x_space.create()
@@ -64,4 +64,4 @@ def test_for_selected() -> None:
         __check_for_instance(s)
 
     validate_signed_permutation_encoding_on_2dbinpacking(
-        ImprovedBottomLeftEncoding1, random)
+        ImprovedBottomLeftEncoding2, random)

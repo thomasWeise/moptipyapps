@@ -26,10 +26,10 @@ from moptipy.utils.plot_utils import save_figure
 from moptipy.utils.sys_info import is_make_build
 from moptipy.utils.temp import TempDir
 
-from moptipyapps.binpacking2d.ibl_encoding_1 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
 )
-from moptipyapps.binpacking2d.ibl_encoding_2 import (
+from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance

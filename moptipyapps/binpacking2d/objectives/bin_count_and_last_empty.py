@@ -1,5 +1,5 @@
 """
-An objective function for minimizing the number of bins of packings.
+An objective function indirectly minimizing the number of bins in packings.
 
 This objective function first computes the number of bins used. Let's call it
 `n_bins`. We know the total number of items,
@@ -60,7 +60,7 @@ def bin_count_and_last_empty(y: np.ndarray) -> int:
     n_items: Final[int] = len(y)  # the number of rows in the matrix
 
     for i in range(n_items):  # iterate over all packed items
-        bin_idx: int = y[i, IDX_BIN]  # get the bin index of the item
+        bin_idx: int = int(y[i, IDX_BIN])  # get the bin index of the item
         if bin_idx > current_bin:  # it's a new biggest bin = new last bin?
             current_size = 1  # then there is 1 object in it for now
             current_bin = bin_idx  # and we remember it
@@ -74,7 +74,7 @@ class BinCountAndLastEmpty(Objective):
 
     def __init__(self, instance: Instance) -> None:
         """
-        Initialize the number of bins objective function.
+        Initialize the objective function.
 
         :param instance: the instance to load the bounds from
         """
@@ -83,7 +83,15 @@ class BinCountAndLastEmpty(Objective):
             raise type_error(instance, "instance", Instance)
         #: the internal instance reference
         self.__instance: Final[Instance] = instance
-        self.evaluate = bin_count_and_last_empty  # type: ignore
+
+    def evaluate(self, x) -> int:
+        """
+        Evaluate the objective function.
+
+        :param x: the solution
+        :return: the bin size and emptyness factor
+        """
+        return bin_count_and_last_empty(x)
 
     def lower_bound(self) -> int:
         """

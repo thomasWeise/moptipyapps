@@ -388,7 +388,7 @@ def _lower_bound_damv(bin_width: int, bin_height: int,
         bin_width, bin_height = bin_height, bin_width
     j_sq: Final[list[int]] = __cutsq(matrix)
     return max(__lb_q(bin_width, bin_height, q, j_sq)
-               for q in range(0, (bin_height // 2) + 1))
+               for q in range((bin_height // 2) + 1))
 
 
 class Instance(Component, np.ndarray):

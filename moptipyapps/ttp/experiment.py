@@ -3,6 +3,7 @@
 import argparse
 from typing import Callable, Final, Iterable, cast
 
+from moptipy.algorithms.random_sampling import RandomSampling
 from moptipy.algorithms.so.rls import RLS
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import Parallelism, run_experiment
@@ -37,7 +38,7 @@ def base_setup(instance: Instance) -> tuple[Permutations, Execution]:
     """
     ge: Final[GameEncoding] = GameEncoding(instance)
     perms: Final[Permutations] = ge.search_space()
-    return (perms, Execution().set_max_fes(1000000000).set_log_improvements(
+    return (perms, Execution().set_max_fes(1_000_000).set_log_all_fes(
         True).set_objective(Errors(instance)).set_search_space(perms)
         .set_solution_space(GamePlanSpace(instance)).set_encoding(
         GameEncoding(instance)))
@@ -54,7 +55,18 @@ def rls(instance: Instance) -> Execution:
     return exe.set_algorithm(RLS(Op0Shuffle(space), Op1Swap2()))
 
 
-def run(base_dir: str, n_runs: int = 5) -> None:
+def rs(instance: Instance) -> Execution:
+    """
+    Create the random sampling execution.
+
+    :param instance: the problem instance
+    :return: the setup
+    """
+    space, exe = base_setup(instance)
+    return exe.set_algorithm(RandomSampling(Op0Shuffle(space)))
+
+
+def run(base_dir: str, n_runs: int = 100) -> None:
     """
     Run the experiment.
 
@@ -67,9 +79,9 @@ def run(base_dir: str, n_runs: int = 5) -> None:
     run_experiment(
         base_dir=use_dir,
         instances=make_instances(),
-        setups=[rls],
+        setups=[rls, rs],
         n_runs=n_runs,
-        n_threads=Parallelism.PERFORMANCE)
+        n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS)
 
 
 # Run the experiment from the command line

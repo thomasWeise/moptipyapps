@@ -1,5 +1,5 @@
 """
-An objective function for minimizing the number of bins of packings.
+An objective function for minimizing the number of bins in packings.
 
 This function returns the number of bins.
 """
@@ -18,7 +18,7 @@ BIN_COUNT_NAME: Final[str] = "binCount"
 class BinCount(Objective):
     """Compute the number of bins."""
 
-    def __init__(self, instance: Instance) -> None:  # +book
+    def __init__(self, instance: Instance) -> None:
         """
         Initialize the number of bins objective function.
 
