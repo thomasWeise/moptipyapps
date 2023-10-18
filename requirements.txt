@@ -40,7 +40,7 @@ scipy == 1.11.3
 # urllib3 and certifi are used to build instance data from internet resources.
 # They are also used to check the URLs in the README.md as part of the build
 # process, we check all the URLs in the README.md file..
-urllib3 == 1.26.17
+urllib3 == 1.26.18
 certifi == 2023.7.22
 
 # defusedxml is used as safe alternative for XML parsing the TTP data
