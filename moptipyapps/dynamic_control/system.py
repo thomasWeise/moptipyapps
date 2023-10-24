@@ -23,7 +23,7 @@ from moptipy.api.component import Component
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import array_to_str
 from moptipy.utils.path import Path
-from moptipy.utils.types import check_to_int_range, type_error
+from moptipy.utils.types import check_int_range, type_error
 
 from moptipyapps.dynamic_control.ode import multi_run_ode
 from moptipyapps.dynamic_control.results_log import ResultsLog
@@ -52,7 +52,8 @@ class System(Component):
                  training_starting_states: np.ndarray,
                  test_steps: int = 5000,
                  training_steps: int = 1000,
-                 plot_examples: Iterable[int] = (0, )) -> None:
+                 plot_examples: Iterable[int] = (0, ),
+                 state_dim_mod: int = 0) -> None:
         """
         Initialize the system.
 
@@ -67,6 +68,7 @@ class System(Component):
         :param training_starting_states: the starting states to be used for
             training, as a matrix with one point per row
         :param plot_examples: the points that should be plotted
+        :param state_dim_mod: the modulus for the state dimensions
         """
         super().__init__()
         if not isinstance(name, str):
@@ -74,10 +76,10 @@ class System(Component):
         #: the name of the model
         self.name: Final[str] = name
         #: the dimensions of the state variable
-        self.state_dims: Final[int] = check_to_int_range(
-            state_dims, "state_dims", 2, 3)
+        self.state_dims: Final[int] = check_int_range(
+            state_dims, "state_dims", 2, 1_000_000)
         #: the dimensions of the controller output
-        self.control_dims: Final[int] = check_to_int_range(
+        self.control_dims: Final[int] = check_int_range(
             control_dims, "control_dims", 1, 100)
 
         if not isinstance(test_starting_states, np.ndarray):
@@ -102,10 +104,10 @@ class System(Component):
             training_starting_states
 
         #: the test simulation steps
-        self.test_steps: Final[int] = check_to_int_range(
+        self.test_steps: Final[int] = check_int_range(
             test_steps, "test_steps", 10, 1_000_000_000)
         #: the training simulation steps
-        self.training_steps: Final[int] = check_to_int_range(
+        self.training_steps: Final[int] = check_int_range(
             training_steps, "training_steps", 10, 1_000_000_000)
 
         #: the plot examples
@@ -114,7 +116,11 @@ class System(Component):
         total: Final[int] = len(self.training_starting_states) \
             + len(self.test_starting_states) - 1
         for i in self.plot_examples:
-            check_to_int_range(i, "plot_examples[i]", 0, total)
+            check_int_range(i, "plot_examples[i]", 0, total)
+
+        #: The modulus for the state dimensions for plotting
+        self.state_dim_mod: Final[int] = check_int_range(
+            state_dim_mod, "state_dim_mod", 0, state_dims)
 
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
         """
@@ -132,6 +138,7 @@ class System(Component):
             array_to_str(self.training_starting_states.flatten()))
         logger.key_value("testSteps", self.test_steps)
         logger.key_value("trainingSteps", self.training_steps)
+        logger.key_value("stateDimMod", self.state_dim_mod)
         logger.key_value("examplePlots", array_to_str(np.array(
             self.plot_examples, int).flatten()))
 
@@ -170,7 +177,11 @@ class System(Component):
             return dest_file
 
         figure = pu.create_figure()
-        if self.state_dims == 3:
+        state_dims: Final[int] = self.state_dims
+        state_dim_mod: Final[int] = self.state_dim_mod
+        use_dims: Final[int] = state_dims if state_dim_mod <= 0 \
+            else state_dim_mod
+        if use_dims == 3:
             axes = figure.add_subplot(projection="3d")
             axes.set_aspect("equal")
             if hasattr(axes, "force_zorder"):
@@ -178,16 +189,19 @@ class System(Component):
             if hasattr(axes, "set_zlabel"):
                 axes.set_zlabel("z")
 
-            axes.scatter(self.training_starting_states[:, 0],
-                         self.training_starting_states[:, 1],
-                         self.training_starting_states[:, 2],
-                         color=_TRAINING_COLOR, marker="x",
-                         zorder=1)
-            axes.scatter(self.test_starting_states[:, 0],
-                         self.test_starting_states[:, 1],
-                         self.test_starting_states[:, 2],
-                         color=_TEST_COLOR, marker="o", zorder=2)
-            axes.scatter(0, 0, 0, color="black", marker="+", zorder=3)
+            if state_dims == 3:
+                axes.scatter(self.training_starting_states[:, 0],
+                             self.training_starting_states[:, 1],
+                             self.training_starting_states[:, 2],
+                             color=_TRAINING_COLOR, marker="x",
+                             zorder=1)
+                axes.scatter(self.test_starting_states[:, 0],
+                             self.test_starting_states[:, 1],
+                             self.test_starting_states[:, 2],
+                             color=_TEST_COLOR, marker="o", zorder=2)
+                axes.scatter(0, 0, 0, color="black", marker="+", zorder=3)
+            else:
+                raise NotImplementedError
 
             if hasattr(axes, "set_zlim"):
                 if not hasattr(axes, "get_zlim"):
@@ -195,20 +209,38 @@ class System(Component):
                                      "'get_zlim' but 'set_zlim'.")
                 zlim = axes.get_zlim()  # type: ignore
                 axes.set_zlim(1.1 * zlim[0], 1.1 * zlim[1])
-        elif self.state_dims == 2:
+        elif use_dims == 2:
             axes = pu.get_axes(figure)
             axes.set_aspect("equal")
             axes.grid(True)
-            axes.scatter(self.training_starting_states[:, 0],
-                         self.training_starting_states[:, 1],
-                         color=_TRAINING_COLOR, marker="x",
-                         zorder=1)
-            axes.scatter(self.test_starting_states[:, 0],
-                         self.test_starting_states[:, 1],
-                         color=_TEST_COLOR, marker="o", zorder=2)
+            if state_dims == 2:
+                axes.scatter(self.training_starting_states[:, 0],
+                             self.training_starting_states[:, 1],
+                             color=_TRAINING_COLOR, marker="x",
+                             zorder=1)
+                axes.scatter(self.test_starting_states[:, 0],
+                             self.test_starting_states[:, 1],
+                             color=_TEST_COLOR, marker="o", zorder=2)
+            else:
+                markers: Final[list[str]] = list("xvo^+<s>")
+                colors: Final[list[str]] = [_TRAINING_COLOR, _TEST_COLOR]
+                zorder: int = 1
+                for i, data in enumerate([self.training_starting_states,
+                                          self.test_starting_states]):
+                    color = colors[i]
+                    for row in data:
+                        x: np.ndarray = row[0:state_dims:state_dim_mod]
+                        y: np.ndarray = row[1:state_dims:state_dim_mod]
+                        zorder += 1
+                        axes.plot(x, y, color=color, zorder=zorder)
+                        for k, xx in enumerate(x):
+                            zorder += 1
+                            axes.scatter(xx, y[k], color=color,
+                                         zorder=zorder,
+                                         marker=markers[k % len(markers)])
         else:
-            raise ValueError(f"invalid dimensions {self.state_dims} "
-                             f"for {self}.")
+            raise ValueError(f"invalid dimensions {state_dims} "
+                             f"with modulus {state_dim_mod} for {self}.")
 
         xlim = axes.get_xlim()
         axes.set_xlim(1.1 * xlim[0], 1.1 * xlim[1])
@@ -257,7 +289,8 @@ class System(Component):
 
         with ResultsPlot(dest_file=file_1, sup_title=the_title,
                          state_dims=self.state_dims,
-                         plot_indices=self.plot_examples) as plt, \
+                         plot_indices=self.plot_examples,
+                         state_dim_mod=self.state_dim_mod) as plt, \
                 ResultsLog(self.state_dims, file_2) as log:
             multi_run_ode(
                 self.test_starting_states,

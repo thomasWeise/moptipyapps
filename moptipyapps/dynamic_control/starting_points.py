@@ -9,7 +9,10 @@ The points synthesized here by function
 1. the points should be as far away from each other as possible in the state
    space,
 2. there should be points of many different distances from the state space
-   origin.
+   origin, and
+3. compared to the coordinates of the other points, the coordinates of the
+   synthesized points should be sometimes smaller and sometimes larger (where
+   sometimes should ideally mean "equally often").
 
 These two goals are slightly contradicting and are achieved by forcing the
 points to be located on rings of increasing distance from the origin via
@@ -97,10 +100,18 @@ def interesting_point_transform(
 @numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
 def interesting_point_objective(x: np.ndarray, other: np.ndarray,
                                 max_radius: float, dim: int) -> float:
-    """Compute the point diversity."""
+    """
+    Compute the point diversity.
+
+    1. the distance between the points
+    2. the distance to the other points
+    3. the coordinates in the different dimensions should be equally often
+       smaller and larger than those of the starting points
+    """
     pts: np.ndarray = interesting_point_transform(x, max_radius, dim)
     n: Final[int] = len(pts)
     f: float = 0.0
+    score: int = 0
     for i in range(n):
         pt: np.ndarray = pts[i]
         scale: float = (((i + 1) / n) ** 2)  # we know this
@@ -110,7 +121,10 @@ def interesting_point_objective(x: np.ndarray, other: np.ndarray,
         for oth in other:
             dst = np.sqrt(np.square(pt - oth).sum())
             f += scale / dst if dst > 0.0 else 1e10
-    return f
+            for k, val in enumerate(pt):
+                score += -1 if val < oth[k] else 1
+
+    return f * np.log1p(abs(score))
 
 
 def make_interesting_starting_points(
@@ -127,12 +141,12 @@ def make_interesting_starting_points(
     >>> p = make_interesting_starting_points(
     ...     3, np.array([[1.0, 2.0], [3.0, 2.9]]), False)
     >>> print(",".join(";".join(f"{x:.5f}" for x in row) for row in p))
-    0.92722;-1.55225,-3.61077;0.19795,-0.91540;-5.34649
+    1.77767;0.33029,1.10482;3.44328,3.18515;-4.39064
 
     >>> p = make_interesting_starting_points(
     ...     3, np.array([[1.0, 2.0, 7.0], [3.0, 2.9, 1.1]]), False)
     >>> print(",".join(";".join(f"{x:.5f}" for x in row) for row in p))
-    -0.35688;-3.08116;0.72047,-5.49372;1.93835;-2.57330,0.22616;-7.21443;-6.25786
+    1.51392;-2.66567;0.86153,3.26154;-5.07757;2.03484,3.75627;5.88214;6.52310
     """
     other_points: Final[np.ndarray] = np.array(other)
     dim: Final[int] = other_points.shape[1]

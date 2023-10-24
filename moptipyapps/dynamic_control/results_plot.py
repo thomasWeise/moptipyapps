@@ -12,7 +12,7 @@ progresses.
 from contextlib import AbstractContextManager
 from math import isfinite, sqrt
 from os.path import basename, dirname
-from typing import Any, Collection, Final, cast
+from typing import Any, Callable, Collection, Final
 
 import matplotlib as mpl  # type: ignore
 import moptipy.utils.plot_utils as pu
@@ -23,7 +23,7 @@ from matplotlib.lines import Line2D  # type: ignore
 from moptipy.utils.console import logger
 from moptipy.utils.path import Path
 from moptipy.utils.strings import float_to_str
-from moptipy.utils.types import check_to_int_range
+from moptipy.utils.types import check_int_range
 from mpl_toolkits.mplot3d.art3d import Line3D  # type: ignore
 
 
@@ -57,66 +57,101 @@ def _vec(v: np.ndarray) -> str:
     return f"({s})"
 
 
-def _get_colors(alen: int, cm: str = "plasma") -> list:
+#: the color maps to use
+__COLOR_MAPS: Final[tuple[str, str, str, str, str, str, str, str, str]] = (
+    "spring", "winter", "copper", "plasma", "cool", "hsv", "winter",
+    "coolwarm", "BrBG")
+
+
+def _get_colors(alen: int, cmi: int = 0, multi: bool = False) -> Callable[
+        [float], tuple[float, float, float, float]]:
     """
     Get a given number of colors.
 
     :param alen: the number of colors
-    :param cm: the color map name
+    :param cmi: the color map name index
+    :param multi: are there multiple colors
     :return: the colors
     """
+    if multi:
+        if cmi == 0:
+            return lambda x: (0.18 + 0.8 * x, 0.0, 0.18 + 0.8 * x, 1.0)
+        if cmi == 1:
+            return lambda x: (0.0, 0.18 + 0.8 * x, 0.0, 1.0)
+        if cmi == 2:
+            return lambda x: (0.0, 0.0, 0.18 + 0.8 * x, 1.0)
+        cmi -= 2
+
+    cm: Final[str] = __COLOR_MAPS[
+        check_int_range(cmi, "color_map_index", 0, 10000) % len(__COLOR_MAPS)]
     obj: Final = _get_colors
+
     if hasattr(obj, cm):
-        the_colors: dict[int, list] = getattr(obj, cm)
+        the_colors: dict[int, Callable[[
+            float], tuple[float, float, float, float]]] = getattr(obj, cm)
     else:
         the_colors = {}
         setattr(obj, cm, the_colors)
     if alen in the_colors:
         return the_colors[alen]
-    colors: list = cast(list, cast(mpl.colors.ListedColormap,
-                                   mpl.colormaps[cm]).resampled(alen).colors)
+    colors: Callable[[float], tuple[float, float, float, float]] \
+        = mpl.colormaps[cm].resampled(alen)
     the_colors[alen] = colors
     return colors
 
 
 #: the start point color
 START_COLOR: Final[str] = "blue"
+#: the start marker
+START_MARKER: Final[str] = "++"
 #: the end point color
 END_COLOR: Final[str] = "red"
+#: the end marker
+END_MARKER: Final[str] = "o\u25CF"
 
 
 def _plot_2d(state: np.ndarray, axes: Axes,
-             colors: list, z: int) -> int:
+             xi: int, yi: int,
+             colors: Callable[[float], tuple[float, float, float, float]],
+             z: int) -> int:
     """
     Plot a figure in 2D.
 
     :param state: the state matrix
     :param axes: the plot
+    :param xi: the x-index
+    :param yi: the y-index
     :param colors: the colors to use
     :param z: the z index
     :returns: the new z index
     """
-    for i in range(len(state) - 1):
+    size: Final[int] = len(state) - 1
+    for i in range(size):
         z += 1
-        axes.add_artist(Line2D(state[i:i + 2, 0],
-                               state[i:i + 2, 1],
-                        color=colors[i], zorder=z))
+        axes.add_artist(Line2D(state[i:i + 2, xi],
+                               state[i:i + 2, yi],
+                        color=colors(i / size), zorder=z))
     z += 1
-    axes.scatter(state[0, 0], state[0, 1], color=START_COLOR,
-                 zorder=z, marker="+")
+    axes.scatter(state[0, xi], state[0, yi], color=START_COLOR,
+                 zorder=z, marker=START_MARKER[0])
     z += 1
-    axes.scatter(state[-1, 0], state[-1, 1], color=END_COLOR,
-                 zorder=z, marker="+")
+    axes.scatter(state[-1, xi], state[-1, yi], color=END_COLOR,
+                 zorder=z, marker=END_MARKER[0])
     return z + 1
 
 
 def _plot_3d(state: np.ndarray, axes: Axes,
-             colors: list, z: int, ranges: list[float]) -> int:
+             xi: int, yi: int, zi: int,
+             colors: Callable[[float], tuple[float, float, float, float]],
+             z: int, ranges: list[float]) -> int:
     """
     Plot a figure in 3D.
 
     :param state: the state matrix
     :param axes: the plot
+    :param xi: the x-index
+    :param yi: the y-index
+    :param yi: the z-index
     :param colors: the colors to use
     :param z: the z index
     :param ranges: the axes ranges
@@ -125,32 +160,33 @@ def _plot_3d(state: np.ndarray, axes: Axes,
     if hasattr(axes, "force_zorder"):
         axes.force_zorder = True
 
-    for i in range(len(state) - 1):
+    size: Final[int] = len(state) - 1
+    for i in range(size):
         z += 1
-        axes.add_artist(Line3D(state[i:i + 2, 0],
-                               state[i:i + 2, 1],
-                               state[i:i + 2, 2],
-                        color=colors[i], zorder=z))
+        axes.add_artist(Line3D(state[i:i + 2, xi],
+                               state[i:i + 2, yi],
+                               state[i:i + 2, zi],
+                        color=colors(i / size), zorder=z))
 
     col: str = START_COLOR
     for p in [state[0], state[-1]]:
         w: float = 0.04 * ranges[0]
         z += 1
-        axes.add_artist(Line3D((p[0] - w, p[0] + w),
-                               (p[1], p[1]),
-                               (p[2], p[2]),
+        axes.add_artist(Line3D((p[xi] - w, p[xi] + w),
+                               (p[yi], p[yi]),
+                               (p[zi], p[zi]),
                         color=col, zorder=z))
         z += 1
         w = 0.04 * ranges[1]
-        axes.add_artist(Line3D((p[0], p[0]),
-                               (p[1] - w, p[1] + w),
-                               (p[2], p[2]),
+        axes.add_artist(Line3D((p[xi], p[xi]),
+                               (p[yi] - w, p[yi] + w),
+                               (p[zi], p[zi]),
                         color=col, zorder=z))
         z += 1
         w = 0.04 * ranges[2]
-        axes.add_artist(Line3D((p[0], p[0]),
-                               (p[1], p[1]),
-                               (p[2] - w, p[2] + w),
+        axes.add_artist(Line3D((p[xi], p[xi]),
+                               (p[yi], p[yi]),
+                               (p[zi] - w, p[zi] + w),
                         color=col, zorder=z))
         col = END_COLOR
     return z + 1
@@ -167,7 +203,8 @@ class ResultsPlot(AbstractContextManager):
 
     def __init__(self, dest_file: str, sup_title: str | None,
                  state_dims: int,
-                 plot_indices: Collection[int] = (0, )) -> None:
+                 plot_indices: Collection[int] = (0, ),
+                 state_dim_mod: int = 0) -> None:
         """
         Create the ODE plotter.
 
@@ -175,14 +212,18 @@ class ResultsPlot(AbstractContextManager):
         :param sup_title: the title for the figure
         :param state_dims: the state dimensions
         :param plot_indices: the indices that are supposed to be plotted
+        :param state_dim_mod: the modulus for the state dimensions
         """
         super().__init__()
         #: the destination file
         self.__dest_file: Final[Path] = Path.path(dest_file)
         logger(f"plotting data to file {self.__dest_file!r}.")
         #: the state dimensions
-        self.__state_dims: Final[int] = check_to_int_range(
-            state_dims, "state_dimes", 2, 3)
+        self.__state_dims: Final[int] = check_int_range(
+            state_dims, "state_dimes", 2, 1_000_000)
+        #: The modulus for the state dimensions for plotting
+        self.__state_dim_mod: Final[int] = check_int_range(
+            state_dim_mod, "state_dim_mod", 0, state_dims)
 
         total_plots: Final[int] = len(plot_indices)
         #: the plot indexes
@@ -199,7 +240,9 @@ class ResultsPlot(AbstractContextManager):
             "max_rows": srt,
             "max_cols": srt,
         }
-        if state_dims >= 3:
+        use_dims: Final[int] = state_dims if state_dim_mod <= 0 \
+            else state_dim_mod
+        if use_dims >= 3:
             args["plot_config"] = {"projection": "3d"}
 
         figure, plots = pu.create_figure_with_subplots(**args)
@@ -233,40 +276,58 @@ class ResultsPlot(AbstractContextManager):
 
         axes: Final[Axes] = pu.get_axes(
             self.__subplots[self.__cur_plot][0])
-        state_dim: Final[int] = self.__state_dims
+        state_dims: Final[int] = self.__state_dims
+        state_dim_mod: Final[int] = self.__state_dim_mod
+        use_dims: Final[int] = state_dims if state_dim_mod <= 0 \
+            else state_dim_mod
 
-        title: str = (f"{_vec(ode[0, 0:state_dim])}\u2192"
-                      f"{_vec(ode[-1, 0:state_dim])}\n"
-                      f"J={j}, T={time:.4f}")
+        # make the appropriate title
+        v1: str = _vec(ode[0, 0:state_dims])
+        v2: str = _vec(ode[-1, 0:state_dims])
+        if use_dims == 2:
+            v1 = f"{START_MARKER[1]}{v1}"
+            v2 = f"{END_MARKER[1]}{v2}"
+        lv1: Final[int] = len(v1)
+        lv2: Final[int] = len(v2)
+        title: str = f"{v1}\u2192{v2}" if ((lv1 + lv2) < 40) else (
+            f"{v1}\u2192\n{v2}" if lv1 <= lv2 else f"{v1}\n\u2192{v2}")
+        title = f"{title}\nJ={j}, T={time:.4f}"
 
         state_min: Final[list[float]] = [
-            ode[:, i].min() for i in range(state_dim)]
+            ode[:, i:state_dims:state_dim_mod].min() for i in range(use_dims)]
         state_max: Final[list[float]] = [
-            ode[:, i].max() for i in range(state_dim)]
+            ode[:, i:state_dims:state_dim_mod].max() for i in range(use_dims)]
         ranges: Final[list[float]] = [
-            state_max[i] - state_min[i] for i in range(state_dim)]
+            state_max[i] - state_min[i] for i in range(use_dims)]
 
         can_plot: bool = all(
             isfinite(state_min[i]) and (state_min[i] > -1e20)
             and isfinite(state_max[i]) and (state_max[i] < 1e20)
             and (state_min[i] < state_max[i]) and isfinite(ranges[i])
-            and (0 < ranges[i] < 1e20) for i in range(state_dim))
+            and (0 < ranges[i] < 1e20) for i in range(use_dims))
 
         if can_plot:
             if (max(1e-20, min(ranges)) / max(ranges)) > 0.25:
                 axes.set_aspect("equal")
             axes.set_xlim(state_min[0], state_max[0])
             axes.set_ylim(state_min[1], state_max[1])
-            if (state_dim > 2) and hasattr(axes, "set_zlim"):
+            if (use_dims > 2) and hasattr(axes, "set_zlim"):
                 axes.set_zlim(state_min[2], state_max[2])
-            colors: Final[list] = _get_colors(len(ode) - 1)
 
-            if state_dim == 2:
-                self.__z = _plot_2d(ode, axes, colors, self.__z)
-            elif state_dim == 3:
-                self.__z = _plot_3d(ode, axes, colors, self.__z, ranges)
-            else:
-                raise ValueError(f"Huh? state_dim={state_dim}??")
+            size: Final[int] = len(ode) - 2
+            for ci, i in enumerate(range(0, state_dims, use_dims)):
+                colors: Callable[[float], tuple[
+                    float, float, float, float]] = _get_colors(
+                    size, ci, 0 < state_dim_mod < state_dims)
+                if use_dims == 3:
+                    self.__z = _plot_3d(ode, axes, i, i + 1, i + 2, colors,
+                                        self.__z, ranges)
+                elif use_dims == 2:
+                    self.__z = _plot_2d(ode, axes, i, i + 1, colors,
+                                        self.__z)
+                else:
+                    raise ValueError(f"Huh? state_dim={state_dims}, "
+                                     f"state_dim_mod={state_dim_mod}??")
         else:
             title = f"{title}\n<cannot plot>"
 

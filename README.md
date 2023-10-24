@@ -83,8 +83,8 @@ We address this problem by representing a packing as a [signed permutation with 
 If an object is to be placed in a rotated way, this is denoted by using `-i` instead of `i`.
 Such permutations are processed from beginning to end, placing the objects into bins as they come according to some heuristic encoding.
 We provide two variants of the Improved Bottom Left encoding.
-[The first one](https://thomasweise.github.io/moptipyapps/moptipyapps.binpacking2d.html#module-moptipyapps.binpacking2d.ibl_encoding_1) closes bins as soon as one object cannot be placed into them.
-[The second one](https://thomasweise.github.io/moptipyapps/moptipyapps.binpacking2d.html#module-moptipyapps.binpacking2d.ibl_encoding_2) tries to put each object in the earliest possible bin.
+[The first one](https://thomasweise.github.io/moptipyapps/moptipyapps.binpacking2d.encodings.html#module-moptipyapps.binpacking2d.encodings.ibl_encoding_1) closes bins as soon as one object cannot be placed into them.
+[The second one](https://thomasweise.github.io/moptipyapps/moptipyapps.binpacking2d.encodings.html#module-moptipyapps.binpacking2d.encodings.ibl_encoding_2) tries to put each object in the earliest possible bin.
 While the former one is faster, the latter one leads to better packings.
 
 We can then apply a black-box metaheuristic to search in the space of these signed permutations with repetitions.
@@ -266,11 +266,13 @@ If you have any concerns regarding security, please visit our [security policy](
 
 ### 5.1. Exceptions
 
-- The included benchmark instance data of the [two-dimensional bin packing](#31-two-dimensional-bin-packing-problem) is taken from [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib).
+- The included benchmark instance data of the [two-dimensional bin packing problem](#31-two-dimensional-bin-packing-problem) is taken from [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib).
   It has been stored in a more size-efficient way and some unnecessary information has been stripped from it (as we really only need the raw bin packing data).
   Nevertheless, the copyright of the original data lies with the authors [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib) or the original authors of the datasets used by them.
 - The included benchmark instances for the [Traveling Salesperson Problem](#32-the-traveling-salesperson-problem-tsp) are taken from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/).
   The copyright of the original data lies with Gerhard Reinelt, the original author of TSPLib, or the original authors of the datasets used by him.
+- The included benchmark instances for the [Traveling Tournament Problem](https://thomasweise.github.io/moptipyapps/#the-traveling-tournament-problem-ttp) are taken from [RobinX](https://robinxval.ugent.be/RobinX/travelRepo.php).
+  The copyright of the original data lies with the [authors](https://robinxval.ugent.be/RobinX/contact.php) of the dataset, presumably D. Van Bulck, D. Goossens, J. Schönberger, and M. Guajardo.
 
 
 ## 6. Contact
