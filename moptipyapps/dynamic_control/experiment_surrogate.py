@@ -33,9 +33,7 @@ from moptipy.spaces.vectorspace import VectorSpace
 from moptipy.utils.help import argparser
 from moptipy.utils.path import Path
 
-from moptipyapps.dynamic_control.controllers.ann import anns, make_ann
-from moptipyapps.dynamic_control.controllers.linear import linear
-from moptipyapps.dynamic_control.controllers.predefined import predefined
+from moptipyapps.dynamic_control.controllers.ann import make_ann
 from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.objective import (
     FigureOfMerit,
@@ -43,8 +41,9 @@ from moptipyapps.dynamic_control.objective import (
 )
 from moptipyapps.dynamic_control.surrogate_cma import SurrogateCmaEs
 from moptipyapps.dynamic_control.system_model import SystemModel
-from moptipyapps.dynamic_control.systems.lorenz import LORENZ_4
-from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_4
+from moptipyapps.dynamic_control.systems.three_coupled_oscillators import (
+    THREE_COUPLED_OSCILLATORS,
+)
 
 
 def make_instances() -> Iterable[Callable[[], SystemModel]]:
@@ -54,12 +53,13 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
     :return: the instances to be used in the dynamic control experiment.
     """
     res: list[Callable[[], SystemModel]] = []
-    for system in (STUART_LANDAU_4, LORENZ_4):
-        controllers = [linear(system)]
-        controllers.extend(anns(system))
-        controllers.extend(predefined(system))
+    for system in (THREE_COUPLED_OSCILLATORS, ):
+        controllers = [
+            make_ann(system.state_dims, system.control_dims, [2, 2]),
+            make_ann(system.state_dims, system.control_dims, [3, 3]),
+            make_ann(system.state_dims, system.control_dims, [4, 4]),]
         for controller in controllers:
-            for ann_model in [[4, 4]]:
+            for ann_model in [[2, 2], [3, 3], [4, 4]]:
                 res.append(cast(
                     Callable[[], SystemModel],
                     lambda _s=system, _c=controller, _m=make_ann(
@@ -103,8 +103,8 @@ def cmaes_raw(instance: Instance, max_fes: int = MAX_FES) -> Execution:
 
 def cmaes_surrogate(instance: SystemModel,
                     max_fes: int = MAX_FES,
-                    fes_for_training: int = 1024,
-                    fes_per_model_run: int = 2024) -> Execution:
+                    fes_for_training: int = 128,
+                    fes_per_model_run: int = 128) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
@@ -171,15 +171,16 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         perform_pre_warmup=False,
         on_completion=on_completion)
 
-    run_experiment(
-        base_dir=use_dir,
-        instances=instances,
-        setups=[cmaes_surrogate],
-        n_runs=n_runs,
-        n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
-        perform_warmup=False,
-        perform_pre_warmup=False,
-        on_completion=on_completion)
+    for fes in [128, 256, 512, 1024]:
+        run_experiment(
+            base_dir=use_dir.resolve_inside(f"model_for_{fes}x{fes}_fes"),
+            instances=instances,
+            setups=[lambda i: cmaes_surrogate(i, MAX_FES, fes, fes)],
+            n_runs=n_runs,
+            n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
+            perform_warmup=False,
+            perform_pre_warmup=False,
+            on_completion=on_completion)
 
 
 # Run the experiment from the command line
