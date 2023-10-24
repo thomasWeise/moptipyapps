@@ -28,6 +28,9 @@ def __make_instances() -> list[Callable[[], Instance]]:
             orig_system = inst.system
             system = System(orig_system.name,
                             orig_system.state_dims, orig_system.control_dims,
+                            orig_system.state_dim_mod,
+                            orig_system.state_dims_in_j,
+                            orig_system.gamma,
                             orig_system.test_starting_states,
                             orig_system.training_starting_states,
                             10, 32, orig_system.plot_examples)

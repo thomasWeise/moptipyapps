@@ -186,7 +186,7 @@ def make_lorenz(n_points: int) -> System:
                 n_points, tests))
 
     lorenz: Final[System] = System(
-        "lorenz", 3, 1, tests, training, 5000, 5000,
+        "lorenz", 3, 1, 3, 3, 0.1, tests, training, 5000, 5000,
         (0, 1, 2, len(training) + len(tests) - 1))
     lorenz.equations = __lorenz_equations  # type: ignore
     return lorenz

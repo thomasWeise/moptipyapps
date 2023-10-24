@@ -360,6 +360,8 @@ def run_ode(starting_state: np.ndarray,
 
 @numba.njit(cache=True, inline="always", fastmath=False, boundscheck=False)
 def __j_from_ode_compute(ode: np.ndarray, state_dim: int,
+                         use_state_dims: int,
+                         gamma: float,
                          dest: np.ndarray) -> None:
     """
     Prepare the input array for the figure of merit computation.
@@ -377,6 +379,8 @@ def __j_from_ode_compute(ode: np.ndarray, state_dim: int,
 
     :param ode: the output array from the ODE simulation
     :param state_dim: the state dimension
+    :param use_state_dims: the dimension until which the state is used
+    :param gamma: the weight for the control variable
     :param dest: the destination array
 
     >>> od = np.array([[1, 2, 3, 4, 0.1],
@@ -385,7 +389,7 @@ def __j_from_ode_compute(ode: np.ndarray, state_dim: int,
     ...                [7, 4, 2, 1, 0.4]])
     >>> sta_dim = 3
     >>> dst = np.empty((od.shape[0] - 1) * (od.shape[1] - 1) - sta_dim)
-    >>> __j_from_ode_compute(od, sta_dim, dst)
+    >>> __j_from_ode_compute(od, sta_dim, sta_dim, 0.1, dst)
     >>> print(dst)
     [24.3  10.8   4.8   0.27  5.    7.2   9.8   1.28  0.16]
     >>> rs = np.array([9 * 9 * 0.3, 6 * 6 * 0.3, 4 * 4 * 0.3, 3 * 3 * 0.03,
@@ -393,30 +397,41 @@ def __j_from_ode_compute(ode: np.ndarray, state_dim: int,
     ...                4 * 4 * 0.01])
     >>> print(rs)
     [24.3  10.8   4.8   0.27  5.    7.2   9.8   1.28  0.16]
+    >>> u_sta_dim = 2
+    >>> dst = np.empty((od.shape[0] - 1) * (
+    ...     od.shape[1] - 1 - sta_dim + u_sta_dim) - u_sta_dim)
+    >>> __j_from_ode_compute(od, sta_dim, u_sta_dim, 1.0, dst)
+    >>> print(dst)
+    [24.3 10.8  2.7  5.   7.2 12.8  1.6]
     """
     index: int = len(dest)
     start: Final[int] = ode.shape[1] - 2
 
+    # for the first row, we only count the impact of the controller
+    # but not the state, because the state is fixed
     inner: int = start
     row = ode[0]
-    weight_01: float = row[-1] * 0.1
+    weight_01: float = row[-1] * gamma
     while inner >= state_dim:
         v = row[inner]
         inner -= 1
         index -= 1
         dest[index] = (v * v) * weight_01 if -1e100 < v < 1e100 else 1e100
+
+    # from now on, we compute the impact of the state and the controller
     for row in ode[1:-1]:
         inner = start
         weight: float = row[-1]
-        weight_01 = weight * 0.1
+        weight_01 = weight * gamma
         while inner >= state_dim:
             v = row[inner]
             inner -= 1
             index -= 1
             dest[index] = (v * v) * weight_01 if -1e100 < v < 1e100 else 1e100
-        while inner >= 0:
-            v = row[inner]
+        inner = use_state_dims  # jump to the used state
+        while inner > 0:
             inner -= 1
+            v = row[inner]
             index -= 1
             dest[index] = (v * v) * weight if -1e100 < v < 1e100 else 1e100
 
@@ -450,7 +465,9 @@ def t_from_ode(ode: np.ndarray) -> float:
     return fsum(ode[0:-1, -1])
 
 
-def j_from_ode(ode: np.ndarray, state_dim: int) -> float:
+def j_from_ode(ode: np.ndarray, state_dim: int,
+               use_state_dims: int = -1,
+               gamma: float = 0.1) -> float:
     """
     Compute the original figure of merit from an ODE array.
 
@@ -464,6 +481,9 @@ def j_from_ode(ode: np.ndarray, state_dim: int) -> float:
 
     :param ode: the array returned by the ODE function, i.e., :func:`run_ode`
     :param state_dim: the state dimension
+    :param use_state_dims: the dimension until which the state is used,
+        `-1` for using the complete state
+    :param gamma: the weight of the controller input
     :return: the figure of merit
 
     >>> od = np.array([[1, 2, 3, 4, 0.1],
@@ -476,9 +496,13 @@ def j_from_ode(ode: np.ndarray, state_dim: int) -> float:
     >>> print((24.3 + 10.8 + 4.8 + 0.27 + 5. + 7.2 + 9.8 + 1.28 + 0.16) / 0.6)
     106.01666666666667
     """
-    dest: Final[np.ndarray] = np.empty(
-        (ode.shape[0] - 1) * (ode.shape[1] - 1) - state_dim)
-    __j_from_ode_compute(ode, state_dim, dest)
+    # The used state dimension could be equal to the state dimension or less.
+    # If it is <= 0, then we use the complete state vector
+    if use_state_dims <= 0:
+        use_state_dims = state_dim
+    dest: Final[np.ndarray] = np.empty((ode.shape[0] - 1) * (
+        ode.shape[1] - 1 - state_dim + use_state_dims) - use_state_dims)
+    __j_from_ode_compute(ode, state_dim, use_state_dims, gamma, dest)
     return fsum(dest) / t_from_ode(ode)
 
 
@@ -491,7 +515,8 @@ def multi_run_ode(
             np.ndarray, float, np.ndarray, np.ndarray], None],
         controller: Callable[[np.ndarray, float, T, np.ndarray], None],
         parameters: T, controller_dim: int = 1,
-        test_steps: int = 5000, training_steps: int = 5000) -> None:
+        test_steps: int = 5000, training_steps: int = 5000,
+        use_state_dims: int = -1, gamma: float = 0.1) -> None:
     """
     Invoke :func:`run_ode` multiple times and pass the result to `collector`.
 
@@ -511,6 +536,9 @@ def multi_run_ode(
     :param controller_dim: the dimension of the controller result
     :param test_steps: the number of test steps to simulate
     :param training_steps: the number of training steps to simulate
+    :param use_state_dims: the dimension until which the state is used,
+        `-1` for using the complete state
+    :param gamma: the weight of the controller input
     """
     if not isinstance(collector, Iterable):
         collector = (collector, )
@@ -519,13 +547,15 @@ def multi_run_ode(
         ode = run_ode(sp, equations, controller, parameters, controller_dim,
                       test_steps)
         for c in collector:
-            c(index, ode, j_from_ode(ode, len(sp)), t_from_ode(ode))
+            c(index, ode, j_from_ode(ode, len(sp), use_state_dims, gamma),
+              t_from_ode(ode))
         index += 1
     for sp in training_starting_states:
         ode = run_ode(sp, equations, controller, parameters, controller_dim,
                       training_steps)
         for c in collector:
-            c(index, ode, j_from_ode(ode, len(sp)), t_from_ode(ode))
+            c(index, ode, j_from_ode(ode, len(sp), use_state_dims, gamma),
+              t_from_ode(ode))
         index += 1
 
 

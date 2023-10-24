@@ -72,6 +72,10 @@ class FigureOfMerit(Objective):
             = [] if supports_model_mode else None
         #: should we collect data?
         self.__collect: bool = self.__collection is not None
+        #: the state dimensions inside the `J`
+        self.__state_dims_in_j: Final[int] = instance.system.state_dims_in_j
+        #: the weight of the control effort
+        self.__gamma: Final[float] = instance.system.gamma
 
     def initialize(self) -> None:
         """Initialize the objective for use."""
@@ -176,6 +180,8 @@ class FigureOfMerit(Objective):
             np.ndarray, np.ndarray]], None] | None] = \
             self.__collection.append if self.__collect else None
         state_dim: Final[int] = len(training[0])
+        state_dims_in_j: Final[int] = self.__state_dims_in_j
+        gamma: Final[float] = self.__gamma
 
         for i, start in enumerate(training):
             # The following line makes no sense at all. It creates a copy of
@@ -189,7 +195,7 @@ class FigureOfMerit(Objective):
             np.copy(start.flatten())  # <--- This should make no sense...
             ode = run_ode(
                 start, equations, controller, x, controller_dim, steps)
-            results[i] = j_from_ode(ode, state_dim)
+            results[i] = j_from_ode(ode, state_dim, state_dims_in_j, gamma)
             if collector is not None:
                 collector(diff_from_ode(ode, state_dim))
         return self.sum_up_results(results)

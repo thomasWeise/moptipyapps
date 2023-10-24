@@ -178,7 +178,8 @@ def make_stuart_landau(n_points: int) -> System:
         make_interesting_starting_points(n_points, tests))
 
     system: Final[System] = System(
-        "stuart_landau", 2, 1, tests, training, 5000, 5000, (0, 1))
+        "stuart_landau", 2, 1, 2, 2, 0.1,
+        tests, training, 5000, 5000, (0, 1))
     system.equations = __stuart_landau_equations  # type: ignore
     return system
 

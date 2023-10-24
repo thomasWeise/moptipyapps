@@ -15,6 +15,7 @@ Examples for different dynamic systems are given in package
 :mod:`~moptipyapps.dynamic_control.systems`.
 """
 
+from math import isfinite
 from typing import Any, Callable, Final, Iterable, TypeVar
 
 import moptipy.utils.plot_utils as pu
@@ -48,18 +49,23 @@ class System(Component):
     """A class for governing a system via differential system."""
 
     def __init__(self, name: str, state_dims: int, control_dims: int,
+                 state_dim_mod: int, state_dims_in_j: int, gamma: float,
                  test_starting_states: np.ndarray,
                  training_starting_states: np.ndarray,
                  test_steps: int = 5000,
                  training_steps: int = 1000,
-                 plot_examples: Iterable[int] = (0, ),
-                 state_dim_mod: int = 0) -> None:
+                 plot_examples: Iterable[int] = (0, )) -> None:
         """
         Initialize the system.
 
         :param name: the name of the system.
         :param state_dims: the state dimensions
         :param control_dims: the control dimensions
+        :param state_dim_mod: the modulus for the state dimensions
+        :param state_dims_in_j: the dimension until which the state is used in
+            the computation of the figure of merit; `-1` for using the complete
+            state
+        :param gamma: the weight of the controller input
         :param test_starting_states: the starting states to be used for
             testing, as a matrix with one point per row
         :param test_steps: the steps to be taken for the test simulation
@@ -68,7 +74,6 @@ class System(Component):
         :param training_starting_states: the starting states to be used for
             training, as a matrix with one point per row
         :param plot_examples: the points that should be plotted
-        :param state_dim_mod: the modulus for the state dimensions
         """
         super().__init__()
         if not isinstance(name, str):
@@ -81,6 +86,21 @@ class System(Component):
         #: the dimensions of the controller output
         self.control_dims: Final[int] = check_int_range(
             control_dims, "control_dims", 1, 100)
+        #: The modulus for the state dimensions for plotting
+        self.state_dim_mod: Final[int] = check_int_range(
+            state_dim_mod, "state_dim_mod", 0, state_dims)
+        state_dims_in_j = check_int_range(
+            state_dims_in_j, "state_dims_in_j", -1, state_dims)
+        #: The number of dimensions used in the J computation
+        self.state_dims_in_j: Final[int] = state_dims if state_dims_in_j <= 0 \
+            else state_dims_in_j
+        if not isinstance(gamma, float):
+            raise type_error(gamma, "gamma", float)
+        if (not isfinite(gamma)) and gamma > 0.0:
+            raise ValueError(
+                f"gamma must be positive and finite, but is {gamma}.")
+        #: The Weight of the control values in the figure of merit computation.
+        self.gamma: Final[float] = gamma
 
         if not isinstance(test_starting_states, np.ndarray):
             raise type_error(test_starting_states, "test_starting_states",
@@ -118,10 +138,6 @@ class System(Component):
         for i in self.plot_examples:
             check_int_range(i, "plot_examples[i]", 0, total)
 
-        #: The modulus for the state dimensions for plotting
-        self.state_dim_mod: Final[int] = check_int_range(
-            state_dim_mod, "state_dim_mod", 0, state_dims)
-
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
         """
         Log all parameters of this component as key-value pairs.
@@ -131,6 +147,9 @@ class System(Component):
         super().log_parameters_to(logger)
         logger.key_value("stateDims", self.state_dims)
         logger.key_value("controlDims", self.control_dims)
+        logger.key_value("stateDimMod", self.state_dim_mod)
+        logger.key_value("stateDimsInJ", self.state_dims_in_j)
+        logger.key_value("gamma", self.gamma)
         logger.key_value("testStartingStates",
                          array_to_str(self.test_starting_states.flatten()))
         logger.key_value(
@@ -138,7 +157,6 @@ class System(Component):
             array_to_str(self.training_starting_states.flatten()))
         logger.key_value("testSteps", self.test_steps)
         logger.key_value("trainingSteps", self.training_steps)
-        logger.key_value("stateDimMod", self.state_dim_mod)
         logger.key_value("examplePlots", array_to_str(np.array(
             self.plot_examples, int).flatten()))
 
@@ -298,7 +316,8 @@ class System(Component):
                 (plt.collector, log.collector),
                 self.equations,
                 controller, parameters, self.control_dims,
-                self.test_steps, self.training_steps)
+                self.test_steps, self.training_steps,
+                self.state_dims_in_j, self.gamma)
 
         return file_1, file_2
 
