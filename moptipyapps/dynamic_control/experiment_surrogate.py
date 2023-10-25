@@ -53,11 +53,11 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
     :return: the instances to be used in the dynamic control experiment.
     """
     res: list[Callable[[], SystemModel]] = []
-    for system in (THREE_COUPLED_OSCILLATORS, ):
+    for system in [THREE_COUPLED_OSCILLATORS]:
         controllers = [
             make_ann(system.state_dims, system.control_dims, [2, 2]),
             make_ann(system.state_dims, system.control_dims, [3, 3]),
-            make_ann(system.state_dims, system.control_dims, [4, 4]),]
+            make_ann(system.state_dims, system.control_dims, [4, 4])]
         for controller in controllers:
             for ann_model in [[2, 2], [3, 3], [4, 4]]:
                 res.append(cast(
@@ -175,7 +175,8 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         run_experiment(
             base_dir=use_dir.resolve_inside(f"model_for_{fes}x{fes}_fes"),
             instances=instances,
-            setups=[lambda i: cmaes_surrogate(i, MAX_FES, fes, fes)],
+            setups=[cast(Callable[[Any], Execution], lambda i, __f=fes:
+                         cmaes_surrogate(i, MAX_FES, __f, __f))],
             n_runs=n_runs,
             n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
             perform_warmup=False,
