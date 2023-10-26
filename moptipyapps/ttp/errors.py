@@ -8,7 +8,7 @@ probably usually generate game plans that may contain errors.
 
 We will hope that optimization can take care of this by applying this
 objective function here to get rid of them. In the documentation of function
-:func:`~moptipyapps.tto.errors.count_errors`, we explain the different types
+:func:`~moptipyapps.ttp.errors.count_errors`, we explain the different types
 of errors that may occur and that are counted.
 
 This objective function plays thus well with encodings that produce infeasible
