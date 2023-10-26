@@ -2,10 +2,17 @@
 An objective that counts constraint violations.
 
 The idea is that we will probably not be able to always produce game plans
-that adhere to all the constraints imposed by a TTP
-:mod:`~moptipyapps.ttp.instance`, so we will instead generate game plans
-that may contain errors. Then we apply this objective function here to get rid
-of them.
+that adhere to all the constraints imposed by a Traveling Tournament Problem
+:mod:`~moptipyapps.ttp` :mod:`~moptipyapps.ttp.instance`, so we will instead
+probably usually generate game plans that may contain errors.
+
+We will hope that optimization can take care of this by applying this
+objective function here to get rid of them. In the documentation of function
+:func:`~moptipyapps.tto.errors.count_errors`, we explain the different types
+of errors that may occur and that are counted.
+
+This objective function plays thus well with encodings that produce infeasible
+schedules, such as the very simple :mod:`~moptipyapps.ttp.game_encoding`.
 """
 
 
@@ -32,17 +39,20 @@ def count_errors(y: np.ndarray, home_streak_min: int,
 
     This method counts the total number of the violations of any of the
     following constraints over `D = (n - 1) * rounds` days for `n`-team
-    tournaments, where `rounds == 2` for double-round robin.:
+    tournaments, where `rounds == 2` for double-round robin. The following
+    kinds of errors are counted:
 
     1.  If a team `A` plays a team `B` on a given day, then `B` must play
         against `A` on that day and if `A` plays at home, then `B` must play
-        away, and vice versa.
-        This can result in at most `D * n` errors.
+        away. If not, then that's an error. This can result in at most
+        `D * n` errors, because each of the `n` teams has (at most) one game
+        on each of the `D` days and if the *other* team could play against
+        the wrong team (or does not play at all), then that's one error.
     2.  If a team has no other team assigned to play with, this is designated
         by value `0` and causes 1 error. This error also ends all ongoing
         streaks, i.e., may additionally lead to a streak violation of at
         most `max(home_streak_min, away_streak_min) - 1`. However, this
-        cannot be more then two errors in sum per day (minues 1,for the
+        cannot be more then two errors in sum per day (minus 1, for the
         first day). Also, this error is mutually exclusive with error 1.
         This can result in at most `D * n + (D - 1) * n = (2*D - 1) * n`
         errors. Since this error is also mutually exclusive with the errors

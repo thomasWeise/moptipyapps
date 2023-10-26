@@ -47,7 +47,9 @@ So far, the following components have been implemented:
    Notice that it is an extension of the Traveling Salesperson Problem
    :mod:`~moptipyapps.tsp.instance` instance data, from which it inherits the
    distance matrix. This data basically describes the starting situation and
-   the input data when we try to solve a TTP instance.
+   the input data when we try to solve a TTP instance. Also, the module
+   provides several of the benchmark instances from
+   <https://robinxval.ugent.be/>.
 2. :mod:`~moptipyapps.ttp.game_plan` provides a class for holding one
    candidate solution to the TTP, i.e., a game plan. The game plan states, for
    each day and each team, against which other team it will plan (if any). The

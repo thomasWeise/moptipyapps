@@ -1,13 +1,18 @@
 """
-A linear encoding based on games.
+A permutation-with-repetition-based encoding based on games.
 
-A linear string where each value `v` represents a game to be played by two of
-the `n` teams. Each value `v` represents to be played between two teams. There
-are `n(n-1)` possible games between `n` teams, distinguishing home and away
-teams. Given a value `v` from `0..n(n-1)-1`, we can get the zero-based index
-of the home team as `home_idx = (game // (n - 1)) % n`. The away index is
-computed in two steps, first we set `away_idx = game % (n - 1)` and if
-`away_idx >= home_idx`, we do `away_idx = away_idy + 1`.
+A point in the search space is a permutation (potentially with repetitions)
+that can be translated to a :class:`~moptipyapps.ttp.game_plan.GamePlan`.
+Each value `v` in the permutation represents a game to be played by two of
+the `n` teams. There are `n(n-1)` possible games between `n` teams,
+distinguishing home and away teams. Given a value `v` from `0..n(n-1)-1`,
+we can get the zero-based index of the home team as
+`home_idx = (game // (n - 1)) % n`. The away index is computed in two steps,
+first we set `away_idx = game % (n - 1)` and if `away_idx >= home_idx`, we
+do `away_idx = away_idy + 1`. (Because a team can never play against itself,
+the situation that `home_idx == away_idx` does not need to be represented, so
+we can "skip" over this possible value by doing the `away_idx = away_idy + 1`
+and thus get a more "compact" numeric range for the permutation elements.)
 
 A game schedule for any round-robin tournament with any given number of rounds
 can then be represented as permutation (potentially with repetitions) of these
@@ -17,6 +22,13 @@ another game. In other words, it is placed at the earliest day at which both
 involved teams do not yet have other games. If no such slot is available, this
 game is not placed at all. In this case, there will be some zeros in the game
 plan after the encoding. No other constraint is considered at this stage.
+
+In other words, this encoding may produce game plans that violate constraints.
+It does not care about the streak length constraints.
+It does not ensure that each team always has a game.
+Therefore, it should only be used in conjunction with objective functions that
+force the search towards feasible solutions, such as the
+:mod:`~moptipyapps.ttp.errors` objective.
 """
 
 

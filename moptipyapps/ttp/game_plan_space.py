@@ -162,19 +162,22 @@ class GamePlanSpace(Space):
         """
         Get the number of game plans.
 
-        The values go from `-n..n` and we have `days*n` values.
+        The values in a game plan go from `-n..n`, including zero, and we have
+        `days*n` values. This gives `(2n + 1) ** (days * n)`, where `days`
+        equals `(n - 1) * rounds` and `rounds` is the number of rounds. In
+        total, this gives `(2n + 1) ** ((n - 1) * rounds * n)`.
 
         :return: the number of possible game plans
 
         >>> space = GamePlanSpace(Instance.from_resource("circ6"))
-        >>> print(13 ** (6 * (6 - 1) * 2))
+        >>> print((2 * 6 + 1) ** ((6 - 1) * 2 * 6))
         6864377172744689378196133203444067624537070830997366604446306636401
         >>> space.n_points()
         6864377172744689378196133203444067624537070830997366604446306636401
         >>> space = GamePlanSpace(Instance.from_resource("circ4"))
         >>> space.n_points()
         79766443076872509863361
-        >>> print(9 ** (4 * (4 - 1) * 2))
+        >>> print((2 * 4 + 1) ** ((4 - 1) * 2 * 4))
         79766443076872509863361
         """
         inst: Final[Instance] = self.instance
@@ -187,7 +190,7 @@ class GamePlanSpace(Space):
         """
         Get the name of the game plan space.
 
-        :return: the name
+        :return: the name, simply `gp_` + the instance name
 
         >>> print(GamePlanSpace(Instance.from_resource("bra24")))
         gp_bra24

@@ -203,7 +203,42 @@ def _from_stream(stream: TextIO) -> "Instance":
                     away_streak_max, separation_min, separation_max)
 
 
-#: the available instances
+#: The instances made available within this package are taken from
+#: <https://robinxval.ugent.be/RobinX/travelRepo.php>, where the following
+#: descriptions are given:
+#: - *Constant Distance (`con*`):* The constant distance instances are the
+#:   most simple instances in which the distance between the home venues of
+#:   any two teams is one. In this case, Urrutia and Ribeiro showed that
+#:   distance minimization is equivalent with break maximization.
+#: - *Circular Distance (`circ*`):* Somewhat similar are the circular
+#:   distance instances in which the teams' venues are placed on a
+#:   circle. Any two consecutive teams are connected by an edge and the
+#:   distance between two teams is equal to the minimal number of edges that
+#:   must be traversed to get to the other team. Although traveling
+#:   salesperson problems with a circular distance matrix have a trivial
+#:   solution, it remains challenging to solve circular traveling tournament
+#:   instances.
+#: - *Galaxy (`gal*`):* This artificial instance class consists of the Galaxy
+#:   instances that use a 3D-space that embeds the Earth and 39 other
+#:   exoplanets.
+#: - *National league (`nl*`):* The `nl`-instances are based on air distance
+#:   between the city centers from teams in the National League of the Major
+#:   League Baseball.
+#: - *National football league (`nfl*`):* The NFL-instances are based on air
+#:   distance between the city centers from teams in the National Football
+#:   League.
+#: - *Super 14 (`sup*`):* The super 14 instances are based on air distance
+#:   between the city centers from teams in the Super 14 rugby cup.
+#: - *Brazilian (`bra24`)):* The Brazilian instance is based on the air
+#:   distance between the home cities of 24 teams in the main division of the
+#:   2003 edition of the Brazilian soccer championship.
+#: - *Linear (`line*`):* In the linear instances, `n` teams are located on a
+#:   straight line with a distance of one unit separating each pair of
+#:   adjacent teams.
+#: - *Increasing distance (`incr*`):* In the increasing distance instances,
+#:   `n` teams are located on a straight line with an increasing distance
+#:   separating each pair of adjacent teams such that the distance between
+#:   team `k` and `k+1` equals `k`.
 _INSTANCES: Final[tuple[str, ...]] = (
     "bra24", "circ4", "circ6", "circ8", "circ10", "circ12", "circ14",
     "circ16", "circ18", "circ20", "circ22", "circ24", "circ26", "circ28",

@@ -19,12 +19,17 @@ are one-based, i.e., that with `1`. Therefore, we need to translate the
 zero-based column index `j` to a team name by adding `1` to it.
 
 This is just a numerical variant of the game plan representation given at
-<https://robinxval.ugent.be/RobinX/travelRepo.php>.
+<https://robinxval.ugent.be/RobinX/travelRepo.php>. Indeed, the `str(...)`
+representation of a game plan is exactly the table shown there.
 
 Of course, if `G[i, j] = v`, then `G[i, v - 1] = -(j + 1)` should hold if
 `v > 0`, for example. Vice versa, if `v < 0` and `G[i, j] = v`, then
 `G[i, (-v) - 1] = j + 1` should hold. Such constraints are checked by the
 :mod:`~moptipyapps.ttp.errors` objective function.
+
+The corresponding space implementation,
+:mod:`~moptipyapps.ttp.game_plan_space`, offers the functionality to convert
+strings to game plans as well as to instantiate them in a black-box algorithm.
 """
 
 from io import StringIO
