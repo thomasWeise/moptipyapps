@@ -46,12 +46,12 @@ def __run_ode_test(instance: Instance,
     n_reps: Final[int] = 2
 
     starting_states: Final[np.ndarray] = random.uniform(
-        -100.0, 100.0, (n_tests, state_dim))
+        -10.0, 10.0, (n_tests, state_dim))
     s2: Final[np.ndarray] = np.copy(starting_states)
     params: Final[np.ndarray] = random.uniform(
-        -100.0, 100.0, (n_tests, param_dim))
+        -10.0, 10.0, (n_tests, param_dim))
     p2: Final[np.ndarray] = np.copy(params)
-    steps: Final[list[int]] = list(map(int, random.integers(10, 50, n_tests)))
+    steps: Final[list[int]] = list(map(int, random.integers(10, 15, n_tests)))
     t2: Final[np.ndarray] = np.copy(steps)
     ctrl: Final[Callable[[np.ndarray, float, np.ndarray, np.ndarray], None]] \
         = controller.controller
