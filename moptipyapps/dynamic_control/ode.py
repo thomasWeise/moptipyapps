@@ -5,8 +5,6 @@ Many dynamic systems can be modeled as systems of ordinary differential
 equations that govern their progress over time. Trying to find out in
 which state such systems are at a given point in time means to integrate
 these equations until that point in time (starting from a starting state).
-Now there are several methods for doing such a thing, including, e.g.,
-:func:`scipy.integrate.odeint`.
 
 What we want to play around with, however, is synthesizing controllers.
 In this case, the differential equations also merge the output of the
@@ -16,209 +14,126 @@ infinity over time or sometimes rather quickly.
 
 Using ODE integrators that compute the system state at pre-defined time steps
 is thus cumbersome, as the system may have already exploded at these goal
-times. Therefore, we cooked our own, simple ODE integrator. Our integrator
-dynamically chooses the length of the time step based on the output of the
-differential equations. If the output is large, then we will automatically use
-shorter time slices. A large differential applied for a small time slice still
-leads to a reasonably-large change in the system state. More specifically, the
-system cannot diverge to infinity: The larger the differential step, the
-shorter the time slice we use, so everything balances out.
+times. Therefore, we perform ODE integration in several steps. First, we try
+it the "normal" way. However, as soon as the system escapes the sane parameter
+range, we stop. We then use the last point where the system was stable and the
+first point where it escaped the reasonable range to estimate a new reasonable
+end time for the integration. We do this until we finally succeed.
 
 Thus, we can simulate a well-behaved system over a long time and an
 ill-behaved system for a shorter time period. Neither system will diverge.
 """
 
-from math import fsum, sqrt
+from math import ceil, fsum, inf
 from typing import Callable, Final, Iterable, TypeVar
 
 import numba  # type: ignore
 import numpy as np
-
-
-@numba.njit(cache=True, inline="always", fastmath=False, boundscheck=False)
-def __diff_update(cur_diff: np.ndarray, cur_row: np.ndarray,
-                  last_diff: np.ndarray, next_row: np.ndarray,
-                  max_dist: float) -> float:
-    """
-    Add the current differential to the current state to get the next state.
-
-    The input of this function is the current differential vector `cur_diff`,
-    the current row of the ode matrix `cur_row`, the last differential vector
-    `last_diff`, the next row of the ode matrix `next_row`, and the maximum
-    permitted step length `max_dist`.
-    In an ideal world, we would set the weight value of the current row, i.e.,
-    `cur_row[-1]` to `1.0` and set `next_row[0:s] = cur_row[0:s] + cur_diff`,
-    where `s` be the dimension of the state. In other words, we would just add
-    the differential vector to the current state and get the next state.
-    However, we do not live in an ideal world. The absolute value
-    `z = |cur_diff| = np.sqrt(np.square(cur_diff).sum())`
-    may be too large. This can have two reasons:
-
-    1. Maybe the differential equation system diverges, i.e., the system
-       moves towards infinity.
-    2. Maybe we are close to some state towards the system may converge, but
-       the step length does not become small enough to actually converge and
-       the system jumps around.
-
-    So we put several mechanisms in place to limit the step lengths:
-
-    1. We never use the full step length `z` but pre-scale it to
-       `log(1 + z) * 0.6180339887498948`.
-    2. We limit the step length to the 1/128th of the distance of the current
-       system state to the center of coordinates.
-    3. We multiply the step length with a factor that exponentially decreases
-       with the angle between the current and the last differential.
-    4. We impose a hard limit on the step length based on the dimensionality
-       of the system.
-
-    All of this leads to a smaller step length `t <= z`. The weight of the
-    step is then `t / z` (if `z > 0`, otherwise `1`)
-
-    :param cur_diff: the differential vector
-    :param cur_row: the current row
-    :param last_diff: the last differential vector
-    :param next_row: the state to update
-    :param max_dist: the maximum distance to move
-    :returns: the current weight
-    :returns: the length of the time slice
-
-    >>> c_row = np.array([0.0, 0.0, 0.0, 0.0], float)
-    >>> c_diff = np.array([1.0, 1.0, 1.0], float)
-    >>> l_diff = np.zeros_like(c_diff)
-    >>> n_row = np.zeros_like(c_row)
-    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # log-limit
-    >>> print(";".join(f"{s:.10f}" for s in n_row))
-    0.3586249472;0.3586249472;0.3586249472;0.0000000000
-    >>> print(f"{c_row[-1]:.10f}")
-    0.3586249472
-    >>> print((np.log1p(np.sqrt(3.0)) * 0.6180339887498948) / np.sqrt(3.0))
-    0.3586249472058058
-    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 0.05)  # hard limit
-    >>> print(";".join(f"{s:.10f}" for s in n_row))
-    0.0288675135;0.0288675135;0.0288675135;0.0000000000
-    >>> print(f"{c_row[-1]:.10f}")
-    0.0288675135
-    >>> print(0.05 / np.sqrt(3.0))
-    0.02886751345948129
-    >>> l_diff = np.array([-1.0, -1.0, -1.0], float)
-    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit
-    >>> print(";".join(f"{s:.10f}" for s in n_row))
-    0.0000289409;0.0000289409;0.0000289409;0.0000000000
-    >>> print(f"{c_row[-1]:.10f}")
-    0.0000289409
-    >>> a = (np.log1p(np.sqrt(3.0)) * 0.6180339887498948
-    ...      * np.exp(-3 * np.pi)) / np.sqrt(3.0)
-    >>> print(f"{a:.10f}")
-    0.0000289409
-    >>> l_diff = np.array([-1.0, -1.0, 1.0], float)
-    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # angle-limit
-    >>> print(";".join(f"{s:.10f}" for s in n_row))
-    0.0011622728;0.0011622728;0.0011622728;0.0000000000
-    >>> print(f"{c_row[-1]:.10f}")
-    0.0011622728
-    >>> a = (np.log1p(np.sqrt(3.0)) * 0.6180339887498948
-    ...      * np.exp(-3 * np.arccos(-1 / 3))) / np.sqrt(3.0)
-    >>> print(f"{a:.10f}")
-    0.0011622728
-    >>> c_row = np.array([0.1, 0.1, 0.1, 0.0], float)
-    >>> l_diff = np.zeros_like(c_diff)
-    >>> _ = __diff_update(c_diff, c_row, l_diff, n_row, 100.0)  # center limit
-    >>> print(";".join(f"{s:.10f}" for s in n_row))
-    0.1007812500;0.1007812500;0.1007812500;0.0000000000
-    >>> print(f"{c_row[-1]:.10f}")
-    0.0007812500
-    >>> print((np.sqrt(0.03) / 128) / np.sqrt(3))
-    0.00078125
-    """
-# Compute the square sum of the current differential.
-    dsum: float = 0.0
-    c: float = 0.0
-    failure: bool = False
-    for dx in cur_diff:
-        if -1e100 < dx < 1e100:
-            y = (dx * dx) - c
-            t = dsum + y
-            c = (t - dsum) - y
-            dsum = t
-        else:
-            failure = True
-            break
-
-# If the differential grew out of bounds, we just add a logarithmic step.
-    if failure or (dsum > 1e100):
-        for i, d in enumerate(cur_diff):
-            next_row[i] = cur_row[i] + (
-                -np.log1p(-d) if d < 0.0 else np.log1p(d))
-        cur_row[-1] = 1.0
-        return 1.0
-
-    dist: Final[float] = np.sqrt(dsum)
-    dim: Final[int] = len(cur_diff)
-    if dist <= 0.0:  # If the step length if 0, we can quit directly.
-        next_row[0:dim] = cur_row[0:dim]
-        next_row[-1] = 1.0
-        return 1.0
-
-# the first adjustment of the step length is always log(1+dist) / golden ratio
-    use_dist: float = np.log1p(dist) * 0.6180339887498948
-
-# now compute the angle-based limit
-# The angle between two vectors A and B is arccos(A*B / (|A| * |B|)).
-    p_dsum: float = 0.0  # this will be used to compute |B|
-    prod: float = 0.0  # this is used to compute A*B
-    c2: float = 0.0
-    for i, dd in enumerate(last_diff):
-        if -1e100 < dd < 1e100:
-            y = (dd * dd) - c
-            t = p_dsum + y
-            c = (t - p_dsum) - y
-            p_dsum = t
-
-            y = (dd * cur_diff[i]) - c2
-            t = prod + y
-            c2 = (t - prod) - y
-            prod = t
-        else:
-            failure = True
-            break
-
-    if (not failure) and (p_dsum > 0.0):
-        p_dsum = np.sqrt(p_dsum) * dist
-        if p_dsum > 0.0:
-            prod /= p_dsum
-            if prod < 1.0:
-                use_dist *= np.exp(
-                    -3.0 * (np.arccos(prod) if prod > -1.0 else np.pi))
-
-# now limit the step length to 1/128th of the distance to the center
-    center_dist: float = 0.0
-    c = 0.0
-    for i in range(dim):
-        dd = cur_row[i]
-        if -1e100 < dd < 1e100:
-            y = (dd * dd) - c
-            t = center_dist + y
-            c = (t - center_dist) - y
-            center_dist = t
-        else:
-            center_dist = max_dist
-            break
-    center_dist = 0.0078125 * np.sqrt(center_dist)
-    if 0.0 < center_dist < use_dist:
-        use_dist = center_dist
-
-# now apply the hard, dimension-based limit
-    if max_dist < use_dist:
-        use_dist = max_dist
-
-# store the weight in the current row and update the next row
-    cur_row[-1] = weight = use_dist / dist
-    next_row[0:dim] = cur_row[0:dim] + (weight * cur_diff)
-    return weight
-
+from scipy.integrate import DOP853, DenseOutput  # type: ignore
 
 #: the type variable for ODE controller parameters
 T = TypeVar("T")
+
+
+@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
+def _is_ok(x: np.ndarray) -> bool:
+    """
+    Check whether all values in a vector are acceptable.
+
+    A vector is "ok" if all of its elements are from the finite range
+    `(-1e10, 1e10)`.  Anything else indicates that we are somehow moving
+    out of the reasonable bounds.
+
+    :param x: the vector
+    :return: `True` if all values are OK, `False` otherwise
+    """
+    for xx in x:  # noqa: SIM110
+        if not -1e10 < xx < 1e10:
+            return False
+    return True
+
+
+class __IntegrationState:
+    """
+    The internal integrator state class.
+
+    This class serves two purposes. First, it encapsulates the system
+    equations and the controller equations such that they can be called as a
+    unit. Second, it raises an alert if the system escapes the "OK" state,
+    i.e., diverge towards infinity. As long as everything is OK,
+    :attr:`is_ok` will remain `True`. But if either the controller or the
+    system state escapes the acceptable interval, it becomes `False`.
+    In that case, :attr:`max_ok_t` holds the highest `t` value at which
+    the system and controller were in an acceptable state and
+    :attr:`min_error_t` holds the smallest `t` value at which that was not
+    the case. We can assume that somewhere inbetween lies the last moment we
+    can find the system in a sane state.
+    """
+
+    def __init__(self,
+                 equations: Callable[[
+                     np.ndarray, float, np.ndarray, np.ndarray], None],
+                 controller: Callable[[
+                     np.ndarray, float, T, np.ndarray], None],
+                 parameters: T, controller_dim: int) -> None:
+        """
+        Create the integrator.
+
+        :param equations: the differential system
+        :param controller: the controller function
+        :param parameters: the controller parameters
+        :param controller_dim: the dimension of the controller result
+        """
+        self.__equations: Final[Callable[[
+            np.ndarray, float, np.ndarray, np.ndarray], None]] = equations
+        self.__controller: Final[Callable[[
+            np.ndarray, float, T, np.ndarray], None]] = controller
+        self.__parameters: Final[T] = parameters
+        self.__ctrl: Final[np.ndarray] = np.empty(controller_dim)
+        self.max_ok_t: float = -inf
+        self.min_error_t: float = inf
+        self.is_ok: bool = True
+
+    def init(self) -> None:
+        """Prepare the system for integration."""
+        self.max_ok_t = -inf
+        self.min_error_t = inf
+        self.is_ok = True
+
+    def f(self, t: float, state: np.ndarray) -> np.ndarray:
+        """
+        Compute the differential at the given state and time.
+
+        First, we invoke the controller function at the state and time. Then
+        we pass the controller vector to the differential equations to update
+        the system state.
+        This function also checks if the state or control go out of bounds
+        and if they do, it sets the :attr:`is_ok` to `False`.
+
+        :param t: the time
+        :param state: the state
+        :return: the differential
+        """
+        out: Final[np.ndarray] = np.zeros_like(state)  # allocate output vec
+        ctrl: Final[np.ndarray] = self.__ctrl  # the controller vector
+
+        # invoke the controller
+        self.__controller(state, t, self.__parameters, ctrl)
+        ok: bool = _is_ok(ctrl)  # is the controller vector ok?
+        if ok:  # if yes, let's invoke the state update equations
+            self.__equations(state, t, ctrl, out)
+            ok = _is_ok(out)  # and check if their result is ok
+        if ok:  # is it ok?
+            if self.max_ok_t < t < self.min_error_t:
+                self.max_ok_t = t
+        else:  # no: there was some error, either in state or controller
+            self.is_ok = False  # then we are no longer OK
+            if t < self.min_error_t:  # update the minimum error time
+                self.min_error_t = t
+            if self.max_ok_t > t:  # what? an earlier error?
+                self.max_ok_t = np.nextafter(t, -inf)  # ok, reset ok time
+
+        return out
 
 
 def run_ode(starting_state: np.ndarray,
@@ -226,7 +141,7 @@ def run_ode(starting_state: np.ndarray,
                 np.ndarray, float, np.ndarray, np.ndarray], None],
             controller: Callable[[np.ndarray, float, T, np.ndarray], None],
             parameters: T, controller_dim: int = 1,
-            steps: int = 5000) -> np.ndarray:
+            min_steps: int = 5000, max_time: float = 50.0) -> np.ndarray:
     """
     Simulate a set of controlled differential system.
 
@@ -241,37 +156,19 @@ def run_ode(starting_state: np.ndarray,
     differential into. This output array has the same dimension as the state
     vector.
 
-    The system will be simulated for exactly `steps` time steps. The system
-    will automatically determine the right length of the time steps. If the
-    differential equations tell our system to make a step of length `z`, then:
-
-    1. We never use the full step length `z` but pre-scale it to
-       `log(1 + z) * 0.6180339887498948`.
-    2. We limit the step length to the 1/128th of the distance of the current
-       system state to the center of coordinates.
-    3. We multiply the step length with a factor that exponentially decreases
-       with the angle between the current and the last differential.
-    4. We impose a hard limit on the step length based on the dimensionality
-       of the system.
-
-    As result, this function returns a tuple of three components: First, the
-    matrix `steps` rows, where each row corresponds to one system state
-    vector. The first row will be identical tp `starting_state`. The second
-    element of the return tuple is the time vector, holding `steps` strictly
-    increasing time value. The third and last return component is the control
-    matrix. It has one row for each time step, i.e., `steps` in total, and
-    each row corresponds to the controller output at that time step. If
-    `controller_dim==1`, this third tuple element is a plain vector and not a
-    matrix.
-
-    The last time slice (at index `-1,-1`) will always be set to zero.
+    This function returns a matrix where each row corresponds to a simulated
+    time step. Each row contains three components in a concatenated fashion:
+    1. the state vector,
+    2. the control vector,
+    3. the time value
 
     :param starting_state: the starting
     :param equations: the differential system
     :param controller: the controller function
     :param parameters: the controller parameters
     :param controller_dim: the dimension of the controller result
-    :param steps: the number of steps to simulate
+    :param min_steps: the minimum number of steps to simulate
+    :param max_time: the maximum time to simulate for
     :returns: a matrix where each row represents a point in time, composed of
         the current state, the controller output, and the length of the time
         slice
@@ -305,56 +202,117 @@ def run_ode(starting_state: np.ndarray,
     1019.7162129779
     >>> idx = np.argwhere(ode[:, 1] <= 0.0)[0][0]
     >>> print(idx)
-    9631
+    2894
     >>> print(f"{ode[idx - 1, 0]:.10f}")
-    1020.8026525593
+    1020.7086386428
     >>> print(f"{ode[idx, 0]:.10f}")
-    1020.8909467853
-    >>> print(f"{fsum(ode[0:idx, -1]):.10f}")
-    14.4375782265
-    >>> print(f"{fsum(ode[0:idx + 1, -1]):.10f}")
-    14.4388267873
+    1021.0621920334
+    >>> print(f"{ode[idx - 1, -1]:.10f}")
+    14.4350000000
+    >>> print(f"{ode[idx, -1]:.10f}")
+    14.4400000000
     >>> print(ode[-1, -1])
-    0.0
+    50.0
     """
-    state_dim: Final[int] = len(starting_state)
-    result: Final[np.ndarray] = np.zeros((
-        steps, state_dim + controller_dim + 1))
-    max_dist: Final[float] = sqrt(
-        (state_dim - 1) / 64.0)  # the maximum distance
+    func_state: Final[__IntegrationState] = __IntegrationState(
+        equations, controller, parameters, controller_dim)
+    func_call: Final[Callable[[float, np.ndarray], np.ndarray]] = func_state.f
+    interpolants: Final[list[np.ndarray]] = []
+    denses: Final[list[DenseOutput]] = []
+    n: Final[int] = len(starting_state)
+    dim: Final[int] = n + controller_dim + 1
 
-    point: np.ndarray = np.empty(state_dim)
-    cur_diff: np.ndarray = np.empty(state_dim)
-    last_diff: np.ndarray = np.zeros(state_dim)
-    c_out: Final[np.ndarray] = np.empty(controller_dim)
-    time: float = 0.0
-    c: float = 0.0
-    c_end_dim: Final[int] = state_dim + controller_dim
+    while True:
+        # first, we reset all the state information
+        func_state.init()
+        interpolants.clear()
+        denses.clear()
 
-    next_row: np.ndarray = result[0]
-    next_row[0:state_dim] = starting_state
+        # then we create the integrator
+        integration = DOP853(
+            func_call, 0.0, starting_state, max_time, min_steps)
+        is_finished: bool = False
 
-    # compute the first row
-    for i in range(1, steps):
-        cur_row = next_row
-        next_row = result[i]
-        point[:] = cur_row[0:state_dim]  # get point part of state
-        controller(point, time, parameters, c_out)  # invoke controller
-        equations(point, time, c_out, cur_diff)  # invoke equations
+        # perform the integration and collect all the points at which stuff
+        # was computed
+        while True:
+            pol = np.empty(dim)
+            pol[0:n] = integration.y
+            pol[-1] = integration.t
+            interpolants.append(pol)
+            integration.step()
+            if not func_state.is_ok:
+                break
+            is_finished = integration.status == "finished"
+            is_running: bool = integration.status == "running"
+            if is_finished or is_running:
+                denses.append(integration.dense_output())
+                if is_finished:
+                    break
+            else:
+                break
 
-# invoke the differential update and update time as well
-        y = __diff_update(cur_diff, cur_row, last_diff,
-                          next_row, max_dist) - c
-        t = time + y
-        c = (t - time) - y
-        time = t
+        if is_finished and func_state.is_ok:
+            # if we get here, everything worked out well so far
+            last_t: float = 0.0
+            max_t: float = interpolants[-1][-1]
 
-        cur_row[state_dim:c_end_dim] = c_out  # store controller output
-        last_diff, cur_diff = cur_diff, last_diff
+            for dense in denses:
+                t_min = dense.t_min
+                t_max = min(dense.t_max, max_time)
+                for k in range(int(ceil(t_min * min_steps / max_time)),
+                               1 + int(t_max * min_steps / max_time)):
+                    t = max_time * k / min_steps
+                    if last_t < t < t_max:
+                        pol = np.empty(dim)
+                        pol[0:n] = dense(t)
+                        pol[-1] = t
+                        interpolants.append(pol)
+                        last_t = t
 
-    point[:] = next_row[0:state_dim]
-    controller(point, time, parameters, c_out)
-    next_row[state_dim:c_end_dim] = c_out
+            if last_t > max_t:  # update the maximum reached time
+                max_t = last_t
+
+            if max_t < max_time:  # add the last point, if necessary
+                dense = denses[-1]
+                if dense.t_min <= max_time <= dense.t_max:
+                    pol = np.empty(dim)
+                    pol[0:n] = denses[-1](max_time)
+                    pol[-1] = max_time
+                    interpolants.append(pol)
+
+            if func_state.is_ok:
+                interpolants.sort(key=lambda v: v[-1])
+
+                # clean up potential doubles
+                end_idx = len(interpolants) - 1
+                cur_t = interpolants[end_idx][-1]
+                for i in range(end_idx - 1, -1, -1):
+                    prev_t = cur_t
+                    cur_t = interpolants[i][-1]
+                    if cur_t >= prev_t:
+                        del interpolants[i + 1]
+                break
+
+        # if we arrive here, things went wrong somehow
+        if func_state.max_ok_t < func_state.min_error_t:
+            max_time = np.nextafter(
+                (0.25 * func_state.max_ok_t)
+                + (0.75 * func_state.min_error_t), -inf)
+        else:
+            max_time = np.nextafter(0.75 * max_time, -inf)
+        if max_time <= 1e-10:
+            pol = interpolants[0]
+            pol[0:n] = starting_state
+            pol[-1] = 0.0
+            interpolants.clear()
+            interpolants.append(pol)
+            break
+
+    # re-evaluate the controller at the given points in time
+    result = np.array(interpolants)
+    for row in result:
+        controller(row[0:n], row[-1], parameters, row[n:-1])
     return result
 
 
@@ -368,14 +326,14 @@ def __j_from_ode_compute(ode: np.ndarray, state_dim: int,
 
     The `ode` matrix contains one row for each time step.
     The row is composed of the current state, the current controller output,
-    and the length of the time slice.
+    and the current time.
     However, all systems of a given simulation start in the same initial
     state, so it makes little sense to include this initial state into the
     figure of merit computation. It does make sense to include the control
     output at that moment, though, because it contributes to the next state.
     It also makes no sense to count in the last row of the ODE computation,
     because this is the final system state and the system will not spend any
-    time in it in the simulation, so its weight will be 0.
+    time in it in the simulation.
 
     :param ode: the output array from the ODE simulation
     :param state_dim: the state dimension
@@ -383,57 +341,54 @@ def __j_from_ode_compute(ode: np.ndarray, state_dim: int,
     :param gamma: the weight for the control variable
     :param dest: the destination array
 
-    >>> od = np.array([[1, 2, 3, 4, 0.1],
-    ...                [5, 6, 7, 8, 0.2],
-    ...                [9, 6, 4, 3, 0.3],
-    ...                [7, 4, 2, 1, 0.4]])
+    >>> od = np.array([[1, 2, 3, 4, 0],
+    ...                [5, 6, 7, 8, 1],
+    ...                [9, 6, 4, 3, 3],
+    ...                [7, 4, 2, 1, 7]])
     >>> sta_dim = 3
     >>> dst = np.empty((od.shape[0] - 1) * (od.shape[1] - 1) - sta_dim)
     >>> __j_from_ode_compute(od, sta_dim, sta_dim, 0.1, dst)
     >>> print(dst)
-    [24.3  10.8   4.8   0.27  5.    7.2   9.8   1.28  0.16]
-    >>> rs = np.array([9 * 9 * 0.3, 6 * 6 * 0.3, 4 * 4 * 0.3, 3 * 3 * 0.03,
-    ...                5 * 5 * 0.2, 6 * 6 * 0.2, 7 * 7 * 0.2, 8 * 8 * 0.02,
-    ...                4 * 4 * 0.01])
+    [  1.6  12.8  98.   72.   50.    3.6  64.  144.  324. ]
+    >>> rs = np.array([0.1 * 1 * 4 * 4,
+    ...                0.1 * 2 * 8 * 8, 2 * 7 * 7, 2 * 6 * 6, 2 * 5 * 5,
+    ...                0.1 * 4 * 3 * 3, 4 * 4 * 4, 4 * 6 * 6, 4 * 9 * 9])
     >>> print(rs)
-    [24.3  10.8   4.8   0.27  5.    7.2   9.8   1.28  0.16]
+    [  1.6  12.8  98.   72.   50.    3.6  64.  144.  324. ]
     >>> u_sta_dim = 2
     >>> dst = np.empty((od.shape[0] - 1) * (
     ...     od.shape[1] - 1 - sta_dim + u_sta_dim) - u_sta_dim)
     >>> __j_from_ode_compute(od, sta_dim, u_sta_dim, 1.0, dst)
     >>> print(dst)
-    [24.3 10.8  2.7  5.   7.2 12.8  1.6]
+    [ 16. 128.  72.  50.  36. 144. 324.]
     """
-    index: int = len(dest)
+    index: int = 0
     start: Final[int] = ode.shape[1] - 2
 
-    # for the first row, we only count the impact of the controller
-    # but not the state, because the state is fixed
-    inner: int = start
-    row = ode[0]
-    weight_01: float = row[-1] * gamma
-    while inner >= state_dim:
-        v = row[inner]
-        inner -= 1
-        index -= 1
-        dest[index] = (v * v) * weight_01 if -1e100 < v < 1e100 else 1e100
-
     # from now on, we compute the impact of the state and the controller
-    for row in ode[1:-1]:
+    add_state: bool = False
+    last_row: np.ndarray = ode[0]
+    for i in range(1, len(ode)):
+        next_row: np.ndarray = ode[i]
+        weight: float = next_row[-1] - last_row[-1]
         inner = start
-        weight: float = row[-1]
-        weight_01 = weight * gamma
+        weight_01: float = weight * gamma
         while inner >= state_dim:
-            v = row[inner]
+            v = last_row[inner]
             inner -= 1
-            index -= 1
             dest[index] = (v * v) * weight_01 if -1e100 < v < 1e100 else 1e100
-        inner = use_state_dims  # jump to the used state
-        while inner > 0:
-            inner -= 1
-            v = row[inner]
-            index -= 1
-            dest[index] = (v * v) * weight if -1e100 < v < 1e100 else 1e100
+            index += 1
+
+        if add_state:
+            inner = use_state_dims  # jump to the used state
+            while inner > 0:
+                inner -= 1
+                v = last_row[inner]
+                dest[index] = (v * v) * weight if -1e100 < v < 1e100 else 1e100
+                index += 1
+
+        add_state = True
+        last_row = next_row
 
 
 def t_from_ode(ode: np.ndarray) -> float:
@@ -441,28 +396,19 @@ def t_from_ode(ode: np.ndarray) -> float:
     Get the time sum from an ODE solution.
 
     The total time that we simulate a system depends on the behavior of the
-    system. If the system makes small steps (has small differential values)
-    and does not change its direction, it can be simulated for a long time.
-    If the system diverges, e.g., if some state variables would go to
-    infinity, or if it often changes direction or has some larger steps, then
-    the total simulation time shortens automatically. This prevents the system
-    from actually diverging. Notice that the time slice length of the very
-    last step in the ODE solution is ignored.
+    system.
 
     :param ode: the ODE solution, as return from :func:`run_ode`.
-    :return: the time sum
-
-    This adds up the last column in the ODE solution, ignoring the last time
-    slice. This means we get 0.1 + 0.2 + 0.3 = 0.6.
+    :return: the total consumed time
 
     >>> od = np.array([[1, 2, 3, 4, 0.1],
     ...                [5, 6, 7, 8, 0.2],
     ...                [9, 6, 4, 3, 0.3],
     ...                [7, 4, 2, 1, 0.4]])
     >>> print(t_from_ode(od))
-    0.6
+    0.4
     """
-    return fsum(ode[0:-1, -1])
+    return ode[-1, -1]
 
 
 def j_from_ode(ode: np.ndarray, state_dim: int,
@@ -486,16 +432,23 @@ def j_from_ode(ode: np.ndarray, state_dim: int,
     :param gamma: the weight of the controller input
     :return: the figure of merit
 
-    >>> od = np.array([[1, 2, 3, 4, 0.1],
-    ...                [5, 6, 7, 8, 0.2],
-    ...                [9, 6, 4, 3, 0.3],
-    ...                [7, 4, 2, 1, 0.4]])
+    >>> od = np.array([[1, 2, 3, 4, 0],
+    ...                [5, 6, 7, 8, 1],
+    ...                [9, 6, 4, 3, 3],
+    ...                [7, 4, 2, 1, 7]])
     >>> sta_dim = 3
     >>> print(f"{j_from_ode(od, sta_dim):.10f}")
-    106.0166666667
-    >>> print((24.3 + 10.8 + 4.8 + 0.27 + 5. + 7.2 + 9.8 + 1.28 + 0.16) / 0.6)
-    106.01666666666667
+    110.0000000000
+    >>> print((1.6 + 12.8 + 98 + 72 + 50 + 3.6 + 64 + 144 + 324) / 7)
+    110.0
+    >>> sta_dim = 3
+    >>> print(f"{j_from_ode(od, 3, 2, 0.5):.10f}")
+    97.1428571429
+    >>> print((8 + 64 + 72 + 50 + 18 + 144 + 324) / 7)
+    97.14285714285714
     """
+    if len(ode) <= 1:
+        return 1e200
     # The used state dimension could be equal to the state dimension or less.
     # If it is <= 0, then we use the complete state vector
     if use_state_dims <= 0:
@@ -503,7 +456,7 @@ def j_from_ode(ode: np.ndarray, state_dim: int,
     dest: Final[np.ndarray] = np.empty((ode.shape[0] - 1) * (
         ode.shape[1] - 1 - state_dim + use_state_dims) - use_state_dims)
     __j_from_ode_compute(ode, state_dim, use_state_dims, gamma, dest)
-    return fsum(dest) / t_from_ode(ode)
+    return fsum(dest) / ode[-1, -1]
 
 
 def multi_run_ode(
@@ -515,7 +468,10 @@ def multi_run_ode(
             np.ndarray, float, np.ndarray, np.ndarray], None],
         controller: Callable[[np.ndarray, float, T, np.ndarray], None],
         parameters: T, controller_dim: int = 1,
-        test_steps: int = 5000, training_steps: int = 5000,
+        test_steps: int = 5000,
+        test_time: float = 50.0,
+        training_steps: int = 5000,
+        training_time: float = 50.0,
         use_state_dims: int = -1, gamma: float = 0.1) -> None:
     """
     Invoke :func:`run_ode` multiple times and pass the result to `collector`.
@@ -535,7 +491,9 @@ def multi_run_ode(
     :param parameters: the controller parameters
     :param controller_dim: the dimension of the controller result
     :param test_steps: the number of test steps to simulate
+    :param test_time: the time limit for tests
     :param training_steps: the number of training steps to simulate
+    :param training_time: the time limit for training
     :param use_state_dims: the dimension until which the state is used,
         `-1` for using the complete state
     :param gamma: the weight of the controller input
@@ -545,14 +503,14 @@ def multi_run_ode(
     index: int = 0
     for sp in test_starting_states:
         ode = run_ode(sp, equations, controller, parameters, controller_dim,
-                      test_steps)
+                      test_steps, test_time)
         for c in collector:
             c(index, ode, j_from_ode(ode, len(sp), use_state_dims, gamma),
               t_from_ode(ode))
         index += 1
     for sp in training_starting_states:
         ode = run_ode(sp, equations, controller, parameters, controller_dim,
-                      training_steps)
+                      training_steps, training_time)
         for c in collector:
             c(index, ode, j_from_ode(ode, len(sp), use_state_dims, gamma),
               t_from_ode(ode))
@@ -605,19 +563,20 @@ def diff_from_ode(ode: np.ndarray, state_dim: int) \
         state differential vectors
 
     >>> od = np.array([
-    ...     [0, 0, 0, 0, 0, 1],  # state 0,0,0; control 0,0; weight 1
-    ...     [1, 2, 3, 4, 5, 1],  # state 1,2,3; control 4,5; weight 1
-    ...     [2, 3, 4, 5, 6, 0.5],  # state 2,3,4; control 5,6; weight 0.5
-    ...     [4, 6, 8, 7, 7, 0]])    # state 4,6,8; control 7,7, weight 0
+    ...     [0, 0, 0, 0, 0, 0],  # state 0,0,0; control 0,0; time 0
+    ...     [1, 2, 3, 4, 5, 1],  # state 1,2,3; control 4,5; time 1
+    ...     [2, 3, 4, 5, 6, 3],  # state 2,3,4; control 5,6; time 3
+    ...     [4, 6, 8, 7, 7, 7]])    # state 4,6,8; control 7,7, time 7
     >>> res = diff_from_ode(od, 3)
-    >>> res[0]  # state and control vectors, weight col and last row removed
-    array([[0., 0., 0., 0., 0.],
-           [1., 2., 3., 4., 5.],
-           [2., 3., 4., 5., 6.]])
-    >>> res[1]  # (state[i + 1] - state[i]) / weight[i]
-    array([[1., 2., 3.],
-           [1., 1., 1.],
-           [4., 6., 8.]])
+    >>> res[0]  # state and control vectors, time col and last row removed
+    array([[0, 0, 0, 0, 0],
+           [1, 2, 3, 4, 5],
+           [2, 3, 4, 5, 6]])
+    >>> res[1]  # (state[i + 1] - state[i]) / (time[i + 1] / time[i])
+    array([[1.  , 2.  , 3.  ],
+           [0.5 , 0.5 , 0.5 ],
+           [0.5 , 0.75, 1.  ]])
     """
     return (ode[0:-1, 0:-1],
-            np.diff(ode[:, 0:state_dim], 1, 0) / ode[0:-1, -1][:, None])
+            np.diff(ode[:, 0:state_dim], 1, 0)
+            / np.diff(ode[:, -1])[:, None])

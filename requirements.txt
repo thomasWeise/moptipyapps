@@ -22,14 +22,13 @@
 
 # `moptipy` provides the basic optimization infrastructure and the spaces and
 # tools that we use for optimization.
-moptipy == 0.9.95
+moptipy == 0.9.96
 
 # `numpy` is needed for its efficient data structures.
-numpy == 1.25.2
+numpy == 1.26.1
 
-# `numba` provides JIT compilers useful making vector/numpy operations
-# efficient.
-numba == 0.58.0
+# numba provides JIT compilers useful making vector/numpy operations efficient
+numba == 0.58.1
 
 # matplotlib is used to create plots in the evaluation procedures.
 matplotlib == 3.8.0
@@ -40,7 +39,7 @@ scipy == 1.11.3
 # urllib3 and certifi are used to build instance data from internet resources.
 # They are also used to check the URLs in the README.md as part of the build
 # process, we check all the URLs in the README.md file..
-urllib3 == 1.26.17
+urllib3 == 1.26.18
 certifi == 2023.7.22
 
 # defusedxml is used as safe alternative for XML parsing the TTP data

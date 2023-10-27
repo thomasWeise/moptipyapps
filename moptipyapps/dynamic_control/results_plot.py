@@ -66,7 +66,13 @@ __COLOR_MAPS: Final[tuple[str, str, str, str, str, str, str, str, str]] = (
 def _get_colors(alen: int, cmi: int = 0, multi: bool = False) -> Callable[
         [float], tuple[float, float, float, float]]:
     """
-    Get a given number of colors.
+    Get a given color map with the given number of columns.
+
+    For a given color map index (`cmi`), this function returns a callable that
+    maps values from `[0,1]` to colors. If this is supposed to be the only
+    color map in use (`m̀ulti == False`), then it will return the standard
+    `spring` color map. Otherwise, it will return different color maps
+    depending on the color map index `cmi`.
 
     :param alen: the number of colors
     :param cmi: the color map name index
@@ -74,11 +80,11 @@ def _get_colors(alen: int, cmi: int = 0, multi: bool = False) -> Callable[
     :return: the colors
     """
     if multi:
-        if cmi == 0:
+        if cmi == 0:  # pink
             return lambda x: (0.18 + 0.8 * x, 0.0, 0.18 + 0.8 * x, 1.0)
-        if cmi == 1:
+        if cmi == 1:  # green
             return lambda x: (0.0, 0.18 + 0.8 * x, 0.0, 1.0)
-        if cmi == 2:
+        if cmi == 2:  # blue
             return lambda x: (0.0, 0.0, 0.18 + 0.8 * x, 1.0)
         cmi -= 2
 

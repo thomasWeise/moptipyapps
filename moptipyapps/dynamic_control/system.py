@@ -53,7 +53,9 @@ class System(Component):
                  test_starting_states: np.ndarray,
                  training_starting_states: np.ndarray,
                  test_steps: int = 5000,
+                 test_time: float = 50.0,
                  training_steps: int = 1000,
+                 training_time: float = 50.0,
                  plot_examples: Iterable[int] = (0, )) -> None:
         """
         Initialize the system.
@@ -69,8 +71,10 @@ class System(Component):
         :param test_starting_states: the starting states to be used for
             testing, as a matrix with one point per row
         :param test_steps: the steps to be taken for the test simulation
+        :param test_time: the time limit for tests
         :param training_steps: the steps to be taken for the training
             simulation
+        :param training_time: the time limit for training
         :param training_starting_states: the starting states to be used for
             training, as a matrix with one point per row
         :param plot_examples: the points that should be plotted
@@ -126,9 +130,25 @@ class System(Component):
         #: the test simulation steps
         self.test_steps: Final[int] = check_int_range(
             test_steps, "test_steps", 10, 1_000_000_000)
+
+        if not isinstance(test_time, float):
+            raise type_error(test_time, "test_time", float)
+        if (not isfinite(test_time)) and test_time > 1e-5:
+            raise ValueError(
+                f"test_time must be > 1e-5 and finite, but is {test_time}.")
+        #: the test time
+        self.test_time: Final[float] = test_time
+
         #: the training simulation steps
         self.training_steps: Final[int] = check_int_range(
             training_steps, "training_steps", 10, 1_000_000_000)
+        if not isinstance(training_time, float):
+            raise type_error(training_time, "training_time", float)
+        if (not isfinite(training_time)) and training_time > 1e-5:
+            raise ValueError(f"training_time must be > 1e-5 and finite, "
+                             f"but is {training_time}.")
+        #: the training time
+        self.training_time: Final[float] = training_time
 
         #: the plot examples
         self.plot_examples: Final[tuple[int, ...]] = tuple(sorted(set(
@@ -156,7 +176,9 @@ class System(Component):
             "trainingStartingStates",
             array_to_str(self.training_starting_states.flatten()))
         logger.key_value("testSteps", self.test_steps)
+        logger.key_value("testTime", self.test_time)
         logger.key_value("trainingSteps", self.training_steps)
+        logger.key_value("trainingTime", self.training_time)
         logger.key_value("examplePlots", array_to_str(np.array(
             self.plot_examples, int).flatten()))
 
@@ -316,7 +338,8 @@ class System(Component):
                 (plt.collector, log.collector),
                 self.equations,
                 controller, parameters, self.control_dims,
-                self.test_steps, self.training_steps,
+                self.test_steps, self.test_time,
+                self.training_steps, self.training_time,
                 self.state_dims_in_j, self.gamma)
 
         return file_1, file_2

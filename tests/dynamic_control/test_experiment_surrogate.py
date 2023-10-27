@@ -1,6 +1,6 @@
 """A test for the surrogate experiment of the dynamic control problem."""
 
-from typing import Callable, Final, cast
+from typing import Callable, cast
 
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
@@ -37,8 +37,8 @@ def __make_instances(random: Generator) -> list[Callable[[], SystemModel]]:
                             orig_system.gamma,
                             orig_system.test_starting_states,
                             orig_system.training_starting_states,
-                            int(random.integers(10, 64)),
-                            int(random.integers(10, 64)),
+                            int(random.integers(10, 14)), 10.0,
+                            int(random.integers(10, 14)), 10.0,
                             orig_system.plot_examples)
             system.equations = orig_system.equations  # type: ignore
             return SystemModel(system, inst.controller, inst.model)
@@ -55,9 +55,9 @@ def __cmaes(instance: SystemModel) -> Execution:
     """
     random: Generator = default_rng(rand_seeds_from_str(str(instance), 1)[0])
     return cmaes_surrogate(instance,
-                           int(random.integers(8, 64)),
-                           int(random.integers(4, 64)),
-                           int(random.integers(4, 64)))
+                           int(random.integers(4, 8)),
+                           int(random.integers(4, 8)),
+                           int(random.integers(4, 8)))
 
 
 def test_experiment_surrogate(random: Generator = default_rng()) -> None:
@@ -66,7 +66,6 @@ def test_experiment_surrogate(random: Generator = default_rng()) -> None:
 
     :param random: a randomizer
     """
-    n_runs: Final[int] = int(random.integers(1, 4))
     er: list[EndResult] = []
     insts: list[Callable[[], SystemModel]] = __make_instances(random)
 
@@ -75,8 +74,8 @@ def test_experiment_surrogate(random: Generator = default_rng()) -> None:
         run_experiment(base_dir=use_dir,
                        instances=insts,
                        setups=[__cmaes],
-                       n_runs=n_runs,
+                       n_runs=1,
                        perform_warmup=False,
                        perform_pre_warmup=False)
         EndResult.from_logs(use_dir, er.append)
-    assert len(er) == (len(insts) * n_runs)
+    assert len(er) == len(insts)

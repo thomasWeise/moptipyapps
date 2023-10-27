@@ -72,8 +72,8 @@ def __objective_tests(fc: Callable[[Instance, bool], FigureOfMerit],
                         orig_system.gamma,
                         orig_system.test_starting_states,
                         orig_system.training_starting_states,
-                        int(random.integers(10, 32)),
-                        int(random.integers(10, 32)),
+                        int(random.integers(10, 32)), 10.0,
+                        int(random.integers(10, 32)), 10.0,
                         orig_system.plot_examples)
 
         controllers = [linear(system), quadratic(system), cubic(system)]

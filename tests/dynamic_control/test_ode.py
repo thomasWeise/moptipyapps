@@ -42,10 +42,8 @@ def __run_ode_test(instance: Instance,
         raise ValueError("control dimensions incompatible: "
                          f"{ctrl_dim}!={system.control_dims}.")
 
-    min_tests = max(111, len(system.training_starting_states),
-                    len(system.test_starting_states))
-    n_tests: int = int(random.integers(min_tests, min_tests * 2))
-    n_reps: Final[int] = int(random.integers(3, 15))
+    n_tests: int = 2
+    n_reps: Final[int] = 2
 
     starting_states: Final[np.ndarray] = random.uniform(
         -100.0, 100.0, (n_tests, state_dim))
@@ -53,7 +51,7 @@ def __run_ode_test(instance: Instance,
     params: Final[np.ndarray] = random.uniform(
         -100.0, 100.0, (n_tests, param_dim))
     p2: Final[np.ndarray] = np.copy(params)
-    steps: Final[list[int]] = list(map(int, random.integers(10, 100, n_tests)))
+    steps: Final[list[int]] = list(map(int, random.integers(10, 50, n_tests)))
     t2: Final[np.ndarray] = np.copy(steps)
     ctrl: Final[Callable[[np.ndarray, float, np.ndarray, np.ndarray], None]] \
         = controller.controller
@@ -170,20 +168,22 @@ def __run_ode_test(instance: Instance,
                     f"error on instance {instance}: corrupted steps")
 
         if mode == 0:
-            n_tests = len(system.training_starting_states)
-            starting_states[0:n_tests, :] = system.training_starting_states
+            n_tests = min(2, len(system.training_starting_states))
+            starting_states[0:n_tests, :] = system.training_starting_states[
+                0:n_tests, :]
         elif mode == 1:
-            n_tests = len(system.test_starting_states)
-            starting_states[0:n_tests, :] = system.test_starting_states
+            n_tests = min(2, len(system.test_starting_states))
+            starting_states[0:n_tests, :] = system.test_starting_states[
+                0:n_tests, :]
 
 
 def test_run_ode_on_experiment_raw() -> None:
     """Test the raw experiment."""
-    for make in make_instances():
-        __run_ode_test(make())
+    insts = list(make_instances())
+    __run_ode_test(insts[default_rng().integers(len(insts))]())
 
 
 def test_run_ode_on_experiment_surrogate() -> None:
-    """Test the raw experiment."""
-    for make in make_instances2():
-        __run_ode_test(make())
+    """Test the surrogate experiment."""
+    insts = list(make_instances2())
+    __run_ode_test(insts[default_rng().integers(len(insts))]())

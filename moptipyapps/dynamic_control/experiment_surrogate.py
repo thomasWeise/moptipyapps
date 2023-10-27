@@ -56,10 +56,9 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
     for system in [THREE_COUPLED_OSCILLATORS]:
         controllers = [
             make_ann(system.state_dims, system.control_dims, [2, 2]),
-            make_ann(system.state_dims, system.control_dims, [3, 3]),
-            make_ann(system.state_dims, system.control_dims, [4, 4])]
+            make_ann(system.state_dims, system.control_dims, [3, 3])]
         for controller in controllers:
-            for ann_model in [[2, 2], [3, 3], [4, 4]]:
+            for ann_model in [[2, 2], [3, 3]]:
                 res.append(cast(
                     Callable[[], SystemModel],
                     lambda _s=system, _c=controller, _m=make_ann(
@@ -178,7 +177,7 @@ def run(base_dir: str, n_runs: int = 5) -> None:
             setups=[cast(Callable[[Any], Execution], lambda i, __f=fes:
                          cmaes_surrogate(i, MAX_FES, __f, __f))],
             n_runs=n_runs,
-            n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
+            n_threads=Parallelism.PERFORMANCE,
             perform_warmup=False,
             perform_pre_warmup=False,
             on_completion=on_completion)

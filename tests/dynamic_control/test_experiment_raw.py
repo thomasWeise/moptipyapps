@@ -33,7 +33,7 @@ def __make_instances() -> list[Callable[[], Instance]]:
                             orig_system.gamma,
                             orig_system.test_starting_states,
                             orig_system.training_starting_states,
-                            10, 32, orig_system.plot_examples)
+                            10, 10.0, 32, 10.0, orig_system.plot_examples)
             return Instance(system, inst.controller)
         res.append(cast(Callable[[], Instance], __make))
     return res

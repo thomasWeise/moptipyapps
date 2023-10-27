@@ -51,6 +51,8 @@ class FigureOfMerit(Objective):
         self.instance: Final[Instance] = instance
         #: the simulation steps
         self.__steps: Final[int] = instance.system.training_steps
+        #: the training time
+        self.__time: Final[float] = instance.system.training_time
         #: the training starting states
         self.__training: Final[np.ndarray] = \
             instance.system.training_starting_states
@@ -167,6 +169,7 @@ class FigureOfMerit(Objective):
         :return: the figure of merit
         """
         steps: Final[int] = self.__steps
+        time: Final[float] = self.__time
         training: Final[np.ndarray] = self.__training
         results: Final[np.ndarray] = self.__results
         equations: Final[Callable[[
@@ -194,7 +197,7 @@ class FigureOfMerit(Objective):
             # unclear reason.
             np.copy(start.flatten())  # <--- This should make no sense...
             ode = run_ode(
-                start, equations, controller, x, controller_dim, steps)
+                start, equations, controller, x, controller_dim, steps, time)
             results[i] = j_from_ode(ode, state_dim, state_dims_in_j, gamma)
             if collector is not None:
                 collector(diff_from_ode(ode, state_dim))

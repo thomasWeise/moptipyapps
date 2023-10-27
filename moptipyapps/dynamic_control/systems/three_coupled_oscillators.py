@@ -97,7 +97,7 @@ def make_3_couple_oscillators(n_points: int) -> System:
 
     three: Final[System] = System(
         "3oscillators", 6, 1, 2, 2, 1.0,
-        tests, training, 5000, 5000,
+        tests, training, 5000, 50.0, 5000, 50.0,
         (0, 1, 2, len(training) + len(tests) - 1))
     three.equations = __3_coupled_oscillators  # type: ignore
     return three

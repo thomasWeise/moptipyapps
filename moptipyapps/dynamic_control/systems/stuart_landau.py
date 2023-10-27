@@ -179,7 +179,7 @@ def make_stuart_landau(n_points: int) -> System:
 
     system: Final[System] = System(
         "stuart_landau", 2, 1, 2, 2, 0.1,
-        tests, training, 5000, 5000, (0, 1))
+        tests, training, 5000, 50.0, 5000, 50.0, (0, 1))
     system.equations = __stuart_landau_equations  # type: ignore
     return system
 
