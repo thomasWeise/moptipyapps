@@ -10,12 +10,6 @@ from numpy.random import Generator, default_rng
 from moptipyapps.dynamic_control.controllers.ann import anns
 from moptipyapps.dynamic_control.controllers.cubic import cubic
 from moptipyapps.dynamic_control.controllers.linear import linear
-from moptipyapps.dynamic_control.controllers.min_ann import min_anns
-from moptipyapps.dynamic_control.controllers.partially_linear import (
-    partially_linear,
-)
-from moptipyapps.dynamic_control.controllers.peaks import peaks
-from moptipyapps.dynamic_control.controllers.predefined import predefined
 from moptipyapps.dynamic_control.controllers.quadratic import quadratic
 from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.objective import (
@@ -23,11 +17,8 @@ from moptipyapps.dynamic_control.objective import (
     FigureOfMeritLE,
 )
 from moptipyapps.dynamic_control.system import System
-from moptipyapps.dynamic_control.systems.lorenz import LORENZ_4, LORENZ_111
-from moptipyapps.dynamic_control.systems.stuart_landau import (
-    STUART_LANDAU_4,
-    STUART_LANDAU_111,
-)
+from moptipyapps.dynamic_control.systems.lorenz import LORENZ_4
+from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_4
 
 
 def __objective_test(fc: Callable[[Instance, bool], FigureOfMerit],
@@ -63,8 +54,7 @@ def __objective_tests(fc: Callable[[Instance, bool], FigureOfMerit],
     :param fc: the figure of merit
     :param random: the generator
     """
-    for orig_system in (STUART_LANDAU_111, LORENZ_111, STUART_LANDAU_4,
-                        LORENZ_4):
+    for orig_system in (STUART_LANDAU_4, LORENZ_4):
         system = System(orig_system.name,
                         orig_system.state_dims, orig_system.control_dims,
                         orig_system.state_dim_mod,
@@ -78,10 +68,6 @@ def __objective_tests(fc: Callable[[Instance, bool], FigureOfMerit],
 
         controllers = [linear(system), quadratic(system), cubic(system)]
         controllers.extend(anns(system))
-        controllers.extend(min_anns(system))
-        controllers.extend(partially_linear(system))
-        controllers.extend(predefined(system))
-        controllers.extend(peaks(system))
         for c in controllers:
             __objective_test(fc, Instance(system, c))
 

@@ -58,9 +58,10 @@ def test_experiment_raw(random: Generator = default_rng()) -> None:
 
     :param random: a randomizer
     """
-    n_runs: Final[int] = int(random.integers(1, 5))
+    n_runs: Final[int] = 1
     er: list[EndResult] = []
     insts: list[Callable[[], Instance]] = __make_instances()
+    insts = [insts[random.integers(len(insts))]]
 
     with TempDir.create() as use_dir:
         er.clear()

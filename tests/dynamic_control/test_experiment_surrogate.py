@@ -1,6 +1,6 @@
 """A test for the surrogate experiment of the dynamic control problem."""
 
-from typing import Callable, cast
+from typing import Callable, Final, cast
 
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
@@ -66,6 +66,7 @@ def test_experiment_surrogate(random: Generator = default_rng()) -> None:
 
     :param random: a randomizer
     """
+    n_runs: Final[int] = 1
     er: list[EndResult] = []
     insts: list[Callable[[], SystemModel]] = list(__make_instances(random))
     insts = [insts[random.integers(len(insts))]]
@@ -75,8 +76,8 @@ def test_experiment_surrogate(random: Generator = default_rng()) -> None:
         run_experiment(base_dir=use_dir,
                        instances=insts,
                        setups=[__cmaes],
-                       n_runs=1,
+                       n_runs=n_runs,
                        perform_warmup=False,
                        perform_pre_warmup=False)
         EndResult.from_logs(use_dir, er.append)
-    assert len(er) == len(insts)
+    assert len(er) == (len(insts) * n_runs)

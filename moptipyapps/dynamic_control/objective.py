@@ -198,10 +198,13 @@ class FigureOfMerit(Objective):
             np.copy(start.flatten())  # <--- This should make no sense...
             ode = run_ode(
                 start, equations, controller, x, controller_dim, steps, time)
-            results[i] = j_from_ode(ode, state_dim, state_dims_in_j, gamma)
+            results[i] = z = j_from_ode(ode, state_dim, state_dims_in_j, gamma)
+            if not (0.0 <= z <= 1e100):
+                return 1e200
             if collector is not None:
                 collector(diff_from_ode(ode, state_dim))
-        return self.sum_up_results(results)
+        z = self.sum_up_results(results)
+        return z if 0.0 <= z <= 1e100 else 1e200
 
     def sum_up_results(self, results: np.ndarray) -> float:
         """
