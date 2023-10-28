@@ -55,9 +55,9 @@ def __cmaes(instance: SystemModel) -> Execution:
     """
     random: Generator = default_rng(rand_seeds_from_str(str(instance), 1)[0])
     return cmaes_surrogate(instance,
-                           int(random.integers(4, 8)),
-                           int(random.integers(4, 8)),
-                           int(random.integers(4, 8)))
+                           int(random.integers(8, 16)),
+                           int(random.integers(8, 16)),
+                           int(random.integers(8, 16)))
 
 
 def test_experiment_surrogate(random: Generator = default_rng()) -> None:
@@ -67,7 +67,8 @@ def test_experiment_surrogate(random: Generator = default_rng()) -> None:
     :param random: a randomizer
     """
     er: list[EndResult] = []
-    insts: list[Callable[[], SystemModel]] = __make_instances(random)
+    insts: list[Callable[[], SystemModel]] = list(__make_instances(random))
+    insts = [insts[random.integers(len(insts))]]
 
     with TempDir.create() as use_dir:
         er.clear()

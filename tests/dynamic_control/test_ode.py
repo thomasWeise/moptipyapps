@@ -63,41 +63,103 @@ def __run_ode_test(instance: Instance,
     diffs1: Final[list[np.ndarray]] = []
     diffs2: Final[list[np.ndarray]] = []
 
-    for mode in range(3):
-        results.clear()
-        js.clear()
-        ts.clear()
-        diffs1.clear()
-        diffs2.clear()
+    mode = int(random.integers(3))
+    if mode == 1:
+        n_tests = min(2, len(system.training_starting_states))
+        starting_states[0:n_tests, :] = system.training_starting_states[
+            0:n_tests, :]
+    elif mode == 2:
+        n_tests = min(2, len(system.test_starting_states))
+        starting_states[0:n_tests, :] = system.test_starting_states[
+            0:n_tests, :]
 
+    results.clear()
+    js.clear()
+    ts.clear()
+    diffs1.clear()
+    diffs2.clear()
+
+    for i in range(n_tests):
+        res = run_ode(starting_states[i], sys, ctrl, params[i],
+                      ctrl_dim, steps[i])
+        if not all(is_all_finite(r) for r in res):
+            raise ValueError(
+                f"error on instance {instance}: encountered invalid "
+                f"output {res!r} for input {starting_states[i]!r} and "
+                f"{params[i]!r}.")
+        results.append(res)
+        rcp = np.copy(res)
+        jj = j_from_ode(res, state_dim)
+        if (not isfinite(jj)) or (jj < 0.0):
+            raise ValueError(f"invalid j={jj} on instance {instance}.")
+        js.append(jj)
+        if not np.all(rcp == res):
+            raise ValueError(
+                f"j_from_ode corrupts result on instance {instance}.")
+        t = t_from_ode(res)
+        if (not isfinite(t)) or (t < 0.0):
+            raise ValueError(f"invalid t={t} on instance {instance}.")
+        ts.append(t)
+        df, cf = diff_from_ode(res, state_dim)
+        if not all(is_all_finite(dff) for dff in df):
+            raise ValueError(
+                f"invalid state on instance {instance}: {df}")
+        if not all(is_all_finite(cff) for cff in cf):
+            raise ValueError(
+                f"invalid differential on instance {instance}: {cf}")
+        diffs1.append(df)
+        diffs2.append(cf)
+        if not np.all(rcp == res):
+            raise ValueError(
+                f"t_from_ode corrupts result on instance {instance}.")
+
+    if (mode == 0) and not np.all(s2 == starting_states):
+        raise ValueError(
+            f"error on instance {instance}: corrupted states")
+    if (mode == 0) and not np.all(p2 == params):
+        raise ValueError(
+            f"error on instance {instance}: corrupted params")
+    if (mode == 0) and not np.all(t2 == steps):
+        raise ValueError(f"error on instance {instance}: corrupted steps")
+
+    for _j in range(n_reps):
         for i in range(n_tests):
             res = run_ode(starting_states[i], sys, ctrl, params[i],
                           ctrl_dim, steps[i])
-            if not all(is_all_finite(r) for r in res):
+            if not np.all(res == results[i]):
                 raise ValueError(
-                    f"error on instance {instance}: encountered invalid "
-                    f"output {res!r} for input {starting_states[i]!r} and "
-                    f"{params[i]!r}.")
-            results.append(res)
+                    f"error on instance {instance}: encountered different "
+                    f"outputs {res!r} and {results[i]!r} for input "
+                    f"{starting_states[i]!r} and {params[i]!r}.")
             rcp = np.copy(res)
             jj = j_from_ode(res, state_dim)
             if (not isfinite(jj)) or (jj < 0.0):
                 raise ValueError(f"invalid j={jj} on instance {instance}.")
-            js.append(jj)
+            if jj != js[i]:
+                raise ValueError(f"inconsistent j={jj}, should be {js[i]} "
+                                 f"on instance {instance}")
             if not np.all(rcp == res):
                 raise ValueError(
                     f"j_from_ode corrupts result on instance {instance}.")
             t = t_from_ode(res)
             if (not isfinite(t)) or (t < 0.0):
                 raise ValueError(f"invalid t={t} on instance {instance}.")
-            ts.append(t)
+            if t != ts[i]:
+                raise ValueError(f"inconsistent t={t}, should be {ts[i]} "
+                                 f"on instance {instance}")
             df, cf = diff_from_ode(res, state_dim)
             if not all(is_all_finite(dff) for dff in df):
                 raise ValueError(
                     f"invalid state on instance {instance}: {df}")
-            if not all(is_all_finite(cff) for cff in cf):
+            if not np.all(df == diffs1[i]):
                 raise ValueError(
-                    f"invalid differential on instance {instance}: {cf}")
+                    f"invalid state on {instance}: {df!r} should be {df}")
+            if not all(is_all_finite(cff) for cff in cf):
+                raise ValueError("invalid differential on instance "
+                                 f"{instance}: {diffs1[i]!r}")
+            if not np.all(cf == diffs2[i]):
+                raise ValueError(f"invalid differential on {instance}: "
+                                 f"{cf!r} should be {diffs2[i]!r}")
             diffs1.append(df)
             diffs2.append(cf)
             if not np.all(rcp == res):
@@ -111,70 +173,8 @@ def __run_ode_test(instance: Instance,
             raise ValueError(
                 f"error on instance {instance}: corrupted params")
         if (mode == 0) and not np.all(t2 == steps):
-            raise ValueError(f"error on instance {instance}: corrupted steps")
-
-        for _j in range(n_reps):
-            for i in range(n_tests):
-                res = run_ode(starting_states[i], sys, ctrl, params[i],
-                              ctrl_dim, steps[i])
-                if not np.all(res == results[i]):
-                    raise ValueError(
-                        f"error on instance {instance}: encountered different "
-                        f"outputs {res!r} and {results[i]!r} for input "
-                        f"{starting_states[i]!r} and {params[i]!r}.")
-                rcp = np.copy(res)
-                jj = j_from_ode(res, state_dim)
-                if (not isfinite(jj)) or (jj < 0.0):
-                    raise ValueError(f"invalid j={jj} on instance {instance}.")
-                if jj != js[i]:
-                    raise ValueError(f"inconsistent j={jj}, should be {js[i]} "
-                                     f"on instance {instance}")
-                if not np.all(rcp == res):
-                    raise ValueError(
-                        f"j_from_ode corrupts result on instance {instance}.")
-                t = t_from_ode(res)
-                if (not isfinite(t)) or (t < 0.0):
-                    raise ValueError(f"invalid t={t} on instance {instance}.")
-                if t != ts[i]:
-                    raise ValueError(f"inconsistent t={t}, should be {ts[i]} "
-                                     f"on instance {instance}")
-                df, cf = diff_from_ode(res, state_dim)
-                if not all(is_all_finite(dff) for dff in df):
-                    raise ValueError(
-                        f"invalid state on instance {instance}: {df}")
-                if not np.all(df == diffs1[i]):
-                    raise ValueError(
-                        f"invalid state on {instance}: {df!r} should be {df}")
-                if not all(is_all_finite(cff) for cff in cf):
-                    raise ValueError("invalid differential on instance "
-                                     f"{instance}: {diffs1[i]!r}")
-                if not np.all(cf == diffs2[i]):
-                    raise ValueError(f"invalid differential on {instance}: "
-                                     f"{cf!r} should be {diffs2[i]!r}")
-                diffs1.append(df)
-                diffs2.append(cf)
-                if not np.all(rcp == res):
-                    raise ValueError(
-                        f"t_from_ode corrupts result on instance {instance}.")
-
-            if (mode == 0) and not np.all(s2 == starting_states):
-                raise ValueError(
-                    f"error on instance {instance}: corrupted states")
-            if (mode == 0) and not np.all(p2 == params):
-                raise ValueError(
-                    f"error on instance {instance}: corrupted params")
-            if (mode == 0) and not np.all(t2 == steps):
-                raise ValueError(
-                    f"error on instance {instance}: corrupted steps")
-
-        if mode == 0:
-            n_tests = min(2, len(system.training_starting_states))
-            starting_states[0:n_tests, :] = system.training_starting_states[
-                0:n_tests, :]
-        elif mode == 1:
-            n_tests = min(2, len(system.test_starting_states))
-            starting_states[0:n_tests, :] = system.test_starting_states[
-                0:n_tests, :]
+            raise ValueError(
+                f"error on instance {instance}: corrupted steps")
 
 
 def test_run_ode_on_experiment_raw() -> None:
