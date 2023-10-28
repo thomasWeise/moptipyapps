@@ -22,6 +22,19 @@ end time for the integration. We do this until we finally succeed.
 
 Thus, we can simulate a well-behaved system over a long time and an
 ill-behaved system for a shorter time period. Neither system will diverge.
+
+The following functions are provided:
+
+- :func:`run_ode` executes a set of differential system equations and
+  controller equations and returns an array with the system state, controller
+  output, and time at the different interpolation steps.
+- :func:`t_from_ode` returns the total time over which the result of
+  :func:`run_ode` was simulated.
+- :func:`j_from_ode` returns a figure of merit, i.e., a weighted sum of (a
+  part of) the system state and the controller output from the result of
+  :func:`run_ode`.
+- :func:`diff_from_ode` extracts state difference information from the result
+  of :func:`run_ode`.
 """
 
 from math import ceil, fsum, inf
@@ -29,7 +42,7 @@ from typing import Callable, Final, Iterable, TypeVar
 
 import numba  # type: ignore
 import numpy as np
-from scipy.integrate import DOP853, DenseOutput  # type: ignore
+from scipy.integrate import RK45, DenseOutput  # type: ignore
 
 #: the type variable for ODE controller parameters
 T = TypeVar("T")
@@ -228,14 +241,17 @@ def run_ode(starting_state: np.ndarray,
         interpolants.clear()
         denses.clear()
 
-        # then we create the integrator
-        integration = DOP853(
-            func_call, 0.0, starting_state, max_time, min_steps)
+        # then we create the integrator for the time range that we simulate
+        integration = RK45(
+            fun=func_call, t0=0.0, y0=starting_state, t_bound=max_time,
+            max_step=min_steps)
         is_finished: bool = False
 
         # perform the integration and collect all the points at which stuff
         # was computed
-        while True:
+        cycle: int = 0
+        while True:  # iteratively add interpolation points
+            cycle += 1
             pol = np.empty(dim)
             pol[0:n] = integration.y
             pol[-1] = integration.t
@@ -295,13 +311,13 @@ def run_ode(starting_state: np.ndarray,
                 break
 
         # if we arrive here, things went wrong somehow
-        if func_state.max_ok_t < func_state.min_error_t:
-            max_time = np.nextafter(
-                (0.25 * func_state.max_ok_t)
-                + (0.75 * func_state.min_error_t), -inf)
+        if (cycle < 3) and (func_state.max_ok_t < func_state.min_error_t):
+            max_time = np.nextafter(  # weighted average giving most weight
+                (0.9 * func_state.max_ok_t)  # on the last OK time and a
+                + (0.1 * func_state.min_error_t), -inf)  # bit on 1st error
         else:
             max_time = np.nextafter(0.75 * max_time, -inf)
-        if max_time <= 1e-10:
+        if (cycle > 4) or (max_time <= 1e-10):
             pol = interpolants[0]
             pol[0:n] = starting_state
             pol[-1] = 0.0
