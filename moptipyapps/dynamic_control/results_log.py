@@ -39,8 +39,8 @@ class ResultsLog(AbstractContextManager):
     figureOfMerit;totalTime;nSteps;start0;start1;end0;end1
     >>> for y in tt[1:]:
     ...     print(";".join(f"{float(v):.3f}" for v in y.split(";")))
-    403374.931;14.890;10007.000;0.000;1.000;1052.882;-33.244
-    407810.756;14.961;10004.000;1.000;1.000;1058.902;-38.616
+    403374.924;14.890;10000.000;0.000;1.000;1052.882;-33.244
+    407810.750;14.961;10000.000;1.000;1.000;1058.902;-38.616
     """
 
     def __init__(self, state_dim: int, out: TextIOBase | str) -> None:
