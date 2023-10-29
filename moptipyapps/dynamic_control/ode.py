@@ -37,7 +37,7 @@ The following functions are provided:
   of :func:`run_ode`.
 """
 
-from math import ceil, fsum, inf
+from math import fsum, inf
 from typing import Callable, Final, Iterable, TypeVar
 
 import numba  # type: ignore
@@ -154,7 +154,7 @@ def run_ode(starting_state: np.ndarray,
                 np.ndarray, float, np.ndarray, np.ndarray], None],
             controller: Callable[[np.ndarray, float, T, np.ndarray], None],
             parameters: T, controller_dim: int = 1,
-            min_steps: int = 5000, max_time: float = 50.0) -> np.ndarray:
+            steps: int = 5000, max_time: float = 50.0) -> np.ndarray:
     """
     Simulate a set of controlled differential system.
 
@@ -169,6 +169,15 @@ def run_ode(starting_state: np.ndarray,
     differential into. This output array has the same dimension as the state
     vector.
 
+    Now the `run_ode` function simulates such a system over `steps` time steps
+    over the closed interval `[0, max_time]`. If both the system and the
+    controller are well-behaved, then the output array will contain `steps`
+    rows with the state, controller, and time information of each step. If
+    the system diverges at some point in time but we can simulate it
+    reasonably well before that, then we try to simulate `steps`, but on a
+    shorter time frame. If even that fails, you will get a single row output
+    with `1e100` as the controller value.
+
     This function returns a matrix where each row corresponds to a simulated
     time step. Each row contains three components in a concatenated fashion:
     1. the state vector,
@@ -180,7 +189,7 @@ def run_ode(starting_state: np.ndarray,
     :param controller: the controller function
     :param parameters: the controller parameters
     :param controller_dim: the dimension of the controller result
-    :param min_steps: the minimum number of steps to simulate
+    :param steps: the number of steps to simulate
     :param max_time: the maximum time to simulate for
     :returns: a matrix where each row represents a point in time, composed of
         the current state, the controller output, and the length of the time
@@ -207,6 +216,8 @@ def run_ode(starting_state: np.ndarray,
     ...     dest[0] = 0.0  #  controller that does nothing
     >>> strt = np.array([0.0, 1.0])
     >>> ode = run_ode(strt, projectile, contrl, param, 1, 10000)
+    >>> print(len(ode))
+    10000
     >>> time_of_flight = 2 * v_y / 9.80665
     >>> print(f"{time_of_flight:.10f}")
     14.4209649817
@@ -215,120 +226,142 @@ def run_ode(starting_state: np.ndarray,
     1019.7162129779
     >>> idx = np.argwhere(ode[:, 1] <= 0.0)[0][0]
     >>> print(idx)
-    2894
+    2887
     >>> print(f"{ode[idx - 1, 0]:.10f}")
-    1020.7086386428
+    1020.4571309653
     >>> print(f"{ode[idx, 0]:.10f}")
-    1021.0621920334
+    1020.8107197148
     >>> print(f"{ode[idx - 1, -1]:.10f}")
-    14.4350000000
+    14.4314431443
     >>> print(f"{ode[idx, -1]:.10f}")
-    14.4400000000
+    14.4364436444
     >>> print(ode[-1, -1])
     50.0
+
+    >>> def contrl2(position, ttime, params, dest):
+    ...     dest[0] = 1e50  #  controller that is ill-behaved
+    >>> run_ode(strt, projectile, contrl2, param, 1, 10000)
+    array([[0.e+000, 1.e+000, 1.e+100, 0.e+000]])
+
+    >>> def contrl3(position, ttime, params, dest):
+    ...     dest[0] = 1e50 if ttime > 10 else 0.0  # diverging controller
+    >>> ode = run_ode(strt, projectile, contrl3, param, 1, 10000)
+    >>> print(len(ode))
+    10000
+    >>> print(ode[-1])
+    [690.10677249 224.06765771   0.           9.75958357]
+
+    >>> def projectile2(position, ttime, ctrl, out):
+    ...     out[:] = 0
+    >>> ode = run_ode(strt, projectile2, contrl, param, 1, 10000)
+    >>> print(len(ode))
+    10000
+    >>> print(ode[-1])
+    [ 0.  1.  0. 50.]
+    >>> ode = run_ode(strt, projectile2, contrl3, param, 1, 10000)
+    >>> print(len(ode))
+    10000
+    >>> print(ode[-1])
+    [0.         1.         0.         9.41234557]
     """
     func_state: Final[__IntegrationState] = __IntegrationState(
         equations, controller, parameters, controller_dim)
     func_call: Final[Callable[[float, np.ndarray], np.ndarray]] = func_state.f
-    interpolants: Final[list[np.ndarray]] = []
     denses: Final[list[DenseOutput]] = []
     n: Final[int] = len(starting_state)
     dim: Final[int] = n + controller_dim + 1
 
-    while True:
+    cycle: int = 0
+    while True:  # loop until we have a sane integration over a sane range
+        cycle += 1
         # first, we reset all the state information
-        func_state.init()
-        interpolants.clear()
-        denses.clear()
+        func_state.init()  # reset the function state
+        denses.clear()  # always discard all interpolators, if there are any
 
         # then we create the integrator for the time range that we simulate
         integration = RK45(
             fun=func_call, t0=0.0, y0=starting_state, t_bound=max_time,
-            max_step=min_steps)
+            max_step=steps)
         is_finished: bool = False
 
         # perform the integration and collect all the points at which stuff
         # was computed
-        cycle: int = 0
         while True:  # iteratively add interpolation points
-            cycle += 1
-            pol = np.empty(dim)
-            pol[0:n] = integration.y
-            pol[-1] = integration.t
-            interpolants.append(pol)
-            integration.step()
+            integration.step()  # do the integration step
             if not func_state.is_ok:
-                break
+                break  # some out-of-bounds thing happened! quit!
             is_finished = integration.status == "finished"
             is_running: bool = integration.status == "running"
-            if is_finished or is_running:
+            if is_finished or is_running:  # keep taking interpolator
                 denses.append(integration.dense_output())
                 if is_finished:
-                    break
-            else:
-                break
+                    break  # we are finished, so we quit and build output
+                continue  # more integration to do, so we go on
+            break  # if we get here, there was an error: quit
 
         if is_finished and func_state.is_ok:
-            # if we get here, everything worked out well so far
-            last_t: float = 0.0
-            max_t: float = interpolants[-1][-1]
+            # if we get here, everything looks fine so far, so we can try
+            # to build the output
+            result: np.ndarray = np.zeros((steps, dim))
+            point: np.ndarray = result[0]
+            point[0:n] = starting_state
 
-            for dense in denses:
-                t_min = dense.t_min
-                t_max = min(dense.t_max, max_time)
-                for k in range(int(ceil(t_min * min_steps / max_time)),
-                               1 + int(t_max * min_steps / max_time)):
-                    t = max_time * k / min_steps
-                    if last_t < t < t_max:
-                        pol = np.empty(dim)
-                        pol[0:n] = dense(t)
-                        pol[-1] = t
-                        interpolants.append(pol)
-                        last_t = t
-
-            if last_t > max_t:  # update the maximum reached time
-                max_t = last_t
-
-            if max_t < max_time:  # add the last point, if necessary
-                dense = denses[-1]
-                if dense.t_min <= max_time <= dense.t_max:
-                    pol = np.empty(dim)
-                    pol[0:n] = denses[-1](max_time)
-                    pol[-1] = max_time
-                    interpolants.append(pol)
-
-            if func_state.is_ok:
-                interpolants.sort(key=lambda v: v[-1])
-
-                # clean up potential doubles
-                end_idx = len(interpolants) - 1
-                cur_t = interpolants[end_idx][-1]
-                for i in range(end_idx - 1, -1, -1):
-                    prev_t = cur_t
-                    cur_t = interpolants[i][-1]
-                    if cur_t >= prev_t:
-                        del interpolants[i + 1]
+            # we now compute all the points by using the interpolation
+            # we start with the first point
+            controller(starting_state, 0.0, parameters, point[n:-1])
+            if not _is_ok(point):
                 break
+            result[:, -1] = np.linspace(0.0, max_time, steps)
 
-        # if we arrive here, things went wrong somehow
+            j: int = 0  # the index of the dense interpolator to use
+            n_dense: int = len(denses)  # the number of interpolators
+            t: float = 0.0  # the current time
+            dense: DenseOutput = denses[j]  # the current interpolator
+            for point in result[1:]:  # for each of the remaining points...
+                last_time: float = t  # remember the last successful point
+                t = point[-1]  # get the time value
+
+                # we now need to find the right interpolator if we have left
+                # the range of the current interpolator
+                while not (dense.t_min <= t <= dense.t_max):
+                    j += 1  # step counter
+                    if j >= n_dense:   # we have left the interpolation range??
+                        func_state.max_ok_t = last_time  # so we need to adjust
+                        func_state.min_error_t = t
+                        is_finished = False  # and try the whole thing again
+                        break
+                    dense = denses[j]  # pick next interpolator
+
+                if is_finished:  # if we get here, we got a right interpolator
+                    point[0:n] = dense(t)  # so we can interpolate the state
+                    controller(point[0:n], t, parameters, point[n:-1])
+                    if not _is_ok(point):  # is there an error in the vector?
+                        func_state.max_ok_t = last_time  # last ok time
+                        func_state.min_error_t = t  # error time
+                        is_finished = False  # we need to quit and try again
+                        break  # stop inner loop
+
+            if is_finished:  # did we succeed?
+                return result  # yes! return the result.
+
+        # if we arrive here, things went wrong somehow.
+        # this means that we should reduce the maximum runtime
         if (cycle < 3) and (func_state.max_ok_t < func_state.min_error_t):
-            max_time = np.nextafter(  # weighted average giving most weight
-                (0.9 * func_state.max_ok_t)  # on the last OK time and a
-                + (0.1 * func_state.min_error_t), -inf)  # bit on 1st error
-        else:
-            max_time = np.nextafter(0.75 * max_time, -inf)
-        if (cycle > 4) or (max_time <= 1e-10):
-            pol = interpolants[0]
-            pol[0:n] = starting_state
-            pol[-1] = 0.0
-            interpolants.clear()
-            interpolants.append(pol)
-            break
+            max_time = np.nextafter(min(func_state.min_error_t, (
+                0.8 * func_state.max_ok_t) + (0.2 * func_state.min_error_t)),
+                -inf)
+        else:  # the small reductions did not work out well ... reduce rapidly
+            max_time = np.nextafter(0.7 * min(func_state.max_ok_t,
+                                              max_time), -inf)
 
-    # re-evaluate the controller at the given points in time
-    result = np.array(interpolants)
-    for row in result:
-        controller(row[0:n], row[-1], parameters, row[n:-1])
+        if (cycle > 4) or (max_time <= 1e-10):
+            break  # if we get here, everything seems so pointless...
+
+    # the default error result
+    result = np.zeros((1, dim))
+    result[0, 0:n] = starting_state
+    result[0, n:-1] = 1e100
+    result[0, -1] = 0.0
     return result
 
 
