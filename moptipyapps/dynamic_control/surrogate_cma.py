@@ -86,6 +86,10 @@ from moptipyapps.dynamic_control.objective import FigureOfMerit
 from moptipyapps.dynamic_control.system_model import SystemModel
 
 
+def _nop() -> None:
+    """A no operation."""
+
+
 class SurrogateCmaEs(Algorithm):
     """A surrogate model-based CMA-ES algorithm."""
 
@@ -218,7 +222,7 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
              .set_max_fes(self.fes_per_model_run)
              .set_algorithm(self.__control_cma))
         result: Final[np.ndarray] = self.__control_cma.space.create()
-
+        orig_init: Callable = raw.initialize
 
 # Now we do the setup run that creates some basic results and
 # gathers the initial information for modelling the system.
@@ -233,6 +237,8 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
             with training_execute.execute() as sub:  # train model
                 sub.get_copy_of_best_y(model)  # get best model
             model_objective.end()  # dispose the collected data
+
+            setattr(raw, "initialize", _nop)  # prevent resetting to "raw"
 
 # The trained model is wrapped into an equation function that can be passed to
 # the ODE integrator.
@@ -253,6 +259,7 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
             with on_model_execute.execute() as ome:
                 ome.get_copy_of_best_y(result)  # get best controller
             raw.set_raw()  # switch to the actual problem and data collection
+            setattr(raw, "initialize", orig_init)  # allow resetting to "raw"
 
 # Finally, we re-evaluate the result that we got from the model run on the
 # actual objective function.
