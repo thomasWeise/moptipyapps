@@ -177,7 +177,7 @@ def run(base_dir: str, n_runs: int = 5) -> None:
             setups=[cast(Callable[[Any], Execution], lambda i, __f=fes:
                          cmaes_surrogate(i, MAX_FES, __f, __f))],
             n_runs=n_runs,
-            n_threads=8,
+            n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
             perform_warmup=False,
             perform_pre_warmup=False,
             on_completion=on_completion)
