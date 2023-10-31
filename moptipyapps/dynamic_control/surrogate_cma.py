@@ -87,7 +87,7 @@ from moptipyapps.dynamic_control.system_model import SystemModel
 
 
 def _nop() -> None:
-    """A no operation."""
+    """Do absolutely nothing."""
 
 
 class SurrogateCmaEs(Algorithm):
