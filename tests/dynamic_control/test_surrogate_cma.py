@@ -18,7 +18,16 @@ from moptipyapps.dynamic_control.system_model import SystemModel
 
 
 def test_surrogate_cmaes() -> None:
-    """Test whether surrogate cmaes really invokes the model."""
+    """
+    Test whether surrogate cmaes really invokes the model.
+
+    There are lower bounds for how often the Surrogate-CMA-ES algorithm needs
+    to invoke the model equations and the real system equations. With this
+    test here, we verify that both equations are invoked at least that often.
+    They may be invoked more often because the Runge-Kutta ODE Integrator
+    could sample some in-between points for better interpolation, i.e., sample
+    both equations more often than necessary.
+    """
     old: Final = mo._evaluate
     mo._evaluate = old.py_func
     random: Final[Generator] = default_rng()
@@ -43,23 +52,27 @@ def test_surrogate_cmaes() -> None:
         cnt[0] += 1
         out.fill(-4.0)
 
-    def __equations(_: np.ndarray, __: float, ___: np.ndarray, out: np.ndarray,
-                    cnt=real_count) -> None:
+    def __equations(_: np.ndarray, __: float, ___: np.ndarray,
+                    out: np.ndarray, cnt=real_count) -> None:
         cnt[0] += 1
         out.fill(5.0)
 
+    # We replace the equations in the instances with the above two.
     setattr(instance.system, "equations", __equations)
     setattr(instance.model, "controller", __model)
 
     objective: Final[FigureOfMerit] = FigureOfMeritLE(instance, True)
-    rsm: Final = objective.set_model
+    real_set_model: Final = objective.set_model
 
-    def __sm(eq, _rsm=rsm) -> None:
-        if hasattr(eq, "py_func"):
-            eq = eq.py_func
-        _rsm(eq)
+    # we need to unpack any numba compilation here, or otherwise the
+    # non-numba-compiled equations "__equations" or "__model" would crash.
+    def __set_model_unpacked(model_equation, _rsm=real_set_model) -> None:
+        """An internal model setting routine unpacking numba."""
+        if hasattr(model_equation, "py_func"):
+            model_equation = model_equation.py_func
+        _rsm(model_equation)
 
-    objective.set_model = __sm
+    objective.set_model = __set_model_unpacked
 
     space = instance.controller.parameter_space()
 
@@ -82,7 +95,7 @@ def test_surrogate_cmaes() -> None:
     n_real_ode_steps: Final[int] = (
         n_total_fes * n_training_cases
         * n_ode_steps_on_raw_model_per_training_case)
-    assert real_count >= n_real_ode_steps
+    assert real_count[0] >= n_real_ode_steps
 
     n_training_invocations: int = 0
     for i in range(n_warmup_fes, n_total_fes):
@@ -91,8 +104,9 @@ def test_surrogate_cmaes() -> None:
         n_training_invocations += n_fes_for_model_training * data_set_size
 
     n_model_ode_steps: Final[int] = (
-        (n_total_fes - n_warmup_fes)
+        (n_total_fes - n_warmup_fes) * n_fes_for_model_training
         * n_training_cases * n_ode_steps_on_raw_model_per_training_case)
-    assert model_counter >= n_training_invocations + n_model_ode_steps
+    assert model_counter[0] >= n_training_invocations + n_model_ode_steps
 
     mo._evaluate = old
+    objective.set_model = real_set_model
