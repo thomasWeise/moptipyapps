@@ -22,6 +22,7 @@ from typing import Final
 
 import numba  # type: ignore
 import numpy as np
+from moptipy.utils.path import Path
 from moptipy.utils.types import check_int_range
 
 from moptipyapps.dynamic_control.starting_points import (
@@ -73,6 +74,50 @@ def __3_coupled_oscillators(state: np.ndarray, _: float,
     out[5] = (sigma3 * a6) + (__PI2 * a5) + b
 
 
+def _sinus_control(
+        _: np.ndarray, time: float, __: float, out: np.ndarray) -> None:
+    """
+    Present the sinus-based control law from the paper.
+
+    :param _: the state, ignored
+    :param time: the time
+    :param __: ignored
+    :param out: the output destination
+    """
+    out[0] = 0.07 * np.sin(__PI2 * time)
+
+
+def _lgpc3_36(
+        state: np.ndarray, time: float, _: float, out: np.ndarray) -> None:
+    """
+    Present the LGPC-3 equation 3.6.
+
+    :param state: the state
+    :param time: the time
+    :param _: ignored
+    :param out: the output destination
+    """
+    out[0] = np.tanh(np.sin(np.tanh(
+        3.0 * state[1] * np.sin(time) * np.sin(__PI2 * time) - state[3])))
+
+
+class __TO(System):
+    """The internal three oscillators class."""
+
+    def describe_system_without_control(
+            self, dest_dir: str, skip_if_exists: bool = True) \
+            -> tuple[Path, ...]:
+        result = list(super().describe_system_without_control(
+            dest_dir, skip_if_exists))
+        result.extend(self.describe_system(
+            "open loop 0.07sin(\u03C0²t)", _sinus_control, 0.0,
+            f"{self.name}_open_loop", dest_dir, skip_if_exists))
+        result.extend(self.describe_system(
+            "LGPC-3", _lgpc3_36, 0.0,
+            f"{self.name}_lgpc3", dest_dir, skip_if_exists))
+        return tuple(result)
+
+
 def make_3_couple_oscillators(n_points: int) -> System:
     """
     Create the oscillator system.
@@ -95,7 +140,7 @@ def make_3_couple_oscillators(n_points: int) -> System:
         0.03239565]]) if n_points == 4 else (
         make_interesting_starting_points(n_points, tests))
 
-    three: Final[System] = System(
+    three: Final[System] = __TO(
         "3oscillators", 6, 1, 2, 2, 1.0,
         tests, training, 5000, 50.0, 5000, 50.0,
         (0, 1, 2, len(training) + len(tests) - 1))

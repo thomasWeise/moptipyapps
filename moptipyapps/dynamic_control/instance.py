@@ -104,7 +104,7 @@ class Instance(Component):
     def describe_parameterization(
             self, title: str | None,
             parameters: np.ndarray, base_name: str,
-            dest_dir: str) -> tuple[Path, Path]:
+            dest_dir: str) -> tuple[Path, ...]:
         """
         Describe the performance of a given system of system.
 

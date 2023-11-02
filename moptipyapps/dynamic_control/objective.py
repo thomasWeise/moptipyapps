@@ -23,6 +23,7 @@ from typing import Callable, Final
 import numpy as np
 from moptipy.api.objective import Objective
 from moptipy.utils.logger import KeyValueLogSection
+from moptipy.utils.nputils import array_to_str
 from moptipy.utils.types import type_error
 
 from moptipyapps.dynamic_control.instance import Instance
@@ -235,6 +236,13 @@ training_starting_states`) and perform :attr:`~moptipyapps.dynamic_control\
         """
         super().log_parameters_to(logger)
         logger.key_value("modelModeEnabled", self.__collection is not None)
+        logger.key_value("dataCollecting", self.__collect)
+        eq: Final = self.__equations
+        logger.key_value("usingOriginalEquations",
+                         eq is self.instance.system.equations)
+        mp: Final[str] = "modelParameters"
+        if hasattr(self.__equations, mp):
+            logger.key_value(mp, array_to_str(getattr(eq, mp)))
         with logger.scope(SCOPE_INSTANCE) as scope:
             self.instance.log_parameters_to(scope)
 

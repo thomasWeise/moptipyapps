@@ -302,7 +302,7 @@ class System(Component):
             controller: Callable[[np.ndarray, float, T, np.ndarray], None],
             parameters: T, base_name: str, dest_dir: str,
             skip_if_exists: bool = False) \
-            -> tuple[Path, Path]:
+            -> tuple[Path, ...]:
         """
         Describe the performance of a given system of system.
 
@@ -346,7 +346,7 @@ class System(Component):
 
     def describe_system_without_control(self, dest_dir: str,
                                         skip_if_exists: bool = True) \
-            -> tuple[Path, Path]:
+            -> tuple[Path, ...]:
         """
         Describe the performance of a given system of system.
 

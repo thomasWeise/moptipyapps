@@ -55,10 +55,9 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
     res: list[Callable[[], SystemModel]] = []
     for system in [THREE_COUPLED_OSCILLATORS]:
         controllers = [
-            make_ann(system.state_dims, system.control_dims, [2, 2]),
             make_ann(system.state_dims, system.control_dims, [3, 3])]
         for controller in controllers:
-            for ann_model in [[2, 2], [3, 3]]:
+            for ann_model in [[7, 6], [6, 6, 6]]:
                 res.append(cast(
                     Callable[[], SystemModel],
                     lambda _s=system, _c=controller, _m=make_ann(
@@ -103,7 +102,8 @@ def cmaes_raw(instance: Instance, max_fes: int = MAX_FES) -> Execution:
 def cmaes_surrogate(instance: SystemModel,
                     max_fes: int = MAX_FES,
                     fes_for_training: int = 128,
-                    fes_per_model_run: int = 128) -> Execution:
+                    fes_per_model_run: int = 128,
+                    fancy_logs: bool = True) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
@@ -111,12 +111,13 @@ def cmaes_surrogate(instance: SystemModel,
     :param max_fes: the maximum FEs
     :param fes_for_training: the FEs for training
     :param fes_per_model_run: the FEs per model run
+    :param fancy_logs: should we do fancy logging?
     :return: the setup
     """
     execution, objective, space = base_setup(instance, max_fes)
     return execution.set_solution_space(space).set_algorithm(SurrogateCmaEs(
         instance, space, objective, max_fes // 4,
-        fes_for_training, fes_per_model_run))
+        fes_for_training, fes_per_model_run, fancy_logs))
 
 
 def on_completion(instance: Any, log_file: Path, process: Process) -> None:
@@ -170,12 +171,15 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         perform_pre_warmup=False,
         on_completion=on_completion)
 
-    for fes in [128, 256, 512, 1024]:
+    for training_fes, run_fes in ((2 ** 13, 2 ** 8),
+                                  (2 ** 16, 2 ** 10)):
         run_experiment(
-            base_dir=use_dir.resolve_inside(f"model_for_{fes}x{fes}_fes"),
+            base_dir=use_dir.resolve_inside(
+                f"model_for_{training_fes}x{run_fes}_fes"),
             instances=instances,
-            setups=[cast(Callable[[Any], Execution], lambda i, __f=fes:
-                         cmaes_surrogate(i, MAX_FES, __f, __f))],
+            setups=[cast(Callable[[Any], Execution],
+                         lambda i, __t=training_fes, __r=run_fes:
+                         cmaes_surrogate(i, MAX_FES, __t, __r))],
             n_runs=n_runs,
             n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
             perform_warmup=False,

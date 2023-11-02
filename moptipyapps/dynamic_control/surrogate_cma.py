@@ -66,6 +66,9 @@ Shenzhen, China (哈尔滨工业大学(深圳)).
 """
 
 
+from copy import copy
+from gc import collect
+from os.path import basename
 from typing import Callable, Final
 
 import numba  # type: ignore
@@ -73,16 +76,19 @@ import numpy as np
 from moptipy.algorithms.so.vector.cmaes_lib import BiPopCMAES
 from moptipy.api.algorithm import Algorithm
 from moptipy.api.execution import Execution
+from moptipy.api.logging import FILE_SUFFIX
 from moptipy.api.process import Process
 from moptipy.api.subprocesses import for_fes
 from moptipy.spaces.vectorspace import VectorSpace
 from moptipy.utils.logger import KeyValueLogSection
-from moptipy.utils.nputils import DEFAULT_FLOAT, rand_seed_generate
+from moptipy.utils.nputils import rand_seed_generate
+from moptipy.utils.path import Path
 from moptipy.utils.types import check_int_range, type_error
 from numpy.random import Generator
 
 from moptipyapps.dynamic_control.model_objective import ModelObjective
 from moptipyapps.dynamic_control.objective import FigureOfMerit
+from moptipyapps.dynamic_control.system import System
 from moptipyapps.dynamic_control.system_model import SystemModel
 
 
@@ -99,7 +105,8 @@ class SurrogateCmaEs(Algorithm):
                  objective: FigureOfMerit,
                  fes_for_warmup: int,
                  fes_for_training: int,
-                 fes_per_model_run: int) -> None:
+                 fes_per_model_run: int,
+                 fancy_logs: bool = False) -> None:
         """
         Initialize the algorithm.
 
@@ -113,6 +120,7 @@ class SurrogateCmaEs(Algorithm):
             model
         :param fes_per_model_run: the number of FEs to be applied to each
             optimization run on the model
+        :param fancy_logs: should we perform fancy logging?
         """
         super().__init__()
 
@@ -123,7 +131,11 @@ class SurrogateCmaEs(Algorithm):
                 controller_space, "controller_space", VectorSpace)
         if not isinstance(objective, FigureOfMerit):
             raise type_error(objective, "objective", FigureOfMerit)
+        if not isinstance(fancy_logs, bool):
+            raise type_error(fancy_logs, "fancy_logs", bool)
 
+        #: should we do fancy logging?
+        self.fancy_logs: Final[bool] = fancy_logs
         #: the number of objective function evaluations to be used for warmup
         self.fes_for_warmup: Final[int] = check_int_range(
             fes_for_warmup, "fes_for_warmup", 1, 1_000_000)
@@ -206,9 +218,6 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
         model_equations: Final[Callable[[
             np.ndarray, float, np.ndarray, np.ndarray], None]] =\
             self.system_model.model.controller
-        merged: Final[np.ndarray] = np.empty(
-            self.system_model.system.state_dims
-            + self.system_model.system.control_dims, DEFAULT_FLOAT)
         raw: Final[FigureOfMerit] = self.__control_objective
         random: Final[Generator] = process.get_random()
         training_execute: Final[Execution] = (
@@ -224,15 +233,57 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
         result: Final[np.ndarray] = self.__control_cma.space.create()
         orig_init: Callable = raw.initialize
 
+# Get a log dir if logging is enabled and set up all the logging information.
+        log_dir_name: str | None = process.get_log_basename() \
+            if self.fancy_logs else None
+        model_training_dir: Path | None = None
+        model_training_log_name: str | None = None
+        models_dir: Path | None = None
+        models_name: str | None = None
+        tempsys: System | None = None
+        ctrl_dir: Path | None = None
+        ctrl_log_name: str | None = None
+        controllers_dir: Path | None = None
+        controllers_name: str | None = None
+        if log_dir_name is not None:
+            log_dir: Final[Path] = Path.path(log_dir_name)
+            log_dir.ensure_dir_exists()
+            prefix: str = "modelTraining"
+            model_training_dir = log_dir.resolve_inside(prefix)
+            model_training_dir.ensure_dir_exists()
+            base_name: Final[str] = basename(log_dir_name)
+            model_training_log_name = f"{base_name}_{prefix}_"
+            training_execute.set_log_improvements(True)
+            prefix = "controllerOnModel"
+            ctrl_dir = log_dir.resolve_inside(prefix)
+            ctrl_dir.ensure_dir_exists()
+            ctrl_log_name = f"{base_name}_{prefix}_"
+            on_model_execute.set_log_improvements(True)
+            prefix = "model"
+            models_dir = log_dir.resolve_inside(prefix)
+            models_dir.ensure_dir_exists()
+            tempsys = copy(self.system_model.system)
+            models_name = f"{tempsys.name}_{prefix}_"
+            prefix = "controllersOnReal"
+            controllers_dir = log_dir.resolve_inside(prefix)
+            controllers_dir.ensure_dir_exists()
+            controllers_name = f"{base_name}_{prefix}_"
+
 # Now we do the setup run that creates some basic results and
 # gathers the initial information for modelling the system.
         with for_fes(process, self.fes_for_warmup) as prc:
             self.__control_cma.solve(prc)
 
         while not should_terminate():  # until budget exhausted
+            consumed_fes: int = process.get_consumed_fes()
 
             # We now train a model on the data that was gathered.
             training_execute.set_rand_seed(rand_seed_generate(random))
+            if model_training_dir is not None:
+                training_execute.set_log_file(
+                    model_training_dir.resolve_inside(
+                        f"{model_training_log_name}{consumed_fes}"
+                        f"{FILE_SUFFIX}"))
             model_objective.begin()  # get the collected data
             with training_execute.execute() as sub:  # train model
                 sub.get_copy_of_best_y(model)  # get best model
@@ -246,24 +297,50 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
                         boundscheck=False)
             def __new_model(state: np.ndarray, time: float,
                             control: np.ndarray, out: np.ndarray,
-                            _merged=merged, _params=model,
-                            _eq=model_equations) -> None:
-                sd: Final[int] = len(state)
-                _merged[0:sd] = state
-                _merged[sd:] = control
-                _eq(_merged, time, _params, out)
+                            _params=model, _eq=model_equations) -> None:
+                _eq(np.hstack((state, control)), time, _params, out)
+
+            setattr(__new_model, "modelParameters", model)  # see objective
+
+            if tempsys is not None:  # plot the model behavior
+                tempsys.equations = __new_model  # type: ignore
+                setattr(tempsys, "name", f"{models_name}{consumed_fes}")
+                tempsys.describe_system_without_control(models_dir)
+
+            collect()  # now we collect all garbage ... there should be much
 
 # OK, now that we got the model, we can perform the model optimization run.
             raw.set_model(__new_model)  # switch to use the model
             on_model_execute.set_rand_seed(rand_seed_generate(random))
+            if ctrl_dir is not None:
+                on_model_execute.set_log_file(ctrl_dir.resolve_inside(
+                    f"{ctrl_log_name}{consumed_fes}{FILE_SUFFIX}"))
             with on_model_execute.execute() as ome:
                 ome.get_copy_of_best_y(result)  # get best controller
             raw.set_raw()  # switch to the actual problem and data collection
             setattr(raw, "initialize", orig_init)  # allow resetting to "raw"
 
+            if tempsys is not None:  # plot the controller on that model
+                setattr(tempsys, "name", f"{models_name}{consumed_fes}")
+                tempsys.describe_system(
+                    f"{models_name}{consumed_fes}",
+                    self.system_model.controller.controller, result,
+                    f"{models_name}{consumed_fes}_synthesized_controller",
+                    models_dir)
+
 # Finally, we re-evaluate the result that we got from the model run on the
 # actual objective function.
-            process.evaluate(result)
+            process.evaluate(result)  # get the real objective value
+
+# plot the actual behavior
+            if controllers_dir is not None:
+                self.system_model.system.describe_system(
+                    f"{self.system_model.system}_{consumed_fes}",
+                    self.system_model.controller.controller,
+                    result, f"{controllers_name}{consumed_fes}",
+                    controllers_dir)
+
+            collect()  # now we collect all garbage ... there should be much
 
     def __str__(self):
         """
@@ -285,6 +362,7 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
         logger.key_value("fesForWarmup", self.fes_for_warmup)
         logger.key_value("fesForTraining", self.fes_for_training)
         logger.key_value("fesPerModelRun", self.fes_per_model_run)
+        logger.key_value("fancyLogs", self.fancy_logs)
         with logger.scope("ctrlCMA") as ccma:
             self.__control_cma.log_parameters_to(ccma)
         with logger.scope("mdlSpace") as mspce:

@@ -57,7 +57,8 @@ def __cmaes(instance: SystemModel) -> Execution:
     return cmaes_surrogate(instance,
                            int(random.integers(8, 16)),
                            int(random.integers(8, 16)),
-                           int(random.integers(8, 16)))
+                           int(random.integers(8, 16)),
+                           fancy_logs=False)
 
 
 def test_experiment_surrogate(random: Generator = default_rng()) -> None:

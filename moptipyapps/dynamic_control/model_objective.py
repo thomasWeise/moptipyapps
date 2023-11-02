@@ -28,22 +28,22 @@ for controller synthesis, it minimizes the mean-square-error directly.
 The model objective function is used by the
 :mod:`~moptipyapps.dynamic_control.surrogate_cma` algorithm.
 """
-
 from typing import Callable, Final
 
 import numba  # type: ignore
 import numpy as np
 from moptipy.api.objective import Objective
+from moptipy.utils.logger import KeyValueLogSection
 
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.objective import FigureOfMerit
 
 
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
+@numba.njit(cache=False, inline="always", fastmath=True, boundscheck=False)
 def _evaluate(x: np.ndarray, dim: int, pin: np.ndarray,
               pout: np.ndarray, res: np.ndarray,
               eq: Callable[[np.ndarray, float, np.ndarray,
-                            np.ndarray], None]) -> np.ndarray:
+                            np.ndarray], None]) -> float:
     """
     Compute the squared differences between expected and actual model output.
 
@@ -52,14 +52,15 @@ def _evaluate(x: np.ndarray, dim: int, pin: np.ndarray,
     :param pin: the input vectors
     :param pout: the expected output vectors, flattened
     :param eq: the equations
-    :return: the vector of squared differences
+    :return: the mean of the `log(x+1)` of the squared differences `x`
     """
     idx: int = 0
     for row in pin:  # iterate over all row=(s, c) tuples
         nidx: int = idx + dim
         eq(row, 0.0, x, res[idx:nidx])  # store the equation results
         idx = nidx
-    return np.square(np.subtract(res, pout, res), res)  # compute squared diff
+    return np.log1p(np.square(  # compute the log(x+1) of the squared diff x
+        np.subtract(res, pout, res), res), res).mean()
 
 
 class ModelObjective(Objective):
@@ -94,14 +95,6 @@ ModelObjective.begin`. The `ds/dt` rows are flattened for performance reasons.
         :param real: the objective used for the real optimization problem
         :param model: the model
         """
-        n1 = str(real)
-        n2 = "figureOfMerit"
-        if n1.startswith(n2):
-            n1 = n1[len(n2):]
-        #: the name of this objective
-        self.name: Final[str] = f"model{n1}"
-        #: the result summation method
-        self.__sum: Callable[[np.ndarray], float] = real.sum_up_results
         #: the equations of the model
         self.__equations: Callable[[np.ndarray, float, np.ndarray,
                                     np.ndarray], None] = model.controller
@@ -116,6 +109,8 @@ ModelObjective.begin`. The `ds/dt` rows are flattened for performance reasons.
             np.ndarray, np.ndarray]]] = real.get_differentials
         #: the dimension of the output
         self.__dim: Final[int] = real.instance.system.state_dims
+        #: the real figure of merit name
+        self.__real_name: Final[str] = str(real)
 
     def begin(self) -> None:
         """
@@ -138,8 +133,8 @@ get_differentials` and allocates internal data structures accordingly.
         :param x: the model parameterization
         :return: the objective value
         """
-        return self.__sum(_evaluate(x, self.__dim, self.__in, self.__out,
-                                    self.__res, self.__equations))
+        return _evaluate(x, self.__dim, self.__in, self.__out,
+                         self.__res, self.__equations)
 
     def end(self) -> None:
         """End a model optimization run and free the associated memory."""
@@ -153,7 +148,7 @@ get_differentials` and allocates internal data structures accordingly.
 
         :return: the name of this objective
         """
-        return self.name
+        return "model"
 
     def lower_bound(self) -> float:
         """
@@ -162,3 +157,14 @@ get_differentials` and allocates internal data structures accordingly.
         :returns: 0.0
         """
         return 0.0
+
+    def log_parameters_to(self, logger: KeyValueLogSection) -> None:
+        """
+        Log all parameters of this component as key-value pairs.
+
+        :param logger: the logger for the parameters
+        """
+        super().log_parameters_to(logger)
+        logger.key_value("figureOfMeritName", self.__real_name)
+        logger.key_value("nSamples",
+                         0 if self.__in is None else len(self.__in))
