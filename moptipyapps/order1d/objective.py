@@ -117,14 +117,14 @@ class OneDimensionalDistribution(Objective):
             raise type_error(instance, "instance", Instance)
         if not isinstance(power, int | float):
             raise type_error(power, "power", (int, float))
-        if not (isfinite(power) and (power > 1.0)):
+        if not (isfinite(power) and (power > 1)):
             raise ValueError(f"invalid power, must be > 1 but is {power}.")
         #: the power
         self.power: Final[int | float] = power
         #: the instance data
         self.instance: Final[Instance] = instance
         #: the instance data by the power of minus three, to speed up stuff
-        self.__inst3: Final[np.ndarray] = instance ** -power
+        self.__inst3: Final[np.ndarray] = instance ** float(-power)
         #: a temporary array
         self.__temp: Final[np.ndarray] = np.empty(
             instance.shape, instance.dtype)
