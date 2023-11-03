@@ -1,6 +1,37 @@
 """
 Find a reasonable one-dimensional order for permutations.
 
+Solve the one-dimensional ordering problem for permutations with fitness
+stored in the `dat` file format as used by Thomson et al. This program
+loads permutations from one or multiple files of this type and then tries
+to arrange them on a horizontal axis such that their neighborhood relation
+on the one-dimensional axis represents their neighborhood based one the
+swap distance metric in the permutation space. It does this re-arrangement
+by applying a randomized local search (RLS) to find the right permutation
+of these permutations to be mapped to one-dimensional coordinates.
+
+You can call this program as follows:
+
+`python3 order1_from_dat.py sourceData outputFile \
+[fitnessCap] [maxFEs] [fileNameRegEx]`
+
+where
+- `sourceData` is the path to a file or folder with the original data.
+  If it is a file, the file will be loaded if it matches `fileNameRegEx`.
+  If it is a folder, all files in this folder and all sub-folders will
+  recursively be parsed for input data.
+- `outputFile` is the path to a file where to store the result.
+- `fitnessCap` is an upper limit for the fitness values stored in the files,
+  all points with higher fitness are ignored. (default: So high that it does
+  not matter.)
+- `maxFEs` are the maximum number of optimization steps until done. By
+  default, these are `10000`.
+- `fileNameRegEx` is a regular expression. Only file names matching this
+  regular expression are parsed. By default, it matches all files. But you
+  could provide `tai27e01.*`, e.g., to only match files starting with
+  `tai27e01` (make sure to write `"tai27e01.*"` on the command line to prevent
+  the dot-start from being expanded by the shell),
+
 The input format of this program are `dat` files of the format
 ```
 EVALS    GENOTYPE    FITNESS
@@ -11,6 +42,10 @@ EVALS    GENOTYPE    FITNESS
 32    [20, 10, 14, 25, 5, 12, 15, 1,  ... 17, 13, 16, 9, 19, 21]    82846
 34    [20, 15, 14, 25, 5, 12, 10, 1,  ...  6, 17, 13, 16, 9, 19, 21]    78204
 ```
+
+`fitnessCap` reflects an upper limit to the `FITNESS` column. Setting it to
+`80000` would, for example, lead to ignoring all but the last line in the
+above example.
 """
 
 import argparse
@@ -108,9 +143,8 @@ def get_distance(a: tuple[str, int, int, np.ndarray],
     return swap_distance(a[3], b[3])
 
 
-def run(source: str, dest: str, max_fes: int = 1_000_000,
-        fitness_limit: int = 1_000_000_000,
-        file_name_regex: str = ".*") -> None:
+def run(source: str, dest: str, max_fes: int, fitness_limit: int,
+        file_name_regex: str) -> None:
     """
     Run the RLS algorithm to optimize a horizontal layout permutation.
 
@@ -164,7 +198,7 @@ if __name__ == "__main__":
     parser.add_argument("fitnessLimit", help="the minimum acceptable fitness",
                         type=int, nargs="?", default=1_000_000_000)
     parser.add_argument("maxFEs", help="the maximum FEs to perform",
-                        type=int, nargs="?", default=1_000_000)
+                        type=int, nargs="?", default=10_000)
     parser.add_argument(
         "fileNameRegEx",
         help="a regular expression that file names must match",

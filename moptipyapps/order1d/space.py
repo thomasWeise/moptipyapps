@@ -1,7 +1,8 @@
 """
 An extension of the permutation space for one-dimensional ordering.
 
-The main difference is how the `to_str` result is noted.
+The main difference is how the `to_str` result is noted, namely that it
+contains the mapping of tags to locations.
 
 >>> def _dist(a, b):
 ...     return abs(a - b)

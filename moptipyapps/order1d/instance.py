@@ -5,6 +5,7 @@ from typing import Callable, Final, Iterable, TypeVar, cast
 
 import numpy as np
 from moptipy.api.component import Component
+from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import int_range_to_dtype
 from moptipy.utils.types import check_int_range, check_to_int_range, type_error
 from scipy.stats import rankdata  # type: ignore
@@ -217,3 +218,13 @@ class Instance(Component, np.ndarray):
         return Instance(
             (2.0 * rankdata(distances, axis=1, method="average") - 1.0),
             ((get_tags(obj), idx) for obj, idx in mappings))
+
+    def log_parameters_to(self, logger: KeyValueLogSection) -> None:
+        """
+        Log all parameters of this component as key-value pairs.
+
+        :param logger: the logger for the parameters
+        """
+        super().log_parameters_to(logger)
+        logger.key_value("nCleaned", len(self))
+        logger.key_value("nOrig", len(self.tags))
