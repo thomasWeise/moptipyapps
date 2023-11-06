@@ -67,8 +67,21 @@ from moptipy.utils.types import check_to_int_range
 
 from moptipyapps.order1d.distances import swap_distance
 from moptipyapps.order1d.instance import Instance
-from moptipyapps.order1d.objective import OneDimensionalDistribution
 from moptipyapps.order1d.space import OrderingSpace
+from moptipyapps.qap.objective import QAPObjective
+
+#: the impact of rank differences
+POWER: Final[float] = 2.0
+#: ignore everything that is farther away than the 64th nearest neighbor
+HORIZON: Final[int] = 64
+#: the fitness tag
+TAG_FITNESS: Final[str] = "fitness"
+#: the evaluation tag
+TAG_EVAL: Final[str] = "evaluations"
+#: the permutation
+TAG_PERM: Final[str] = "permutation"
+#: the file
+TAG_FILE: Final[str] = "file"
 
 
 def parse_data(path: str, collector: Callable[[
@@ -108,25 +121,27 @@ def parse_data(path: str, collector: Callable[[
         if bracket_close <= bracket_open:
             continue
         f: int = check_to_int_range(line[bracket_close + 1:],
-                                    "fitness", 0, 1_000_000_000_000)
+                                    TAG_FITNESS, 0, 1_000_000_000_000)
         if f > fitness_limit:
             continue
         evals: int = check_to_int_range(line[:bracket_open].strip(),
-                                        "evals", 1, 1_000_000_000_000_000)
+                                        TAG_EVAL, 1, 1_000_000_000_000_000)
         perm: list[int] = [
-            check_to_int_range(s, "perm", 1, 1_000_000_000) - 1
+            check_to_int_range(s, TAG_PERM, 1, 1_000_000_000) - 1
             for s in line[bracket_open + 1:bracket_close].split(",")]
         collector((the_name, evals, f, np.array(perm)))
 
 
-def get_tags(data: tuple[str, int, int, np.ndarray]) -> tuple[str, str, str]:
+def get_tags(data: tuple[str, int, int, np.ndarray]) \
+        -> tuple[str, str, str, str]:
     """
     Get the tags to store along with the data.
 
     :param data: the data
     :return: the tags
     """
-    return data[0], str(data[1]), str(data[2])
+    return (data[0], str(data[1]), str(data[2]),
+            f"[{','.join(map(str, data[3]))}]")
 
 
 def get_distance(a: tuple[str, int, int, np.ndarray],
@@ -166,16 +181,17 @@ def run(source: str, dest: str, max_fes: int, fitness_limit: int,
     logger(f"finished loading {len(data)} rows of data, "
            "now constructing distance rank matrix.")
     instance: Final[Instance] = Instance.from_sequence_and_distance(
-        data, get_tags, get_distance)
+        data, get_distance, POWER, HORIZON,
+        (TAG_FILE, TAG_EVAL, TAG_FITNESS, TAG_PERM), get_tags)
     del data  # free the now useless data
 
     # run the algorithm
-    logger(f"finished constructing matrix with {len(instance)} rows, "
+    logger(f"finished constructing matrix with {instance.n} rows, "
            "now doing optimization for "
-           f"{max_fes} FEs and writing result to '{dest}'.")
+           f"{max_fes} FEs and, afterwards, writing result to '{dest}'.")
     space: Final[OrderingSpace] = OrderingSpace(instance)
     with (Execution().set_solution_space(space)
-          .set_objective(OneDimensionalDistribution(instance))
+          .set_objective(QAPObjective(instance))
           .set_algorithm(RLS(Op0Shuffle(space), Op1Swap2()))
           .set_max_fes(max_fes)
           .set_log_improvements(True)

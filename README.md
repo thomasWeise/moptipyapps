@@ -309,6 +309,9 @@ If you have any concerns regarding security, please visit our [security policy](
   The copyright of the original data lies with Gerhard Reinelt, the original author of TSPLib, or the original authors of the datasets used by him.
 - The included benchmark instances for the [Traveling Tournament Problem](https://thomasweise.github.io/moptipyapps/#the-traveling-tournament-problem-ttp) are taken from [RobinX](https://robinxval.ugent.be/RobinX/travelRepo.php).
   The copyright of the original data lies with the [authors](https://robinxval.ugent.be/RobinX/contact.php) of the dataset, presumably D. Van Bulck, D. Goossens, J. Schönberger, and M. Guajardo.
+- The included benchmark instances for the Quadratic Assignment Problem are taken from QAPLib, which is available at <https://qaplib.mgi.polymtl.ca> and
+<https://coral.ise.lehigh.edu/data-sets/qaplib>.
+  The copyright of the original repository lies with R.E. Burkard, E. Çela, S.E. Karisch and F. Rendl as well as Peter Hahn and Miguel Anjos.
 
 
 ## 6. Contact

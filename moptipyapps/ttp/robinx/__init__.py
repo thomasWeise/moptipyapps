@@ -21,7 +21,7 @@ from typing import TextIO
 
 def open_resource_stream(file_name: str) -> TextIO:
     """
-    Open a TSPLib resource stream.
+    Open a RobinX resource stream.
 
     :param file_name: the file name of the resource
     :return: the stream

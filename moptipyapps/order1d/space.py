@@ -19,7 +19,6 @@ contains the mapping of tags to locations.
 [0 2 1]
 """
 
-from io import StringIO
 from typing import Final
 
 import numpy as np
@@ -28,7 +27,11 @@ from moptipy.utils.logger import CSV_SEPARATOR
 from moptipy.utils.strings import float_to_str
 from moptipy.utils.types import type_error
 
-from moptipyapps.order1d.instance import Instance
+from moptipyapps.order1d.instance import (
+    _SUGGESTED_X_IN_0_1,
+    _ZERO_BASED_INDEX,
+    Instance,
+)
 
 
 class OrderingSpace(Permutations):
@@ -42,7 +45,7 @@ class OrderingSpace(Permutations):
         """
         if not isinstance(instance, Instance):
             raise type_error(instance, "instance", Instance)
-        super().__init__(range(len(instance)))
+        super().__init__(range(instance.n))
         #: the instance
         self.instance: Final[Instance] = instance
 
@@ -56,25 +59,23 @@ class OrderingSpace(Permutations):
         tags: Final[tuple[tuple[tuple[str, ...], int], ...]] \
             = self.instance.tags
 
-        total: Final[int] = len(x) + 1
+        n: Final[int] = len(self.blueprint) - 1
+        text: list[str] = []
 
-        with StringIO() as sio:
-            sio.writelines(super().to_str(x))
-            sio.write("\n\n")
+        text.extend(super().to_str(x).split("\n"))
+        text.append("")
 
-            row: list[str] = ["indexZeroBased", "suggestedXin01"]
-            row.extend(f"tag{i}" for i in range(len(tags[0][0])))
-            sio.write(CSV_SEPARATOR.join(row))
-            sio.write("\n")
+        row: list[str] = [_ZERO_BASED_INDEX, _SUGGESTED_X_IN_0_1]
+        row.extend(self.instance.tag_titles)
+        text.append(f"{CSV_SEPARATOR.join(row)}")
 
-            for tag, i in tags:
-                row.clear()
-                row.append(str(x[i]))
-                row.append(float_to_str((x[i] + 1) / total))
-                row.extend(tag)
-                sio.write(CSV_SEPARATOR.join(row))
-                sio.write("\n")
-            return sio.getvalue()
+        for tag, i in tags:
+            row.clear()
+            row.append(str(x[i]))
+            row.append(float_to_str(x[i] / n))
+            row.extend(tag)
+            text.append(f"{CSV_SEPARATOR.join(row)}")
+        return "\n".join(text)
 
     def from_str(self, text: str) -> np.ndarray:
         """

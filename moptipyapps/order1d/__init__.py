@@ -47,20 +47,19 @@ The objects should be arranged in such a way that, for each object,
 - the third nearest neighbors on the 1-dimensional axis are also the third
   nearest neighbors in the original space (according to the distance matrix
   provided),
-- and so on; with (quadratically) decreasing weights of neighbor distance
-  ranks.
+- and so on; with (e.g., quadratically) decreasing weights of neighbor
+  distance ranks.
 
-The original distances be limited to integers for the sake of simplicity, but
-we may use floats as well if we want to. Either way, we do not care about the
-actual precise distances (e.g., something like "0.001") between the objects
-on either the one-dimensional nor the original space. Only about the distance
-ranks, i.e., about "2nd nearest neighbor," but not "0.012 distance units
-away." The solutions of this problem are thus permutations (orders) of the
-objects. Of course, if we really want to plot the objects, such a permutation
-can easily be translated to `x`-coordinates, say, by dividing the index of an
-object by the number of objects, which nets values in `[0,1]`. But basically,
-we reduce the task to finding permutations of objects that reflect the
-neighbor structure of the original space as closely as possible.
+We do not care about the actual precise distances (e.g., something like
+"0.001") between the objects on either the one-dimensional nor the original
+space. Only about the distance ranks, i.e., about "2nd nearest neighbor," but
+not "0.012 distance units away." The solutions of this problem are thus
+permutations (orders) of the objects. Of course, if we really want to plot the
+objects, such a permutation can easily be translated to `x`-coordinates, say,
+by dividing the index of an object by the number of objects, which nets values
+in `[0,1]`. But basically, we reduce the task to finding permutations of
+objects that reflect the neighbor structure of the original space as closely
+as possible.
 
 If such a problem is solved correctly, then the arrangement on the
 one-dimensional axis should properly reflect the arrangement of the objects in
@@ -81,4 +80,18 @@ represented exactly in one dimension.
 
 But that's OK.
 Because we mainly do this for visualization purposes anyway.
+
+Now here comes the cool thing: We can cast this problem to a Quadratic
+Assignment Problem (:mod:`~moptipyapps.qap`). A QAP is defined by a distance
+matrix and a flow matrix. The idea is to assign `n` facilities to locations.
+The distances between the locations are given by the distance matrix. At the
+same time, the flow matrix defines the flows between the facilities. The goal
+is to find the assignment of facilities to locations that minimizes the
+overall "flow times distance" product sum.
+
+We can cast the one-dimensional ordering problem to a QAP as follows: The
+facilities represent the original objects that we want to arrange. The indices
+in the permutation of facilities be the locations and their distances their
+absolute difference. The flow between two facilities be inversely proportional
+to the distance rank in the original space.
 """
