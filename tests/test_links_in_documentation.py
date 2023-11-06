@@ -128,7 +128,8 @@ def __check(url: str, valid_urls: dict[str, str | None],
 
     code: int
     body: str | None
-    method = "GET" if needs_body else "HEAD"
+    method = "GET" if needs_body or (
+        "coral.ise.lehigh.edu" in base_url) else "HEAD"
     error: Exception | None = None
     response = None
 # Sometimes, access to the URLs on GitHub fails.
@@ -138,6 +139,7 @@ def __check(url: str, valid_urls: dict[str, str | None],
 # If that fails, we wait for 5s, then try with timeout 30 and 3 retries.
 # If that fails too, we assume that the URL is really incorrect, which rarely
 # should not be the case (justifying the many retries).
+    toggle: bool = True
     try:
         for sltrt in [(0, 0, 5), (2, 3, 8), (5, 3, 30)]:
             sleep_time, retries, timeout = sltrt
@@ -151,6 +153,8 @@ def __check(url: str, valid_urls: dict[str, str | None],
                 error = None
                 break
             except Exception as be:
+                method = "GET" if needs_body or toggle else "HEAD"
+                toggle = not toggle
                 logger(f"sleep={sleep_time}, retries={retries}, "
                        f"timeout={timeout}, error={str(be)!r}, and "
                        f"header={header!r} for {base_url!r}.")

@@ -37,7 +37,7 @@ class Instance(QAPInstance):
     >>> def _tags(a):
     ...     return f"t{a}"
     >>> the_instance = Instance.from_sequence_and_distance(
-    ...     [1, 2, 3], _dist, 1, ("bla", ), _tags)
+    ...     [1, 2, 3], _dist, 1, 100, ("bla", ), _tags)
     >>> print(the_instance)
     order1d_3_1
     >>> print(the_instance.distances)

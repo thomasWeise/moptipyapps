@@ -9,12 +9,12 @@ contains the mapping of tags to locations.
 >>> def _tags(a):
 ...     return f"t{a}"
 >>> the_instance = Instance.from_sequence_and_distance(
-...     [1, 2, 3, 3, 2, 3], _tags, _dist)
+...     [1, 2, 3, 3, 2, 3], _dist, 2, 10, ("x", ), _tags)
 >>> the_space = OrderingSpace(the_instance)
 >>> the_str = the_space.to_str(np.array([0, 2, 1]))
 >>> the_str.splitlines()
-['0;2;1', '', 'indexZeroBased;suggestedXin01;tag0', '0;0.25;t1', \
-'2;0.75;t2', '2;0.75;t2', '1;0.5;t3', '1;0.5;t3', '1;0.5;t3']
+['0;2;1', '', 'indexZeroBased;suggestedXin01;x', '0;0;t1', '2;1;t2', \
+'2;1;t2', '1;0.5;t3', '1;0.5;t3', '1;0.5;t3']
 >>> print(the_space.from_str(the_str))
 [0 2 1]
 """
