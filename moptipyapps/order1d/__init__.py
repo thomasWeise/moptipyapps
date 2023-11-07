@@ -89,9 +89,160 @@ same time, the flow matrix defines the flows between the facilities. The goal
 is to find the assignment of facilities to locations that minimizes the
 overall "flow times distance" product sum.
 
-We can cast the one-dimensional ordering problem to a QAP as follows: The
-facilities represent the original objects that we want to arrange. The indices
-in the permutation of facilities be the locations and their distances their
-absolute difference. The flow between two facilities be inversely proportional
-to the distance rank in the original space.
+We can translate the "One-Dimensional Ordering Problem" to the QAP as follows:
+Imagine that we have `n` unique objects and know the (symmetric) distances
+between them.
+
+Let's say that we have four numbers as objects, `1`, `2`, `3`, `4`.
+>>> data = [1, 2, 3, 4]
+>>> n = len(data)
+
+The distance between two numbers `a` and `b` be `abs(a - b)`.
+>>> def dist(a, b):
+...     return abs(a - b)
+
+The **original** distance matrix that we could be would be
+
+>>> dm = [[dist(i, j) for j in range(n)] for i in range(n)]
+>>> print(dm)
+[[0, 1, 2, 3], [1, 0, 1, 2], [2, 1, 0, 1], [3, 2, 1, 0]]
+
+Now from this matrix, we can find the nearest neighbors as follows:
+
+>>> from scipy.stats import rankdata  # type: ignore
+>>> import numpy as np
+>>> rnks = rankdata(dm, axis=1, method="average") - 1
+>>> print(rnks)
+[[0.  1.  2.  3. ]
+ [1.5 0.  1.5 3. ]
+ [3.  1.5 0.  1.5]
+ [3.  2.  1.  0. ]]
+
+From the perspective of "`1`", "`2`" is the first nearest neighbor,
+"`3`" is the second-nearest neighbor, and "`4`" is the third-nearest neighbor.
+From the perspective of "`2`", both "`1`" and "`3`" are nearest neighbors, so
+they share rank `1.5`.
+And so on.
+
+Let's multiply this by `2` to get integers:
+[If no fractional ranks appear, then we do not need to multiply by `2`.]
+
+>>> rnks = np.array(rnks * 2, dtype=int)
+>>> print(rnks)
+[[0 2 4 6]
+ [3 0 3 6]
+ [6 3 0 3]
+ [6 4 2 0]]
+
+Now we want to translate this to a flow matrix (NOT a distance matrix).
+What we want is that there is a big flow from each object to its nearest
+neighbor, a smaller flow from each object to its second-nearest neighbor,
+a yet smaller flow to the third nearest neighbor, and so on.
+So all we need to do is to subtract the elements off the diagonal from
+`8 = 2*n`.
+[If no fractional elements were there, then we would use `n` instead of
+`2*n`.]
+Anyway, we get:
+
+>>> rnks = np.array([[0 if x == 0 else 2*n - x for x in a]
+...                  for a in rnks], int)
+>>> print(rnks)
+[[0 6 4 2]
+ [5 0 5 2]
+ [2 5 0 5]
+ [2 4 6 0]]
+
+We can see:
+The flow from "`1`" to "`2`" is `6`, which higher than the flow from "`1`" to
+"`3`" (namely `4`), and so on.
+The low from "`2`" to "`1`" is `5`, which is a bit lower than `6` but higher
+than `4`, because "`1`" is the "1.5th nearest neighbor of `2`".
+
+Just for good measures, we can weight this qudratically, so we get:
+
+>>> rnks = rnks ** 2
+>>> print(rnks)
+[[ 0 36 16  4]
+ [25  0 25  4]
+ [ 4 25  0 25]
+ [ 4 16 36  0]]
+
+This way, we give much more importance to "getting the nearest neighbors
+right" than getting "far-away neighbors" right. Nice.
+
+OK, but how about the distance matrix for the QAP?
+What's the distance?
+Well, it's the distance that I would get by arranging the objects in a
+specific order.
+It is the difference of the indices in the permutation:
+
+>>> print(np.array([[abs(i - j) for j in range(n)] for i in range(n)], int))
+[[0 1 2 3]
+ [1 0 1 2]
+ [2 1 0 1]
+ [3 2 1 0]]
+
+This means:
+The object that I will place at index `1` has a distance of "`1`" to the
+object at index `2`.
+It has a distance of "`2`" to the object at index `3`.
+It has a distance of "`3`" to the object at index `4`.
+The object at index `2` will have a distance of "`1`" to both the objects
+at indices `1` and `3` and a distance of "`2`" to the object at index `4`.
+And so on.
+
+In other words, objects that are close in their original space have a big
+flow between each other.
+If we put them at directly neighboring indexes, then we will multiply this
+big flow with a small number.
+If we put them at distant indices, then we will multiply this big flow with
+a large number.
+
+Objects that are far away from each other in their original space have a small
+flow between each other.
+If we put them at indices that are far apart, we will multiply the larger
+index-difference = distance with a small number.
+If we put them close, then we multiply a small distance with a small flow -
+but we will have to pay for this elsewhere, because then we may need to put
+objects with a larger flow between each other farther apart.
+
+>>> from moptipyapps.order1d.instance import Instance
+>>> the_instance = Instance.from_sequence_and_distance(
+...     [1, 2, 3, 4], dist, 2, 100, ("bla", ), lambda i: str(i))
+>>> print(the_instance.flows)
+[[ 0 36 16  4]
+ [25  0 25  4]
+ [ 4 25  0 25]
+ [ 4 16 36  0]]
+>>> print(the_instance.distances)
+[[0 1 2 3]
+ [1 0 1 2]
+ [2 1 0 1]
+ [3 2 1 0]]
+
+There is one little thing that needs to be done:
+If we have many objects, then the QAP objective values can get very large.
+So it makes sense to define a "horizon" after which the relationship for
+objects are ignored.
+Above, we chose "100", which had no impact.
+If we choose "2", then only the two nearest neighbors would be considered and
+we get:
+
+>>> the_instance = Instance.from_sequence_and_distance(
+...     [1, 2, 3, 4], dist, 2, 2, ("bla", ), lambda i: str(i))
+>>> print(the_instance.flows)
+[[ 0 16  4  0]
+ [ 9  0  9  0]
+ [ 0  9  0  9]
+ [ 0  4 16  0]]
+>>> print(the_instance.distances)
+[[0 1 2 3]
+ [1 0 1 2]
+ [2 1 0 1]
+ [3 2 1 0]]
+
+The distance matrix of the QAP stays the same, but the flow matrix now has
+several zeros.
+Anything farther away than the second-nearest neighbor will be ignored, i.e.,
+get a flow of `0`.
 """
