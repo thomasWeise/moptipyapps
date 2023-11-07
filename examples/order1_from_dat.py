@@ -141,7 +141,7 @@ def get_tags(data: tuple[str, int, int, np.ndarray]) \
     :return: the tags
     """
     return (data[0], str(data[1]), str(data[2]),
-            f"[{','.join(map(str, data[3]))}]")
+            f"\"[{','.join(str(a + 1) for a in data[3])}]\"")
 
 
 def get_distance(a: tuple[str, int, int, np.ndarray],
