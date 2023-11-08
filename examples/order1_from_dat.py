@@ -50,19 +50,24 @@ above example.
 
 import argparse
 from os import listdir
-from os.path import basename, isdir, isfile, join
+from os.path import basename, dirname, isdir, isfile, join
 from re import Pattern
 from re import compile as re_compile
 from typing import Any, Callable, Final
 
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from moptipy.algorithms.so.rls import RLS
 from moptipy.api.execution import Execution
 from moptipy.operators.permutations.op0_shuffle import Op0Shuffle
 from moptipy.operators.permutations.op1_swap2 import Op1Swap2
 from moptipy.utils.console import logger
 from moptipy.utils.help import argparser
+from moptipy.utils.nputils import rand_seeds_from_str
 from moptipy.utils.path import Path
+from moptipy.utils.plot_defaults import distinct_colors, distinct_markers
+from moptipy.utils.plot_utils import create_figure, get_axes, save_figure
 from moptipy.utils.types import check_to_int_range
 
 from moptipyapps.order1d.distances import swap_distance
@@ -73,7 +78,7 @@ from moptipyapps.qap.objective import QAPObjective
 #: the impact of rank differences
 POWER: Final[float] = 2.0
 #: ignore everything that is farther away than the 64th nearest neighbor
-HORIZON: Final[int] = 64
+HORIZON: Final[int] = 1024
 #: the fitness tag
 TAG_FITNESS: Final[str] = "fitness"
 #: the evaluation tag
@@ -186,18 +191,42 @@ def run(source: str, dest: str, max_fes: int, fitness_limit: int,
     del data  # free the now useless data
 
     # run the algorithm
+    dest_file: Final[Path] = Path.path(f"{dest}.txt")
     logger(f"finished constructing matrix with {instance.n} rows, "
            "now doing optimization for "
-           f"{max_fes} FEs and, afterwards, writing result to '{dest}'.")
+           f"{max_fes} FEs and, afterwards, writing result to '{dest_file}'.")
     space: Final[OrderingSpace] = OrderingSpace(instance)
+    result: Final[np.ndarray] = space.create()
     with (Execution().set_solution_space(space)
           .set_objective(QAPObjective(instance))
           .set_algorithm(RLS(Op0Shuffle(space), Op1Swap2()))
           .set_max_fes(max_fes)
           .set_log_improvements(True)
-          .set_log_file(dest).execute()):
-        pass
-    logger("all done.")
+          .set_log_file(dest_file)
+          .set_rand_seed(rand_seeds_from_str(source, 1)[0])
+            .execute()) as proc:
+        proc.get_copy_of_best_y(result)
+    logger("finished optimizing, got the solution "
+           f"{','.join(map(str, result))!r}.")
+
+    files: Final[list[str]] = sorted({f[0][0] for f in instance.tags})
+    logger(f"now we begin plotting the data from {len(files)} files.")
+    dest_dir: Final[Path] = Path.directory(dirname(dest_file))
+    figure: Final[Figure] = create_figure()
+    colors: Final[tuple[tuple[float, float, float], ...]] \
+        = distinct_colors(len(files))
+    markers: Final[tuple[str, ...]] = distinct_markers(4)
+    axes: Final[Axes] = get_axes(figure)
+    for i, file in enumerate(files):
+        plot_data = np.array(
+            sorted([(result[idx], int(tags[2])) for tags, idx in
+                    instance.tags if tags[0] == file],
+                   key=lambda a: (a[1], a[0])), dtype=int)
+        axes.plot(plot_data[:, 0], plot_data[:, 1], color=colors[i],
+                  marker=markers[i % len(markers)])
+    axes.set_xticks([])
+    save_figure(figure, basename(dest), dest_dir, "pdf")
+    logger("finished plotting.")
 
 
 # Perform the optimization
