@@ -1,8 +1,13 @@
 """
 QAPLIB -- A Quadratic Assignment Problem Library.
 
-The original data  can be found at <https://qaplib.mgi.polymtl.ca> and
-<https://coral.ise.lehigh.edu/data-sets/qaplib>.
+1. QAPLIB - A Quadratic Assignment Problem Library. The Websites
+   <https://qaplib.mgi.polymtl.ca/> (updated 2018) and
+   <https://coral.ise.lehigh.edu/data-sets/qaplib/> (updated 2011), including
+   the benchmark instances, on visited 2023-10-21.
+2. Rainer E. Burkard, Stefan E. Karisch, and Franz Rendl. QAPLIB - A Quadratic
+   Assignment Problem Library. Journal of Global Optimization. 10:391-403,
+   1997. https://doi.org/10.1023/A:1008293323270.
 """
 
 from importlib import resources  # nosem

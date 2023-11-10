@@ -1,4 +1,39 @@
-"""An instance of the Quadratic Assignment Problem."""
+"""
+An instance of the Quadratic Assignment Problem.
+
+In this module, we provide the class :class:`~Instance` that encapsulates all
+information of a problem instance of the Quadratic Assignment Problem (QAP).
+The QAP aims to locate facilities at locations such that the flow-distance
+product sum combining a flows of goods between instances with the distances of
+the locations becomes minimal. Each instance therefore presents a matrix with
+:attr:`~moptipyapps.qap.instance.Instance.distances` and a matrix with flows
+:attr:`~moptipyapps.qap.instance.Instance.flows`.
+
+1. Eliane Maria Loiola, Nair Maria Maia de Abreu, Paulo Oswaldo
+   Boaventura-Netto, Peter Hahn, and Tania Querido. A survey for the
+   Quadratic Assignment Problem. European Journal of Operational Research.
+   176(2):657-690. January 2007. https://doi.org/10.1016/j.ejor.2005.09.032.
+2. Rainer E. Burkard, Eranda Çela, Panos M. Pardalos, and
+   Leonidas S. Pitsoulis. The Quadratic Assignment Problem. In Ding-Zhu Du,
+   Panos M. Pardalos, eds., Handbook of Combinatorial Optimization,
+   pages 1713-1809, 1998, Springer New York, NY, USA.
+   https://doi.org/10.1007/978-1-4613-0303-9_27.
+
+
+We additionally provide access to several standard QAP benchmark instances
+via the :meth:`~Instance.from_resource` and :meth:`~Instance.list_resources`
+methods. The standard benchmark instances stem from QAPLIB, a library of QAP
+instances, which can be found at <https://qaplib.mgi.polymtl.ca> and
+<https://coral.ise.lehigh.edu/data-sets/qaplib>.
+
+1. QAPLIB - A Quadratic Assignment Problem Library. The Websites
+   <https://qaplib.mgi.polymtl.ca/> (updated 2018) and
+   <https://coral.ise.lehigh.edu/data-sets/qaplib/> (updated 2011), including
+   the benchmark instances, on visited 2023-10-21.
+2. Rainer E. Burkard, Stefan E. Karisch, and Franz Rendl. QAPLIB - A Quadratic
+   Assignment Problem Library. Journal of Global Optimization. 10:391-403,
+   1997. https://doi.org/10.1023/A:1008293323270.
+"""
 
 
 from typing import Final, Iterable, cast
@@ -303,7 +338,7 @@ class Instance(Component):
         """
         Get a tuple of all the QAP-lib instances available as resource.
 
-        The original data  can be found at <https://qaplib.mgi.polymtl.ca> and
+        The original data can be found at <https://qaplib.mgi.polymtl.ca> and
         <https://coral.ise.lehigh.edu/data-sets/qaplib>.
 
         :return: the tuple with the instance names

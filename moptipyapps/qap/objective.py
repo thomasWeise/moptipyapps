@@ -1,6 +1,27 @@
 """
 The objective function for the Quadratic Assignment Problem.
 
+The candidate solutions to the QAP are
+:mod:`~moptipy.spaces.permutations` `p` of length `n` of the numbers `0`, `1`,
+..., `n-1`. An :mod:`~moptipyapps.qap.instance` of the Quadratic Assignment
+Problem (QAP) presents a `n*n` matrix `D` with
+:attr:`~moptipyapps.qap.instance.Instance.distances` and a `n*n` matrix `F`
+with flows :attr:`~moptipyapps.qap.instance.Instance.flows`. The objective
+value, subject to minimization, is then the
+`sum( F[i,j] * D[p[i], p[j]] for i, j in 0..n-1 )`, i.e., the sum of the
+products of the flows between facilities and the distances of their assigned
+locations.
+
+1. Eliane Maria Loiola, Nair Maria Maia de Abreu, Paulo Oswaldo
+   Boaventura-Netto, Peter Hahn, and Tania Querido. A survey for the
+   Quadratic Assignment Problem. European Journal of Operational Research.
+   176(2):657-690. January 2007. https://doi.org/10.1016/j.ejor.2005.09.032.
+2. Rainer E. Burkard, Eranda Çela, Panos M. Pardalos, and
+   Leonidas S. Pitsoulis. The Quadratic Assignment Problem. In Ding-Zhu Du,
+   Panos M. Pardalos, eds., Handbook of Combinatorial Optimization,
+   pages 1713-1809, 1998, Springer New York, NY, USA.
+   https://doi.org/10.1007/978-1-4613-0303-9_27.
+
 >>> inst = Instance.from_resource("bur26a")
 >>> QAPObjective(inst).evaluate(np.array([
 ...     25, 14, 10, 6, 3, 11, 12, 1, 5, 17, 0, 4, 8, 20,
