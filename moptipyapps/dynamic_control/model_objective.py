@@ -16,15 +16,8 @@ need to do is to train a model `M` that receives as input a vector `x=(s,c)`
 (where `(s,c)` be the concatenation of `s` and `c`) and fill as output a vector
 `ds/dt`.
 
-The objective function in this module minimizes the mean square error over the
-model-computed `ds/dt` vectors and the actual `ds/dt` vectors. It does so by
-using the `expm1(mean(logp1(...))))` hack of the
-:class:`~moptipyapps.dynamic_control.objective.FigureOfMeritLE` function if
-:class:`~moptipyapps.dynamic_control.objective.FigureOfMeritLE` was the
-controller synthesis objective. Otherwise, if
-:class:`~moptipyapps.dynamic_control.objective.FigureOfMerit` is the objective
-for controller synthesis, it minimizes the mean-square-error directly.
-
+The objective function in this module minimizes the root mean square error
+over the model-computed `ds/dt` vectors and the actual `ds/dt` vectors.
 The model objective function is used by the
 :mod:`~moptipyapps.dynamic_control.surrogate_cma` algorithm.
 """
@@ -34,33 +27,56 @@ import numba  # type: ignore
 import numpy as np
 from moptipy.api.objective import Objective
 from moptipy.utils.logger import KeyValueLogSection
+from moptipy.utils.nputils import DEFAULT_FLOAT
 
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.objective import FigureOfMerit
 
 
 @numba.njit(cache=False, inline="always", fastmath=True, boundscheck=False)
-def _evaluate(x: np.ndarray, dim: int, pin: np.ndarray,
-              pout: np.ndarray, res: np.ndarray,
+def _evaluate(x: np.ndarray, pin: np.ndarray, pout: np.ndarray,
+              temp_1: np.ndarray, temp_2: np.ndarray,
               eq: Callable[[np.ndarray, float, np.ndarray,
                             np.ndarray], None]) -> float:
     """
-    Compute the squared differences between expected and actual model output.
+    Compute the RMSE differences between expected and actual model output.
 
     :param x: the model parameterization
-    :param dim: the dimension of state vector
     :param pin: the input vectors
     :param pout: the expected output vectors, flattened
+    :param temp_1: the long temporary array to receive the result values
+    :param temp_2: the temporary array to receive the state output
     :param eq: the equations
     :return: the mean of the `log(x+1)` of the squared differences `x`
+
+    >>> vx = np.array([0.5, 0.2], float)
+    >>> vpin = np.array([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]], float)
+    >>> vpout = np.array([[10, 5], [14, 9], [18, 8]], float)
+    >>> vtemp_1 = np.empty(3, float)
+    >>> vtemp_2 = np.empty(2, float)
+    >>> @numba.njit(cache=False, inline="always", fastmath=True)
+    ... def _func(lstate: np.ndarray, _: float, lx: np.ndarray,
+    ...           lout: np.ndarray) -> None:
+    ...     lout[:] = (lstate[0:2] * lx[0]) - lx[1] - lstate[-1]
+    >>> _evaluate(vx, vpin, vpout, vtemp_1, vtemp_2, _func)
+    22.680823177337874
+    >>> y_1_1 = ((0 * 0.5) - 0.2 - 3) - 10
+    >>> y_1_2 = ((1 * 0.5) - 0.2 - 3) - 5
+    >>> r_1 = y_1_1 ** 2 + y_1_2 ** 2
+    >>> y_2_1 = ((4 * 0.5) - 0.2 - 7) - 14
+    >>> y_2_2 = ((5 * 0.5) - 0.2 - 7) - 9
+    >>> r_2 = y_2_1 ** 2 + y_2_2 ** 2
+    >>> y_3_1 = ((8 * 0.5) - 0.2 - 11) - 18
+    >>> y_3_2 = ((9 * 0.5) - 0.2 - 11) - 8
+    >>> r_3 = y_3_1 ** 2 + y_3_2 ** 2
+    >>> np.sqrt(np.array([r_1, r_2, r_3])).mean()
+    22.680823177337874
     """
-    idx: int = 0
-    for row in pin:  # iterate over all row=(s, c) tuples
-        nidx: int = idx + dim
-        eq(row, 0.0, x, res[idx:nidx])  # store the equation results
-        idx = nidx
-    return np.log1p(np.square(  # compute the log(x+1) of the squared diff x
-        np.subtract(res, pout, res), res), res).mean()
+    for i, row in enumerate(pin):  # iterate over all row=(s, c) tuples
+        eq(row, 0.0, x, temp_2)  # store the equation results
+        temp_1[i] = np.square(np.subtract(temp_2, pout[i], temp_2),
+                              temp_2).sum()
+    return np.sqrt(temp_1, temp_1).mean()
 
 
 class ModelObjective(Objective):
@@ -99,7 +115,7 @@ ModelObjective.begin`. The `ds/dt` rows are flattened for performance reasons.
         self.__equations: Callable[[np.ndarray, float, np.ndarray,
                                     np.ndarray], None] = model.controller
         #: the result
-        self.__res: np.ndarray | None = None
+        self.__temp_1: np.ndarray | None = None
         #: the input
         self.__in: np.ndarray | None = None
         #: the output
@@ -107,8 +123,9 @@ ModelObjective.begin`. The `ds/dt` rows are flattened for performance reasons.
         #: the differentials getter
         self.__get_differentials: Final[Callable[[], tuple[
             np.ndarray, np.ndarray]]] = real.get_differentials
-        #: the dimension of the output
-        self.__dim: Final[int] = real.instance.system.state_dims
+        #: the temporary array
+        self.__temp_2: Final[np.ndarray] = np.empty(
+            real.instance.system.state_dims, DEFAULT_FLOAT)
         #: the real figure of merit name
         self.__real_name: Final[str] = str(real)
 
@@ -122,9 +139,8 @@ ModelObjective.begin`. The `ds/dt` rows are flattened for performance reasons.
         method :meth:`~moptipyapps.dynamic_control.objective.FigureOfMerit.\
 get_differentials` and allocates internal data structures accordingly.
         """
-        self.__in, out = self.__get_differentials()
-        self.__out = out.flatten()
-        self.__res = np.empty(len(self.__out), self.__out.dtype)
+        self.__in, self.__out = self.__get_differentials()
+        self.__temp_1 = np.empty(len(self.__out), self.__out.dtype)
 
     def evaluate(self, x: np.ndarray) -> float:
         """
@@ -133,12 +149,12 @@ get_differentials` and allocates internal data structures accordingly.
         :param x: the model parameterization
         :return: the objective value
         """
-        return _evaluate(x, self.__dim, self.__in, self.__out,
-                         self.__res, self.__equations)
+        return _evaluate(x, self.__in, self.__out, self.__temp_1,
+                         self.__temp_2, self.__equations)
 
     def end(self) -> None:
         """End a model optimization run and free the associated memory."""
-        self.__res = None
+        self.__temp_1 = None
         self.__in = None
         self.__out = None
 
@@ -148,7 +164,7 @@ get_differentials` and allocates internal data structures accordingly.
 
         :return: the name of this objective
         """
-        return "model"
+        return "modelRMSE"
 
     def lower_bound(self) -> float:
         """

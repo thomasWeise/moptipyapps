@@ -13,7 +13,8 @@
   - [Traveling Salesperson Problem (TSP)](#32-the-traveling-salesperson-problem-tsp)
   - [Dynamic Controller Synthesis](#33-dynamic-controller-synthesis)
   - [Traveling Tournament Problem (TTP)](#34-the-traveling-tournament-problem-ttp)
-  - [One-Dimensional Ordering](#35-one-dimensional-ordering)
+  - [Quadratic Assignment Problem (QAP)](#35-the-quadratic-assignment-problem-qap)
+  - [One-Dimensional Ordering](#36-one-dimensional-ordering)
 - [Unit Tests and Static Analysis](#4-unit-tests-and-static-analysis)
 - [License](#5-license)
 - [Contact](#6-contact)
@@ -169,8 +170,22 @@ The second problem is that this is not all:
 For each TTP, a distance matrix is defined, very much like for the [TSP](#32-the-traveling-salesperson-problem-tsp).
 The goal is to find a feasible game schedule where the overall travel distances are minimal.
 
+### 3.5. The Quadratic Assignment Problem (QAP)
+In the package [`moptipyapps.qap`](https://thomasweise.github.io/moptipyapps/moptipyapps.qap.html#module-moptipyapps.qap), we implement some utilities to play with the Quadratic Assignment Problem (QAP).
+The QAP is one of the very classical problems from Operations Research.
+Imagine you are planning the layout for a factory.
+The goal is to assign `n` facilities (say, machines or workshops) to `n` locations.
+Now between the facilities, there exists a flow of goods.
+The output of one facility may be the input of another one and vice versa.
+The amount of stuff to be transported is likely to be different between different facilities.
+Between some facilities, a lot of things may need to be transport.
+Between others, there could be no exchange of material or only very little.
+The available locations also have different distances among each other.
+Some locations are closer, some are farther from each other.
+The goal is to find an assignment of facilities to locations such that the overall sum of the product of flow and distance for each facility pair gets minimized.
+To this end, solutions can be represented as permutations of facilities determining the order in which they are placed on the locations `1` to `n`.
 
-### 3.5. One-Dimensional Ordering
+### 3.6. One-Dimensional Ordering
 In the package [`moptipyapps.order1d`](https://thomasweise.github.io/moptipyapps/moptipyapps.order1d.html#module-moptipyapps.order1d), we implement what I would like to call the "one-dimensional ordering problem".
 Imagine that you have `n` objects and you only know the distances between them.
 You want to arrange these objects on one axis, e.g., along the horizontal (`x`) axis, i.e., in a one-dimensional space.

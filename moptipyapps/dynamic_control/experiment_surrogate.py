@@ -57,7 +57,7 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
         controllers = [
             make_ann(system.state_dims, system.control_dims, [3, 3])]
         for controller in controllers:
-            for ann_model in [[7, 6], [6, 6, 6]]:
+            for ann_model in [[2], [3, 3], [4, 4, 4]]:
                 res.append(cast(
                     Callable[[], SystemModel],
                     lambda _s=system, _c=controller, _m=make_ann(
@@ -171,8 +171,9 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         perform_pre_warmup=False,
         on_completion=on_completion)
 
-    for training_fes, run_fes in ((2 ** 13, 2 ** 8),
-                                  (2 ** 16, 2 ** 10)):
+    for training_fes, run_fes in ((2 ** 8, 2 ** 8),
+                                  (2 ** 10, 2 ** 8),
+                                  (2 ** 12, 2 ** 8)):
         run_experiment(
             base_dir=use_dir.resolve_inside(
                 f"model_for_{training_fes}x{run_fes}_fes"),
