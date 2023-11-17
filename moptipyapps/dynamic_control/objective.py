@@ -70,11 +70,14 @@ class FigureOfMerit(Objective):
             instance.controller.controller
         #: the controller dimension
         self.__controller_dim: Final[int] = instance.controller.control_dims
-        #: the collection of state+control and differential vectors
-        self.__collection: Final[list[tuple[np.ndarray, np.ndarray]] | None] \
+        #: the collection of state+control vectors
+        self.__collection_sc: Final[list[np.ndarray] | None] \
+            = [] if supports_model_mode else None
+        #: the collection of differential vectors
+        self.__collection_df: Final[list[np.ndarray] | None] \
             = [] if supports_model_mode else None
         #: should we collect data?
-        self.__collect: bool = self.__collection is not None
+        self.__collect: bool = self.__collection_df is not None
         #: the state dimensions inside the `J`
         self.__state_dims_in_j: Final[int] = instance.system.state_dims_in_j
         #: the weight of the control effort
@@ -83,8 +86,10 @@ class FigureOfMerit(Objective):
     def initialize(self) -> None:
         """Initialize the objective for use."""
         super().initialize()
-        if self.__collection is not None:
-            self.__collection.clear()
+        if self.__collection_df is not None:
+            self.__collection_df.clear()
+        if self.__collection_sc is not None:
+            self.__collection_sc.clear()
         self.set_raw()
 
     def set_raw(self) -> None:
@@ -101,7 +106,7 @@ class FigureOfMerit(Objective):
         mode via :meth:`set_model`.
         """
         self.__equations = self.instance.system.equations
-        self.__collect = self.__collection is not None
+        self.__collect = self.__collection_sc is not None
 
     def get_differentials(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -115,17 +120,19 @@ class FigureOfMerit(Objective):
 
         :returns: the collected differentials
         """
-        cl: Final[list[tuple[np.ndarray, np.ndarray]] | None] = \
-            self.__collection
-        if cl is None:
+        clsc: Final[list[np.ndarray] | None] = self.__collection_sc
+        cldf: Final[list[np.ndarray] | None] = self.__collection_df
+        if clsc is None:
             raise ValueError("Differential collection not supported.")
-        if len(cl) == 1:
-            return cl[0]  # pylint: disable=E1136
-        result = (np.concatenate([t[0] for t in cl]),  # pylint: disable=E1133
-                  np.concatenate([t[1] for t in cl]))  # pylint: disable=E1133
-        cl.clear()
-        cl.append(result)
-        return result
+        if len(clsc) == 1:
+            return clsc[0], cldf[0]  # pylint: disable=E1136
+        sc: Final[np.ndarray] = np.concatenate(clsc)  # pylint: disable=E1133
+        df: Final[np.ndarray] = np.concatenate(cldf)  # pylint: disable=E1133
+        clsc.clear()
+        clsc.append(sc)
+        cldf.clear()
+        cldf.append(df)
+        return sc, df
 
     def set_model(self, equations: Callable[[
             np.ndarray, float, np.ndarray, np.ndarray], None]) -> None:
@@ -148,7 +155,7 @@ class FigureOfMerit(Objective):
         :param equations: the equations to be used instead of the actual
             system's differential equations.
         """
-        if self.__collection is None:
+        if self.__collection_sc is None:
             raise ValueError("Cannot go into model mode without gathering "
                              "model training data!")
         self.__equations = equations
@@ -161,6 +168,15 @@ class FigureOfMerit(Objective):
         :return: `figureOfMerit`
         """
         return "figureOfMerit"
+
+    def __append(self, data: tuple[np.ndarray, np.ndarray]) -> None:
+        """
+        Internally collect the data.
+
+        :param data: the data to collect
+        """
+        self.__collection_sc.append(data[0])
+        self.__collection_df.append(data[1])
 
     def evaluate(self, x: np.ndarray) -> float:
         """
@@ -182,7 +198,7 @@ class FigureOfMerit(Objective):
         controller_dim: Final[int] = self.__controller_dim
         collector: Final[Callable[[tuple[
             np.ndarray, np.ndarray]], None] | None] = \
-            self.__collection.append if self.__collect else None
+            self.__append if self.__collect else None
         state_dim: Final[int] = len(training[0])
         state_dims_in_j: Final[int] = self.__state_dims_in_j
         gamma: Final[float] = self.__gamma
@@ -235,7 +251,7 @@ training_starting_states`) and perform :attr:`~moptipyapps.dynamic_control\
         :param logger: the logger for the parameters
         """
         super().log_parameters_to(logger)
-        logger.key_value("modelModeEnabled", self.__collection is not None)
+        logger.key_value("modelModeEnabled", self.__collection_sc is not None)
         logger.key_value("dataCollecting", self.__collect)
         eq: Final = self.__equations
         logger.key_value("usingOriginalEquations",

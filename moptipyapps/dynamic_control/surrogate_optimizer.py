@@ -1,5 +1,5 @@
 """
-A surrogate system model-based CMA-ES approach.
+A surrogate system model-based Optimization approach.
 
 In the real world, we want to synthesize a controller `c(s, p)` that can
 drive a dynamic system into a good state. The controller receives as input
@@ -27,11 +27,26 @@ first to gather the data to obtain our initial model `M`. But if we can get
 this to work, then we could probably get much better controllers with fewer
 actual experiments.
 
-This here is an algorithm that tries to implement the above pattern. For the
-model and controller optimization, it uses the BiPop-CMA-ES offered by
-`moptipy` (:class:`~moptipy.algorithms.so.vector.cmaes_lib.BiPopCMAES`). But
-it uses two instances of this algorithm, namely one to optimize the controller
-parameters and one that optimizes the model parameters.
+This here is an algorithm that tries to implement the above pattern.
+This algorithm employs three different sub-algorithms:
+
+1. For sampling the initial :attr:`~SurrogateOptimizer.fes_for_warmup` FEs,
+   it uses a warm-up algorithm - by default, this is done by
+   :mod:`~moptipy.algorithms.random_sampling`.
+2. Then, it spends :attr:`~SurrogateOptimizer.fes_for_training` steps on the
+   collected data to train the model using the model training algorithm,
+   which, by default, is
+   :class:`~moptipy.algorithms.so.vector.cmaes_lib.BiPopCMAES`.
+3. Then, it spends :attr:`~SurrogateOptimizer.fes_per_model_run` steps
+   to train controllers on the model, by default again with a
+   :class:`~moptipy.algorithms.so.vector.cmaes_lib.BiPopCMAES`.
+
+For the model and controller optimization, it thus uses by default the
+BiPop-CMA-ES offered by `moptipy`
+(:class:`~moptipy.algorithms.so.vector.cmaes_lib.BiPopCMAES`).
+But it uses two instances of this algorithm, namely one to optimize the
+controller parameters and one that optimizes the model parameters.
+And, as said, a random sampling method to gather the initial samples.
 
 The idea is that we divide the computational budget into a warmup and a
 model-based phase. In the warmup phase, we use CMA-ES to normally optimize
@@ -73,12 +88,14 @@ from typing import Callable, Final
 
 import numba  # type: ignore
 import numpy as np
+from moptipy.algorithms.random_sampling import RandomSampling
 from moptipy.algorithms.so.vector.cmaes_lib import BiPopCMAES
 from moptipy.api.algorithm import Algorithm
 from moptipy.api.execution import Execution
 from moptipy.api.logging import FILE_SUFFIX
 from moptipy.api.process import Process
 from moptipy.api.subprocesses import for_fes
+from moptipy.operators.vectors.op0_uniform import Op0Uniform
 from moptipy.spaces.vectorspace import VectorSpace
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import rand_seed_generate
@@ -96,17 +113,31 @@ def _nop() -> None:
     """Do absolutely nothing."""
 
 
-class SurrogateCmaEs(Algorithm):
+def _bpcmaes(vs: VectorSpace) -> BiPopCMAES:
+    """
+    Create the Bi-Pop CMA-ES.
+
+    :param vs: the vector space
+    :return: the algorithm
+    """
+    return BiPopCMAES(vs, True)
+
+
+class SurrogateOptimizer(Algorithm):
     """A surrogate model-based CMA-ES algorithm."""
 
-    def __init__(self,
-                 system_model: SystemModel,
-                 controller_space: VectorSpace,
-                 objective: FigureOfMerit,
-                 fes_for_warmup: int,
-                 fes_for_training: int,
-                 fes_per_model_run: int,
-                 fancy_logs: bool = False) -> None:
+    def __init__(
+            self, system_model: SystemModel, controller_space: VectorSpace,
+            objective: FigureOfMerit, fes_for_warmup: int,
+            fes_for_training: int, fes_per_model_run: int,
+            fancy_logs: bool = False,
+            warmup_algorithm: Callable[
+                [VectorSpace], Algorithm] =
+            lambda v: RandomSampling(Op0Uniform(v)),
+            model_training_algorithm: Callable[
+                [VectorSpace], Algorithm] = _bpcmaes,
+            controller_training_algorithm: Callable[
+                [VectorSpace], Algorithm] = _bpcmaes) -> None:
         """
         Initialize the algorithm.
 
@@ -121,6 +152,10 @@ class SurrogateCmaEs(Algorithm):
         :param fes_per_model_run: the number of FEs to be applied to each
             optimization run on the model
         :param fancy_logs: should we perform fancy logging?
+        :param warmup_algorithm: the algorithm for sampling the warmup points
+        :param model_training_algorithm: the model training algorithm builder
+        :param controller_training_algorithm: the controller training
+            algorithm builder
         """
         super().__init__()
 
@@ -133,7 +168,17 @@ class SurrogateCmaEs(Algorithm):
             raise type_error(objective, "objective", FigureOfMerit)
         if not isinstance(fancy_logs, bool):
             raise type_error(fancy_logs, "fancy_logs", bool)
+        if not callable(warmup_algorithm):
+            raise type_error(warmup_algorithm, "warmup_algorithm", call=True)
+        if not callable(model_training_algorithm):
+            raise type_error(model_training_algorithm,
+                             "model_training_algorithm", call=True)
+        if not callable(controller_training_algorithm):
+            raise type_error(controller_training_algorithm,
+                             "controller_training_algorithm", call=True)
 
+        # the controller space
+        self.controller_space: Final[VectorSpace] = controller_space
         #: should we do fancy logging?
         self.fancy_logs: Final[bool] = fancy_logs
         #: the number of objective function evaluations to be used for warmup
@@ -147,18 +192,31 @@ class SurrogateCmaEs(Algorithm):
             fes_per_model_run, "fes_per_model_run", 1, 1_000_000)
         #: the system model
         self.system_model: Final[SystemModel] = system_model
-        #: the internal CMA-ES algorithm
-        self.__control_cma: Final[BiPopCMAES] = BiPopCMAES(controller_space)
+        #: the internal warmup algorithm
+        self.__warmup_algorithm: Final[Algorithm] = warmup_algorithm(
+            controller_space)
+        #: the internal controller training algorithm
+        self.__control_algorithm: Final[Algorithm] = (
+            controller_training_algorithm(controller_space))
         #: the model parameter space
         self.__model_space: Final[VectorSpace] = \
             system_model.model.parameter_space()
-        #: the model cma
-        self.__model_cma: Final[BiPopCMAES] = BiPopCMAES(self.__model_space)
+        #: the model training algorithm
+        self.__model_training: Final[Algorithm] = model_training_algorithm(
+            self.__model_space)
         #: the control objective function reference
         self.__control_objective: Final[FigureOfMerit] = objective
         #: the model objective
         self.__model_objective: Final[ModelObjective] = ModelObjective(
             objective, system_model.model)
+
+    def initialize(self) -> None:
+        """Initialize."""
+        super().initialize()
+        self.__warmup_algorithm.initialize()
+        self.__model_training.initialize()
+        self.__control_algorithm.initialize()
+        self.__model_space.initialize()
 
     def solve(self, process: Process) -> None:
         """
@@ -223,14 +281,14 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
         training_execute: Final[Execution] = (
             Execution().set_solution_space(model_space)
             .set_max_fes(self.fes_for_training)
-            .set_algorithm(self.__model_cma)
+            .set_algorithm(self.__model_training)
             .set_objective(model_objective))
         on_model_execute: Final[Execution] = \
-            (Execution().set_solution_space(self.__control_cma.space)
+            (Execution().set_solution_space(self.controller_space)
              .set_objective(raw)
              .set_max_fes(self.fes_per_model_run)
-             .set_algorithm(self.__control_cma))
-        result: Final[np.ndarray] = self.__control_cma.space.create()
+             .set_algorithm(self.__control_algorithm))
+        result: Final[np.ndarray] = self.controller_space.create()
         orig_init: Callable = raw.initialize
 
 # Get a log dir if logging is enabled and set up all the logging information.
@@ -272,7 +330,7 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
 # Now we do the setup run that creates some basic results and
 # gathers the initial information for modelling the system.
         with for_fes(process, self.fes_for_warmup) as prc:
-            self.__control_cma.solve(prc)
+            self.__warmup_algorithm.solve(prc)
 
         while not should_terminate():  # until budget exhausted
             consumed_fes: int = process.get_consumed_fes()
@@ -348,9 +406,9 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
 
         :return: the algorithm name
         """
-        return (f"surrogateCma_{self.system_model.model}_"
-                f"{self.fes_for_warmup}_{self.fes_for_training}"
-                f"_{self.fes_per_model_run}")
+        return (f"{self.__warmup_algorithm}_{self.__control_algorithm}_"
+                f"{self.__model_training}_{self.fes_for_warmup}_"
+                f"{self.fes_for_training}_{self.fes_per_model_run}")
 
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
         """
@@ -363,13 +421,17 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
         logger.key_value("fesForTraining", self.fes_for_training)
         logger.key_value("fesPerModelRun", self.fes_per_model_run)
         logger.key_value("fancyLogs", self.fancy_logs)
-        with logger.scope("ctrlCMA") as ccma:
-            self.__control_cma.log_parameters_to(ccma)
-        with logger.scope("mdlSpace") as mspce:
-            self.__model_space.log_parameters_to(mspce)
-        with logger.scope("ctrlF") as cf:
+        with logger.scope("controlX") as cx:
+            self.controller_space.log_parameters_to(cx)
+        with logger.scope("warmupA") as wa:
+            self.__warmup_algorithm.log_parameters_to(wa)
+        with logger.scope("controlA") as ca:
+            self.__control_algorithm.log_parameters_to(ca)
+        with logger.scope("controlF") as cf:
             self.__control_objective.log_parameters_to(cf)
-        with logger.scope("mdlF") as mf:
+        with logger.scope("modelX") as mx:
+            self.__model_space.log_parameters_to(mx)
+        with logger.scope("modelF") as mf:
             self.__model_objective.log_parameters_to(mf)
-        with logger.scope("mdlCMA") as mcma:
-            self.__model_cma.log_parameters_to(mcma)
+        with logger.scope("modelA") as ma:
+            self.__model_training.log_parameters_to(ma)

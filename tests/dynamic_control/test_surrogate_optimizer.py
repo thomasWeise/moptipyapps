@@ -1,4 +1,4 @@
-"""Test the model equations."""
+"""Test the surrogate-model based optimization algorithm."""
 
 
 from typing import Final
@@ -13,13 +13,13 @@ from moptipyapps.dynamic_control.objective import (
     FigureOfMerit,
     FigureOfMeritLE,
 )
-from moptipyapps.dynamic_control.surrogate_cma import SurrogateCmaEs
+from moptipyapps.dynamic_control.surrogate_optimizer import SurrogateOptimizer
 from moptipyapps.dynamic_control.system_model import SystemModel
 
 
 def test_surrogate_cmaes() -> None:
     """
-    Test whether surrogate cmaes really invokes the model.
+    Test whether surrogate-based CMA-ES really invokes the model.
 
     There are lower bounds for how often the Surrogate-CMA-ES algorithm needs
     to invoke the model equations and the real system equations. With this
@@ -86,7 +86,7 @@ def test_surrogate_cmaes() -> None:
     with Execution().set_max_fes(n_total_fes)\
         .set_objective(objective).set_solution_space(space)\
         .set_solution_space(space)\
-        .set_algorithm(SurrogateCmaEs(
+        .set_algorithm(SurrogateOptimizer(
             instance, space, objective, n_warmup_fes,
             n_fes_for_model_training,
             n_fes_for_controller_synthesis_on_model)).execute():

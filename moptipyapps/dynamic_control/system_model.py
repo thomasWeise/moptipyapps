@@ -48,7 +48,7 @@ blueprint, and a model blueprint.
 
 An example implementation of the concept of synthesizing models for a dynamic
 system in order to synthesize controllers is given as the
-:mod:`~moptipyapps.dynamic_control.surrogate_cma` algorithm.
+:mod:`~moptipyapps.dynamic_control.surrogate_optimizer` algorithm.
 Examples for different dynamic systems controllers (which we here also use to
 model the systems themselves) are given in package
 :mod:`~moptipyapps.dynamic_control.controllers`.

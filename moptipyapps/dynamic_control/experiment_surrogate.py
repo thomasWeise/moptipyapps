@@ -9,8 +9,8 @@ minimizes both the squared system state and controller effort.
 
 The difference compared to :mod:`~moptipyapps.dynamic_control.experiment_raw`
 is that we also try to synthesize a system model at the same time. We employ
-the procedure detailed in :mod:`~moptipyapps.dynamic_control.surrogate_cma`
-for this purpose.
+the procedure detailed in
+:mod:`~moptipyapps.dynamic_control.surrogate_optimizer` for this purpose.
 
 Word of advice: This experiment takes **extremely long** and needs
 **a lot of memory**!
@@ -25,7 +25,8 @@ from os.path import basename, dirname
 from typing import Any, Callable, Final, Iterable, cast
 
 import numpy as np
-from moptipy.algorithms.so.vector.cmaes_lib import BiPopCMAES
+from moptipy.algorithms.luby_restarts import luby_restarts
+from moptipy.api.algorithm import Algorithm
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import Parallelism, run_experiment
 from moptipy.api.process import Process
@@ -39,7 +40,10 @@ from moptipyapps.dynamic_control.objective import (
     FigureOfMerit,
     FigureOfMeritLE,
 )
-from moptipyapps.dynamic_control.surrogate_cma import SurrogateCmaEs
+from moptipyapps.dynamic_control.surrogate_optimizer import (
+    SurrogateOptimizer,
+    _bpcmaes,
+)
 from moptipyapps.dynamic_control.system_model import SystemModel
 from moptipyapps.dynamic_control.systems.three_coupled_oscillators import (
     THREE_COUPLED_OSCILLATORS,
@@ -57,7 +61,7 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
         controllers = [
             make_ann(system.state_dims, system.control_dims, [3, 3])]
         for controller in controllers:
-            for ann_model in [[2], [3, 3], [4, 4, 4]]:
+            for ann_model in [[6], [6, 6], [6, 6, 6]]:
                 res.append(cast(
                     Callable[[], SystemModel],
                     lambda _s=system, _c=controller, _m=make_ann(
@@ -96,14 +100,15 @@ def cmaes_raw(instance: Instance, max_fes: int = MAX_FES) -> Execution:
     :return: the setup
     """
     execution, _, space = base_setup(instance, max_fes)
-    return execution.set_algorithm(BiPopCMAES(space))
+    return execution.set_algorithm(_bpcmaes(space))
 
 
 def cmaes_surrogate(instance: SystemModel,
                     max_fes: int = MAX_FES,
                     fes_for_training: int = 128,
                     fes_per_model_run: int = 128,
-                    fancy_logs: bool = True) -> Execution:
+                    fancy_logs: bool = True,
+                    luby_divider: int = 1) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
@@ -112,12 +117,20 @@ def cmaes_surrogate(instance: SystemModel,
     :param fes_for_training: the FEs for training
     :param fes_per_model_run: the FEs per model run
     :param fancy_logs: should we do fancy logging?
+    :param luby_divider: the luby FE divider
     :return: the setup
     """
     execution, objective, space = base_setup(instance, max_fes)
-    return execution.set_solution_space(space).set_algorithm(SurrogateCmaEs(
-        instance, space, objective, max_fes // 4,
-        fes_for_training, fes_per_model_run, fancy_logs))
+
+    return execution.set_solution_space(space).set_algorithm(
+        SurrogateOptimizer(
+            instance, space, objective, max_fes // 4,
+            fes_for_training, fes_per_model_run, fancy_logs,
+            model_training_algorithm=_bpcmaes if luby_divider <= 1 else
+            cast(Callable[[VectorSpace], Algorithm],
+                 lambda v, fes=fes_for_training // luby_divider:
+                 luby_restarts(_bpcmaes(v), fes, True)),
+            controller_training_algorithm=_bpcmaes))
 
 
 def on_completion(instance: Any, log_file: Path, process: Process) -> None:
@@ -171,21 +184,22 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         perform_pre_warmup=False,
         on_completion=on_completion)
 
-    for training_fes, run_fes in ((2 ** 8, 2 ** 8),
-                                  (2 ** 10, 2 ** 8),
-                                  (2 ** 12, 2 ** 8)):
-        run_experiment(
-            base_dir=use_dir.resolve_inside(
-                f"model_for_{training_fes}x{run_fes}_fes"),
-            instances=instances,
-            setups=[cast(Callable[[Any], Execution],
-                         lambda i, __t=training_fes, __r=run_fes:
-                         cmaes_surrogate(i, MAX_FES, __t, __r))],
-            n_runs=n_runs,
-            n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
-            perform_warmup=False,
-            perform_pre_warmup=False,
-            on_completion=on_completion)
+    for runs in range(1, n_runs + 1):
+        for training_fes, run_fes in ((2 ** 16, 2 ** 10), ):
+            run_experiment(
+                base_dir=use_dir.resolve_inside(
+                    f"model_for_{training_fes}x{run_fes}_fes"),
+                instances=instances,
+                setups=[cast(
+                    Callable[[Any], Execution],
+                    lambda i, __t=training_fes, __r=run_fes, __ld=ld:
+                    cmaes_surrogate(i, MAX_FES, __t, __r, True, __ld))
+                    for ld in [1, 16, 64]],
+                n_runs=runs,
+                n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
+                perform_warmup=False,
+                perform_pre_warmup=False,
+                on_completion=on_completion)
 
 
 # Run the experiment from the command line

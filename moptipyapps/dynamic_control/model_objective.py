@@ -19,7 +19,7 @@ need to do is to train a model `M` that receives as input a vector `x=(s,c)`
 The objective function in this module minimizes the root mean square error
 over the model-computed `ds/dt` vectors and the actual `ds/dt` vectors.
 The model objective function is used by the
-:mod:`~moptipyapps.dynamic_control.surrogate_cma` algorithm.
+:mod:`~moptipyapps.dynamic_control.surrogate_optimizer` algorithm.
 """
 from typing import Callable, Final
 
