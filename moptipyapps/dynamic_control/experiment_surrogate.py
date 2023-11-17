@@ -25,8 +25,6 @@ from os.path import basename, dirname
 from typing import Any, Callable, Final, Iterable, cast
 
 import numpy as np
-from moptipy.algorithms.luby_restarts import luby_restarts
-from moptipy.api.algorithm import Algorithm
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import Parallelism, run_experiment
 from moptipy.api.process import Process
@@ -45,6 +43,8 @@ from moptipyapps.dynamic_control.surrogate_optimizer import (
     _bpcmaes,
 )
 from moptipyapps.dynamic_control.system_model import SystemModel
+from moptipyapps.dynamic_control.systems.lorenz import LORENZ_4
+from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_4
 from moptipyapps.dynamic_control.systems.three_coupled_oscillators import (
     THREE_COUPLED_OSCILLATORS,
 )
@@ -57,11 +57,16 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
     :return: the instances to be used in the dynamic control experiment.
     """
     res: list[Callable[[], SystemModel]] = []
-    for system in [THREE_COUPLED_OSCILLATORS]:
+    for system in [STUART_LANDAU_4, LORENZ_4, THREE_COUPLED_OSCILLATORS]:
+        state_dims: int = system.state_dims
+        ctrl_dims: int = system.control_dims
         controllers = [
-            make_ann(system.state_dims, system.control_dims, [3, 3])]
+            make_ann(state_dims, ctrl_dims, [state_dims]),
+            make_ann(state_dims, ctrl_dims, [state_dims, state_dims])]
         for controller in controllers:
-            for ann_model in [[6], [6, 6], [6, 6, 6]]:
+            for ann_model in [[state_dims], [state_dims, state_dims],
+                              [state_dims, state_dims, state_dims],
+                              [2 * state_dims]]:
                 res.append(cast(
                     Callable[[], SystemModel],
                     lambda _s=system, _c=controller, _m=make_ann(
@@ -107,8 +112,7 @@ def cmaes_surrogate(instance: SystemModel,
                     max_fes: int = MAX_FES,
                     fes_for_training: int = 128,
                     fes_per_model_run: int = 128,
-                    fancy_logs: bool = True,
-                    luby_divider: int = 1) -> Execution:
+                    fancy_logs: bool = True) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
@@ -117,7 +121,6 @@ def cmaes_surrogate(instance: SystemModel,
     :param fes_for_training: the FEs for training
     :param fes_per_model_run: the FEs per model run
     :param fancy_logs: should we do fancy logging?
-    :param luby_divider: the luby FE divider
     :return: the setup
     """
     execution, objective, space = base_setup(instance, max_fes)
@@ -126,10 +129,7 @@ def cmaes_surrogate(instance: SystemModel,
         SurrogateOptimizer(
             instance, space, objective, max_fes // 4,
             fes_for_training, fes_per_model_run, fancy_logs,
-            model_training_algorithm=_bpcmaes if luby_divider <= 1 else
-            cast(Callable[[VectorSpace], Algorithm],
-                 lambda v, fes=fes_for_training // luby_divider:
-                 luby_restarts(_bpcmaes(v), fes, True)),
+            model_training_algorithm=_bpcmaes,
             controller_training_algorithm=_bpcmaes))
 
 
@@ -192,9 +192,8 @@ def run(base_dir: str, n_runs: int = 5) -> None:
                 instances=instances,
                 setups=[cast(
                     Callable[[Any], Execution],
-                    lambda i, __t=training_fes, __r=run_fes, __ld=ld:
-                    cmaes_surrogate(i, MAX_FES, __t, __r, True, __ld))
-                    for ld in [1, 16, 64]],
+                    lambda i, __t=training_fes, __r=run_fes:
+                    cmaes_surrogate(i, MAX_FES, __t, __r, True))],
                 n_runs=runs,
                 n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
                 perform_warmup=False,
