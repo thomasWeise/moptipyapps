@@ -5,14 +5,14 @@ from typing import Callable, Final, cast
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
 from moptipy.evaluation.end_results import EndResult
-from moptipy.utils.nputils import rand_seeds_from_str
 from moptipy.utils.temp import TempDir
 from numpy.random import Generator, default_rng
 
 from moptipyapps.dynamic_control.experiment_surrogate import (
-    cmaes_surrogate,
+    base_setup,
     make_instances,
 )
+from moptipyapps.dynamic_control.surrogate_optimizer import SurrogateOptimizer
 from moptipyapps.dynamic_control.system import System
 from moptipyapps.dynamic_control.system_model import SystemModel
 
@@ -53,12 +53,16 @@ def __cmaes(instance: SystemModel) -> Execution:
     :param instance: the problem instance
     :return: the setup
     """
-    random: Generator = default_rng(rand_seeds_from_str(str(instance), 1)[0])
-    return cmaes_surrogate(instance,
-                           int(random.integers(8, 16)),
-                           int(random.integers(8, 16)),
-                           int(random.integers(8, 16)),
-                           fancy_logs=False)
+    execution, objective, space = base_setup(instance)
+    return execution.set_solution_space(space).set_max_fes(10).set_algorithm(
+        SurrogateOptimizer(
+            system_model=instance,
+            controller_space=space,
+            objective=objective,
+            fes_for_warmup=2,
+            fes_for_training=4,
+            fes_per_model_run=4,
+            fancy_logs=False))
 
 
 def test_experiment_surrogate(random: Generator = default_rng()) -> None:

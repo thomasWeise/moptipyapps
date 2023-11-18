@@ -191,24 +191,26 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         2 * (MAX_FES - WARMUP_FES))))
     base_ms_1_3: Final[int] = int(0.5 + ((2 * base_ms) / 3))
     base_ms_2_3: Final[int] = (2 * base_ms) - base_ms_1_3
+    setups: list[Callable[[Any], Execution]] = []
+    for training_ms, run_ms in ((base_ms, base_ms),
+                                (base_ms_1_3, base_ms_2_3),
+                                (base_ms_2_3, base_ms_1_3)):
+        setups.append(cast(
+            Callable[[Any], Execution],
+            lambda i, __t=training_ms, __r=run_ms:
+            cmaes_surrogate(i, __t, __r, True)))
 
     for runs in range(1, n_runs + 1):
-        for training_ms, run_ms in ((base_ms, base_ms),
-                                    (base_ms_1_3, base_ms_2_3),
-                                    (base_ms_2_3, base_ms_1_3)):
-            run_experiment(
-                base_dir=use_dir.resolve_inside(
-                    f"model_for_{training_ms}x{run_ms}ms"),
-                instances=instances,
-                setups=[cast(
-                    Callable[[Any], Execution],
-                    lambda i, __t=training_ms, __r=run_ms:
-                    cmaes_surrogate(i, __t, __r, True))],
-                n_runs=runs,
-                n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
-                perform_warmup=False,
-                perform_pre_warmup=False,
-                on_completion=on_completion)
+        run_experiment(
+            base_dir=use_dir.resolve_inside(
+                f"model_for_{training_ms}x{run_ms}ms"),
+            instances=instances,
+            setups=setups,
+            n_runs=runs,
+            n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
+            perform_warmup=False,
+            perform_pre_warmup=False,
+            on_completion=on_completion)
 
 
 # Run the experiment from the command line

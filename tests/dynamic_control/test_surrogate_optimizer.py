@@ -87,9 +87,11 @@ def test_surrogate_cmaes() -> None:
         .set_objective(objective).set_solution_space(space)\
         .set_solution_space(space)\
         .set_algorithm(SurrogateOptimizer(
-            instance, space, objective, n_warmup_fes,
-            n_fes_for_model_training,
-            n_fes_for_controller_synthesis_on_model)).execute():
+            instance, space, objective,
+            fes_for_warmup=n_warmup_fes,
+            fes_for_training=n_fes_for_model_training,
+            fes_per_model_run=n_fes_for_controller_synthesis_on_model,
+            fancy_logs=False)).execute():
         pass
 
     n_real_ode_steps: Final[int] = (

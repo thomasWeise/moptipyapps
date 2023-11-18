@@ -213,13 +213,14 @@ class FigureOfMerit(Objective):
             # results of the objective function are inconsistent. For an
             # unclear reason.
             np.copy(start.flatten())  # <--- This should make no sense...
-            ode = run_ode(
+            the_ode = run_ode(
                 start, equations, controller, x, controller_dim, steps, time)
-            results[i] = z = j_from_ode(ode, state_dim, state_dims_in_j, gamma)
+            results[i] = z = j_from_ode(
+                the_ode, state_dim, state_dims_in_j, gamma)
             if not (0.0 <= z <= 1e100):
                 return 1e200
             if collector is not None:
-                collector(diff_from_ode(ode, state_dim))
+                collector(diff_from_ode(the_ode, state_dim))
         z = self.sum_up_results(results)
         return z if 0.0 <= z <= 1e100 else 1e200
 
