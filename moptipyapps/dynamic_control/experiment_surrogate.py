@@ -202,8 +202,7 @@ def run(base_dir: str, n_runs: int = 5) -> None:
 
     for runs in range(1, n_runs + 1):
         run_experiment(
-            base_dir=use_dir.resolve_inside(
-                f"model_for_{training_ms}x{run_ms}ms"),
+            base_dir=use_dir,
             instances=instances,
             setups=setups,
             n_runs=runs,
