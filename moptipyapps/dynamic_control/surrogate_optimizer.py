@@ -188,26 +188,26 @@ class SurrogateOptimizer(Algorithm):
         self.fancy_logs: Final[bool] = fancy_logs
         #: the number of objective function evaluations to be used for warmup
         self.fes_for_warmup: Final[int] = check_int_range(
-            fes_for_warmup, "fes_for_warmup", 1, 1_000_000)
+            fes_for_warmup, "fes_for_warmup", 1, 1_000_000_000)
         #: the FEs for training the model
         self.fes_for_training: Final[int | None] = None \
             if fes_for_training is None else check_int_range(
-            fes_for_training, "fes_for_training", 1, 1_000_000)
+            fes_for_training, "fes_for_training", 1, 1_000_000_000)
         #: the ms for training the model
         self.ms_for_training: Final[int | None] = None \
             if ms_for_training is None else check_int_range(
-            ms_for_training, "ms_for_training", 1, 1_000_000_000)
+            ms_for_training, "ms_for_training", 1, 1_000_000_000_000)
         if (self.fes_for_training is None) and (self.ms_for_training is None):
             raise ValueError("One of fes_for_training or "
                              "ms_for_training must not be None.")
         #: the FEs for each run on the model
         self.fes_per_model_run: Final[int | None] = None \
             if fes_per_model_run is None else check_int_range(
-            fes_per_model_run, "fes_per_model_run", 1, 1_000_000)
+            fes_per_model_run, "fes_per_model_run", 1, 1_000_000_000)
         #: the ms for each run on the model
         self.ms_per_model_run: Final[int | None] = None \
             if ms_per_model_run is None else check_int_range(
-            ms_per_model_run, "ms_per_model_run", 1, 1_000_000)
+            ms_per_model_run, "ms_per_model_run", 1, 1_000_000_000_000)
         if ((self.fes_per_model_run is None)
                 and (self.ms_per_model_run is None)):
             raise ValueError("One of fes_per_model_run or "
