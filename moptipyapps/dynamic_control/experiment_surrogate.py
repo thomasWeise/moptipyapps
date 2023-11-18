@@ -61,12 +61,10 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
         state_dims: int = system.state_dims
         ctrl_dims: int = system.control_dims
         controllers = [
-            make_ann(state_dims, ctrl_dims, [state_dims]),
             make_ann(state_dims, ctrl_dims, [state_dims, state_dims])]
         for controller in controllers:
-            for ann_model in [[state_dims], [state_dims, state_dims],
-                              [state_dims, state_dims, state_dims],
-                              [2 * state_dims]]:
+            for ann_model in [[state_dims, state_dims],
+                              [state_dims, state_dims, state_dims]]:
                 res.append(cast(
                     Callable[[], SystemModel],
                     lambda _s=system, _c=controller, _m=make_ann(
@@ -78,57 +76,62 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
 
 #: the total objective function evaluations
 MAX_FES: Final[int] = 64
+#: the warmup FEs
+WARMUP_FES: Final[int] = MAX_FES // 16
+#: the maximum milliseconds per run
+MAX_MS_PER_RUN: Final[int] = 4 * 24 * 3600 * 1000
 
 
-def base_setup(instance: Instance, max_fes: int) -> tuple[
+def base_setup(instance: Instance) -> tuple[
         Execution, FigureOfMerit, VectorSpace]:
     """
     Create the basic setup.
 
     :param instance: the instance to use
-    :param max_fes: the maximum FEs
     :return: the basic execution
     """
     objective: Final[FigureOfMerit] = FigureOfMeritLE(
         instance, isinstance(instance, SystemModel))
     space = instance.controller.parameter_space()
-    return Execution().set_max_fes(max_fes).set_log_all_fes(True)\
+    return Execution().set_max_fes(MAX_FES).set_log_all_fes(True)\
         .set_objective(objective).set_solution_space(space), objective, space
 
 
-def cmaes_raw(instance: Instance, max_fes: int = MAX_FES) -> Execution:
+def cmaes_raw(instance: Instance) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
     :param instance: the problem instance
-    :param max_fes: the maximum FEs
     :return: the setup
     """
-    execution, _, space = base_setup(instance, max_fes)
+    execution, _, space = base_setup(instance)
     return execution.set_algorithm(_bpcmaes(space))
 
 
 def cmaes_surrogate(instance: SystemModel,
-                    max_fes: int = MAX_FES,
-                    fes_for_training: int = 128,
-                    fes_per_model_run: int = 128,
+                    ms_for_training: int = 128,
+                    ms_per_model_run: int = 128,
                     fancy_logs: bool = True) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
     :param instance: the problem instance
-    :param max_fes: the maximum FEs
-    :param fes_for_training: the FEs for training
-    :param fes_per_model_run: the FEs per model run
+    :param ms_for_training: the milliseconds for training
+    :param ms_per_model_run: the milliseconds per model run
     :param fancy_logs: should we do fancy logging?
     :return: the setup
     """
-    execution, objective, space = base_setup(instance, max_fes)
+    execution, objective, space = base_setup(instance)
 
     return execution.set_solution_space(space).set_algorithm(
         SurrogateOptimizer(
-            instance, space, objective, max_fes // 4,
-            fes_for_training, fes_per_model_run, fancy_logs,
+            system_model=instance,
+            controller_space=space,
+            objective=objective,
+            fes_for_warmup=WARMUP_FES,
+            ms_for_training=ms_for_training,
+            ms_per_model_run=ms_per_model_run,
+            fancy_logs=fancy_logs,
             model_training_algorithm=_bpcmaes,
             controller_training_algorithm=_bpcmaes))
 
@@ -184,16 +187,23 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         perform_pre_warmup=False,
         on_completion=on_completion)
 
+    base_ms: Final[int] = int(0.5 + (MAX_MS_PER_RUN / (
+        2 * (MAX_FES - WARMUP_FES))))
+    base_ms_1_3: Final[int] = int(0.5 + ((2 * base_ms) / 3))
+    base_ms_2_3: Final[int] = (2 * base_ms) - base_ms_1_3
+
     for runs in range(1, n_runs + 1):
-        for training_fes, run_fes in ((2 ** 16, 2 ** 10), ):
+        for training_ms, run_ms in ((base_ms, base_ms),
+                                    (base_ms_1_3, base_ms_2_3),
+                                    (base_ms_2_3, base_ms_1_3)):
             run_experiment(
                 base_dir=use_dir.resolve_inside(
-                    f"model_for_{training_fes}x{run_fes}_fes"),
+                    f"model_for_{training_ms}x{run_ms}ms"),
                 instances=instances,
                 setups=[cast(
                     Callable[[Any], Execution],
-                    lambda i, __t=training_fes, __r=run_fes:
-                    cmaes_surrogate(i, MAX_FES, __t, __r, True))],
+                    lambda i, __t=training_ms, __r=run_ms:
+                    cmaes_surrogate(i, __t, __r, True))],
                 n_runs=runs,
                 n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
                 perform_warmup=False,

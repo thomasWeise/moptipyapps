@@ -129,7 +129,10 @@ class SurrogateOptimizer(Algorithm):
     def __init__(
             self, system_model: SystemModel, controller_space: VectorSpace,
             objective: FigureOfMerit, fes_for_warmup: int,
-            fes_for_training: int, fes_per_model_run: int,
+            fes_for_training: int | None = None,
+            ms_for_training: int | None = None,
+            fes_per_model_run: int | None = None,
+            ms_per_model_run: int | None = None,
             fancy_logs: bool = False,
             warmup_algorithm: Callable[
                 [VectorSpace], Algorithm] =
@@ -149,8 +152,10 @@ class SurrogateOptimizer(Algorithm):
             warming up
         :param fes_for_training: the number of FEs to be used to train the
             model
+        :param ms_for_training: the number of milliseconds for model training
         :param fes_per_model_run: the number of FEs to be applied to each
             optimization run on the model
+        :param ms_per_model_run: the number of milliseconds for a model run
         :param fancy_logs: should we perform fancy logging?
         :param warmup_algorithm: the algorithm for sampling the warmup points
         :param model_training_algorithm: the model training algorithm builder
@@ -185,11 +190,28 @@ class SurrogateOptimizer(Algorithm):
         self.fes_for_warmup: Final[int] = check_int_range(
             fes_for_warmup, "fes_for_warmup", 1, 1_000_000)
         #: the FEs for training the model
-        self.fes_for_training: Final[int] = check_int_range(
+        self.fes_for_training: Final[int | None] = None \
+            if fes_for_training is None else check_int_range(
             fes_for_training, "fes_for_training", 1, 1_000_000)
+        #: the ms for training the model
+        self.ms_for_training: Final[int | None] = None \
+            if ms_for_training is None else check_int_range(
+            ms_for_training, "ms_for_training", 1, 1_000_000_000)
+        if (self.fes_for_training is None) and (self.ms_for_training is None):
+            raise ValueError("One of fes_for_training or "
+                             "ms_for_training must not be None.")
         #: the FEs for each run on the model
-        self.fes_per_model_run: Final[int] = check_int_range(
+        self.fes_per_model_run: Final[int | None] = None \
+            if fes_per_model_run is None else check_int_range(
             fes_per_model_run, "fes_per_model_run", 1, 1_000_000)
+        #: the ms for each run on the model
+        self.ms_per_model_run: Final[int | None] = None \
+            if ms_per_model_run is None else check_int_range(
+            ms_per_model_run, "ms_per_model_run", 1, 1_000_000)
+        if ((self.fes_per_model_run is None)
+                and (self.ms_per_model_run is None)):
+            raise ValueError("One of fes_per_model_run or "
+                             "ms_per_model_run must not be None.")
         #: the system model
         self.system_model: Final[SystemModel] = system_model
         #: the internal warmup algorithm
@@ -278,16 +300,25 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
             self.system_model.model.controller
         raw: Final[FigureOfMerit] = self.__control_objective
         random: Final[Generator] = process.get_random()
+
         training_execute: Final[Execution] = (
             Execution().set_solution_space(model_space)
-            .set_max_fes(self.fes_for_training)
             .set_algorithm(self.__model_training)
             .set_objective(model_objective))
+        if self.fes_for_training is not None:
+            training_execute.set_max_fes(self.fes_for_training)
+        if self.ms_for_training is not None:
+            training_execute.set_max_time_millis(self.ms_for_training)
+
         on_model_execute: Final[Execution] = \
             (Execution().set_solution_space(self.controller_space)
              .set_objective(raw)
-             .set_max_fes(self.fes_per_model_run)
              .set_algorithm(self.__control_algorithm))
+        if self.fes_per_model_run is not None:
+            on_model_execute.set_max_fes(self.fes_per_model_run)
+        if self.ms_per_model_run is not None:
+            on_model_execute.set_max_time_millis(self.ms_per_model_run)
+
         result: Final[np.ndarray] = self.controller_space.create()
         orig_init: Callable = raw.initialize
 
@@ -406,9 +437,18 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
 
         :return: the algorithm name
         """
-        return (f"{self.__warmup_algorithm}_{self.__control_algorithm}_"
-                f"{self.__model_training}_{self.fes_for_warmup}_"
-                f"{self.fes_for_training}_{self.fes_per_model_run}")
+        s: str = (f"{self.__warmup_algorithm}_{self.__control_algorithm}_"
+                  f"{self.__model_training}_{self.fes_for_warmup}_tn")
+        if self.fes_for_training is not None:
+            s = f"_{s}_{self.fes_for_training}fes"
+        if self.ms_for_training is not None:
+            s = f"_{s}_{self.ms_for_training}ms"
+        s = f"{s}_sy"
+        if self.fes_per_model_run is not None:
+            s = f"{s}_{self.fes_per_model_run}fes"
+        if self.ms_per_model_run is not None:
+            s = f"{s}_{self.ms_per_model_run}ms"
+        return s
 
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
         """
