@@ -77,7 +77,7 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
 #: the total objective function evaluations
 MAX_FES: Final[int] = 64
 #: the warmup FEs
-WARMUP_FES: Final[int] = MAX_FES // 16
+WARMUP_FES: Final[int] = MAX_FES // 4
 #: the maximum milliseconds per run
 MAX_MS_PER_RUN: Final[int] = 4 * 24 * 3600 * 1000
 
