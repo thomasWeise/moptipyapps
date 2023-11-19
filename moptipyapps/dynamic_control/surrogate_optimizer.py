@@ -440,9 +440,9 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
         s: str = (f"{self.__warmup_algorithm}_{self.__control_algorithm}_"
                   f"{self.__model_training}_{self.fes_for_warmup}_tn")
         if self.fes_for_training is not None:
-            s = f"_{s}_{self.fes_for_training}fes"
+            s = f"{s}_{self.fes_for_training}fes"
         if self.ms_for_training is not None:
-            s = f"_{s}_{self.ms_for_training}ms"
+            s = f"{s}_{self.ms_for_training}ms"
         s = f"{s}_sy"
         if self.fes_per_model_run is not None:
             s = f"{s}_{self.fes_per_model_run}fes"
