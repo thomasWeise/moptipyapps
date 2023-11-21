@@ -93,7 +93,6 @@ We can then apply a black-box metaheuristic to search in the space of these sign
 The objective function would be some measure consistent with the goal of minimizing the number of bins used.
 
 *Examples:*
-
 - [plot a packing chart](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_plot.html)
 - [apply a randomized local search to one 2D bin packing instance](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_rls.html)
 - [measure the runtime of the different encodings for the 2D bin packing problem](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_timing.html)
@@ -118,8 +117,8 @@ We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/softw
 110 of these instances are included as resources in this package.
 
 *Examples:*
-
 - [apply a randomized local search to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_rls.html)
+- [apply a some FFA-based algorithms to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_special_algorithms.html)
 
 Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 
@@ -154,7 +153,6 @@ What we try to find is the controller which can bring move object to the origin 
 
 
 ### 3.4. The Traveling Tournament Problem (TTP)
-
 In the package [`moptipyapps.ttp`](https://thomasweise.github.io/moptipyapps/moptipyapps.ttp.html#module-moptipyapps.ttp), we provide a set of classes and tools to explore the *Traveling Tournament Problem (TTP)*.
 In a TTP, we have an even number of `n` teams.
 Each team plays a tournament against every other team.
@@ -170,6 +168,10 @@ The second problem is that this is not all:
 For each TTP, a distance matrix is defined, very much like for the [TSP](#32-the-traveling-salesperson-problem-tsp).
 The goal is to find a feasible game schedule where the overall travel distances are minimal.
 
+*Examples:*
+- [apply a local search to find a feasible TTP plan](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_rls_rs.html)
+
+
 ### 3.5. The Quadratic Assignment Problem (QAP)
 In the package [`moptipyapps.qap`](https://thomasweise.github.io/moptipyapps/moptipyapps.qap.html#module-moptipyapps.qap), we implement some utilities to play with the Quadratic Assignment Problem (QAP).
 The QAP is one of the very classical problems from Operations Research.
@@ -184,6 +186,10 @@ The available locations also have different distances among each other.
 Some locations are closer, some are farther from each other.
 The goal is to find an assignment of facilities to locations such that the overall sum of the product of flow and distance for each facility pair gets minimized.
 To this end, solutions can be represented as permutations of facilities determining the order in which they are placed on the locations `1` to `n`.
+
+*Examples:*
+- See [one-dimensional ordering](#36-one-dimensional-ordering)
+
 
 ### 3.6. One-Dimensional Ordering
 In the package [`moptipyapps.order1d`](https://thomasweise.github.io/moptipyapps/moptipyapps.order1d.html#module-moptipyapps.order1d), we implement what I would like to call the "one-dimensional ordering problem".
@@ -218,6 +224,9 @@ Such a structure cannot be represented exactly in one dimension.
 
 But that's OK.
 Because we mainly do this for visualization purposes anyway.
+
+*Examples:*
+- [use one-dimensional ordering to for search trajectory charts](https://thomasweise.github.io/moptipyapps/examples/order1_from_dat.py.html)
 
 
 ## 4. Unit Tests and Static Analysis

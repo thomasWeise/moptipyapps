@@ -59,11 +59,12 @@ So far, the following components have been implemented:
    allows us to instantiate game plans in a uniform way and to convert them to
    and from strings (which is used when writing log files).
 4. :mod:`~moptipyapps.ttp.game_encoding` allows us to decode a permutation
-   (potentially with repetitions, see :mod:~moptipy.spaces.permutations`) into
-   a game plan. We therefore can use optimization algorithms and operators
-   working on the well-understood space of permutations to produce game plans.
-   However, the decoded game plans may have errors, e.g., slots without games
-   or violations of the maximum or minimum streak length constraints.
+   (potentially with repetitions, see :mod:`~moptipy.spaces.permutations`)
+   into a game plan. We therefore can use optimization algorithms and
+   operators working on the well-understood space of permutations to produce
+   game plans. However, the decoded game plans may have errors, e.g., slots
+   without games or violations of the maximum or minimum streak length
+   constraints.
 5. :mod:`~moptipyapps.ttp.errors` offers an objective function that counts the
    number of such constraint violations in a game plan. If we can minimize it
    to zero, then the game plan is feasible.
