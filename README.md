@@ -226,7 +226,7 @@ But that's OK.
 Because we mainly do this for visualization purposes anyway.
 
 *Examples:*
-- [use one-dimensional ordering to for search trajectory charts](https://thomasweise.github.io/moptipyapps/examples/order1_from_dat.py.html)
+- [use one-dimensional ordering to for search trajectory charts](https://thomasweise.github.io/moptipyapps/examples/order1_from_dat.html)
 
 
 ## 4. Unit Tests and Static Analysis
