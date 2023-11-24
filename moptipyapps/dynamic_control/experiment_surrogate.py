@@ -198,9 +198,9 @@ def run(base_dir: str, n_runs: int = 64) -> None:
         if not (0 < warmup_fes < MAX_FES):
             continue
         training_fes: int = max(1, int(0.5 + (total_training_fes / (
-                MAX_FES - warmup_fes))))
+            MAX_FES - warmup_fes))))
         on_model_fes: int = max(1, int(0.5 + (total_on_model_fes / (
-                MAX_FES - warmup_fes))))
+            MAX_FES - warmup_fes))))
 
         setups.append(cast(
             Callable[[Any], Execution],
