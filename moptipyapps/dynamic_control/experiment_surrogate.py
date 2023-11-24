@@ -58,28 +58,25 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
     """
     res: list[Callable[[], SystemModel]] = []
     for system in [STUART_LANDAU_4, LORENZ_4, THREE_COUPLED_OSCILLATORS]:
-        state_dims: int = system.state_dims
+        sd: int = system.state_dims
+        sdp2: int = sd + 2
         ctrl_dims: int = system.control_dims
         controllers = [
-            make_ann(state_dims, ctrl_dims, [state_dims, state_dims])]
+            make_ann(sd, ctrl_dims, [sd, sd]),
+            make_ann(sd, ctrl_dims, [sdp2, sdp2])]
         for controller in controllers:
-            for ann_model in [[state_dims, state_dims],
-                              [state_dims, state_dims, state_dims]]:
+            for ann_model in [[sd, sd, sd], [sd, sd, sd, sd],
+                              [sdp2, sdp2, sdp2]]:
                 res.append(cast(
                     Callable[[], SystemModel],
                     lambda _s=system, _c=controller, _m=make_ann(
-                        system.state_dims + system.control_dims,
-                        system.state_dims, ann_model):
+                        sd + system.control_dims, sd, ann_model):
                     SystemModel(_s, _c, _m)))
     return res
 
 
 #: the total objective function evaluations
 MAX_FES: Final[int] = 64
-#: the warmup FEs
-WARMUP_FES: Final[int] = MAX_FES // 4
-#: the maximum milliseconds per run
-MAX_MS_PER_RUN: Final[int] = 4 * 24 * 3600 * 1000
 
 
 def base_setup(instance: Instance) -> tuple[
@@ -109,15 +106,17 @@ def cmaes_raw(instance: Instance) -> Execution:
 
 
 def cmaes_surrogate(instance: SystemModel,
-                    ms_for_training: int = 128,
-                    ms_per_model_run: int = 128,
+                    fes_for_warmup: int = 16,
+                    fes_for_training: int = 128,
+                    fes_per_model_run: int = 128,
                     fancy_logs: bool = True) -> Execution:
     """
     Create the Bi-Pop-CMA-ES setup.
 
     :param instance: the problem instance
-    :param ms_for_training: the milliseconds for training
-    :param ms_per_model_run: the milliseconds per model run
+    :param fes_for_warmup: the FEs to be used for warmup
+    :param fes_for_training: the milliseconds for training
+    :param fes_per_model_run: the milliseconds per model run
     :param fancy_logs: should we do fancy logging?
     :return: the setup
     """
@@ -128,10 +127,11 @@ def cmaes_surrogate(instance: SystemModel,
             system_model=instance,
             controller_space=space,
             objective=objective,
-            fes_for_warmup=WARMUP_FES,
-            ms_for_training=ms_for_training,
-            ms_per_model_run=ms_per_model_run,
+            fes_for_warmup=fes_for_warmup,
+            fes_for_training=fes_for_training,
+            fes_per_model_run=fes_per_model_run,
             fancy_logs=fancy_logs,
+            warmup_algorithm=_bpcmaes,
             model_training_algorithm=_bpcmaes,
             controller_training_algorithm=_bpcmaes))
 
@@ -154,7 +154,7 @@ def on_completion(instance: Any, log_file: Path, process: Process) -> None:
     inst.describe_parameterization(f"F = {j}", result, base_name, dest_dir)
 
 
-def run(base_dir: str, n_runs: int = 5) -> None:
+def run(base_dir: str, n_runs: int = 64) -> None:
     """
     Run the experiment.
 
@@ -187,18 +187,25 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         perform_pre_warmup=False,
         on_completion=on_completion)
 
-    base_ms: Final[int] = int(0.5 + (MAX_MS_PER_RUN / (
-        2 * (MAX_FES - WARMUP_FES))))
-    base_ms_1_3: Final[int] = int(0.5 + ((2 * base_ms) / 3))
-    base_ms_2_3: Final[int] = (2 * base_ms) - base_ms_1_3
     setups: list[Callable[[Any], Execution]] = []
-    for training_ms, run_ms in ((base_ms, base_ms),
-                                (base_ms_1_3, base_ms_2_3),
-                                (base_ms_2_3, base_ms_1_3)):
+    total_training_fes: Final[int] = (MAX_FES - 1) * (2 ** 15)
+    total_on_model_fes: Final[int] = (MAX_FES - 1) * 2048
+
+    fe_choices: set[int] = {2 ** wfb for wfb in range(6)}
+    fe_choices.update(MAX_FES - (2 ** wfb) for wfb in range(6))
+
+    for warmup_fes in fe_choices:
+        if not (0 < warmup_fes < MAX_FES):
+            continue
+        training_fes: int = max(1, int(0.5 + (total_training_fes / (
+                MAX_FES - warmup_fes))))
+        on_model_fes: int = max(1, int(0.5 + (total_on_model_fes / (
+                MAX_FES - warmup_fes))))
+
         setups.append(cast(
             Callable[[Any], Execution],
-            lambda i, __t=training_ms, __r=run_ms:
-            cmaes_surrogate(i, __t, __r, True)))
+            lambda i, __w=warmup_fes, __t=training_fes, __o=on_model_fes:
+            cmaes_surrogate(i, __w, __t, __o, True)))
 
     for runs in range(1, n_runs + 1):
         run_experiment(
