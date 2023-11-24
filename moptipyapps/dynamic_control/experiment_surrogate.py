@@ -207,7 +207,9 @@ def run(base_dir: str, n_runs: int = 64) -> None:
             lambda i, __w=warmup_fes, __t=training_fes, __o=on_model_fes:
             cmaes_surrogate(i, __w, __t, __o, True)))
 
-    for runs in range(1, n_runs + 1):
+    for runs in sorted({3, 5, 7, 11, 17, 23, 31, 51, n_runs}):
+        if runs > n_runs:
+            break
         run_experiment(
             base_dir=use_dir,
             instances=instances,
