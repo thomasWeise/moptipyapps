@@ -57,7 +57,8 @@ def make_instances() -> Iterable[Callable[[], Instance]]:
     """
     Create the instances to be used in the TTP experiment.
 
-    Here, we simply load all the `circ*` instances. These are basically
+    Here, we simply load all the `circ*` instances. Here, all cities
+    are located on a circle.
 
     :return: the instances to be used in the TTP experiment.
     """

@@ -123,7 +123,7 @@ def count_errors(y: np.ndarray, home_streak_min: int,
         hold, for each pairing, when the last game was played
     :param temp_2: a temporary `n,n` integer array, which is used to hold,
         how often each team played each other team
-    :returns: `True` if a valid solution was produced
+    :returns: the total number of errors. `0` if the game plan is feasible
 
     >>> count_errors(np.array([[-2, 1], [2, -1]], int),
     ...              1, 3, 1, 3, 1, 2, np.empty(1, int),
@@ -188,11 +188,11 @@ def count_errors(y: np.ndarray, home_streak_min: int,
     ...              np.empty((4, 4), int))
     6
     """
-    days, n = y.shape  # get the number of teams
+    days, teams = y.shape  # get the number of days and teams
     errors: int = 0  # the error counter
     temp_1.fill(-1)  # last time the teams played each other
     temp_2.fill(0)
-    for team_1 in range(n):
+    for team_1 in range(teams):
         col = y[:, team_1]
         team_1_id: int = team_1 + 1
         is_in_home_streak: bool = False
@@ -277,8 +277,8 @@ def count_errors(y: np.ndarray, home_streak_min: int,
             temp_1[idx] = day
 
     # sum up the team games
-    games_per_combo: Final[int] = days // (n - 1)
-    for i in range(n):
+    games_per_combo: Final[int] = days // (teams - 1)
+    for i in range(teams):
         for j in range(i):
             ij = temp_2[i, j]
             ji = temp_2[j, i]
@@ -287,7 +287,7 @@ def count_errors(y: np.ndarray, home_streak_min: int,
             if diff > 1:
                 errors += diff - 1
 
-    return errors
+    return int(errors)
 
 
 class Errors(Objective):
@@ -354,6 +354,14 @@ class Errors(Objective):
         rounds: Final[int] = self.instance.rounds
         days: Final[int] = (n - 1) * rounds
         return (4 * days - 1) * n - 1
+
+    def is_always_integer(self) -> bool:
+        """
+        State that this objective function is always integer-valued.
+
+        :return: `True`
+        """
+        return True
 
     def __str__(self) -> str:
         """Get the name of this objective function."""
