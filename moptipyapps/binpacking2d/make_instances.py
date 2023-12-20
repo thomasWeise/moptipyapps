@@ -16,8 +16,9 @@ The resource file holds one instance per line.
 
 import zipfile
 from io import BytesIO
+from math import isqrt
 from os.path import dirname, exists
-from typing import Callable, Final, Iterable
+from typing import Any, Callable, Final, Iterable
 
 # noinspection PyPackageRequirements
 import certifi  # type: ignore
@@ -34,10 +35,13 @@ from moptipyapps.binpacking2d.instance import (
     Instance,
 )
 
+#: the base url for 2DPackLib
+__BASE_URL: str = \
+    "https://site.unibo.it/operations-research/en/research/2dpacklib"
+
 #: The base URLs of the relevant 2DPackLib instances.
 __BASE_URLS: Final[Iterable[str]] = tuple(
-    ("https://site.unibo.it/operations-research/en"
-     f"/research/2dpacklib/{f}.zip") for f in ["a", "beng", "class"])
+    f"{__BASE_URL}/{f}.zip" for f in ["a", "beng", "class"])
 
 
 def download_2dpacklib_instances(
@@ -107,30 +111,55 @@ def __normalize_2dpacklib_inst_name(instname: str) -> str:
     return instname
 
 
-def join_2dpacklib_instances_to_compact(
-        files: Iterable[str], dest_file: str,
+def append_almost_squares_strings(collector: Callable[[
+        tuple[str, str]], Any]) -> None:
+    """
+    Append the strings of the almost squares instances.
+
+    :param collector: the instance collector
+    :return: the strings
+    """
+    objects: list[list[int]] = [[2, 1, 1]]
+    size: int = 2
+    for small_side in range(2, 36):
+        big_side = small_side + 1
+        objects.append([big_side, small_side, 1])
+        size += small_side * big_side
+
+        bin_small = isqrt(size)
+        bin_big = bin_small + 1
+        if (bin_big * bin_small) == size:
+            iname: str = str(small_side)
+            iname = f"asqas{iname}" if len(iname) >= 2 else f"asqas0{iname}"
+            collector((iname, Instance(
+                iname, bin_big, bin_small, objects).to_compact_str()))
+
+
+def join_instances_to_compact(
+        binpacklib2d_files: Iterable[str], dest_file: str,
         normalizer: Callable[[str], str] = __normalize_2dpacklib_inst_name) \
         -> tuple[Path, Iterable[str]]:
     """
     Join all instances from a set of 2DPackLib files to one compact file.
 
-    :param files: the iterable of 2DPackLib file paths
+    :param binpacklib2d_files: the iterable of 2DPackLib file paths
     :param dest_file: the destination file
     :param normalizer: the name normalizer, i.e., a function that processes
         and/or transforms an instance name
     :return: the canonical destination path and the list of instance names
         stored
     """
-    if not isinstance(files, Iterable):
-        raise type_error(files, "files", Iterable)
+    if not isinstance(binpacklib2d_files, Iterable):
+        raise type_error(binpacklib2d_files, "files", Iterable)
     if not callable(normalizer):
         raise type_error(normalizer, "normalizer", call=True)
     dest_path = Path.path(dest_file)
     data: Final[list[tuple[str, str]]] = []
-    for f in files:
-        inst: Instance = Instance.from_2dpacklib(Path.file(f))
+    for file in binpacklib2d_files:
+        inst: Instance = Instance.from_2dpacklib(Path.file(file))
         inst.name = normalizer(inst.name)
         data.append((inst.name, inst.to_compact_str()))
+    append_almost_squares_strings(data.append)  # add the asquas instances
     data.sort()
     dest_path.write_all([content for _, content in data])
     dest_path.enforce_file()
@@ -158,7 +187,7 @@ def make_2dpacklib_resource(
     with TempDir.create() as temp:
         files: Iterable[Path] = download_2dpacklib_instances(
             dest_dir=temp, source_urls=source_urls)
-        return join_2dpacklib_instances_to_compact(
+        return join_instances_to_compact(
             files, dest_path, normalizer)
 
 
@@ -178,7 +207,20 @@ if __name__ == "__main__":
         has_space = False
     rows.append(current[:-1] + ")")
 
-    print(  # noqa
-        "#: the list of instance names of the 2DPackLib bin packing set")
+    cmt_strs: list[str] = (
+        "the the list of instance names of the 2DPackLib bin "
+        f"packing set downloaded from {__BASE_URL} ('a*',"
+        "'beng*', 'cl*') as well as the four non-trivial "
+        "'Almost Squares in Almost Squares' instances ('asqas*').").split()
+    cmt_str = "#:"
+    for word in cmt_strs:
+        if len(word) + 1 + len(cmt_str) <= 79:
+            cmt_str = f"{cmt_str} {word}"
+        else:
+            print(cmt_str)  # noqa
+            cmt_str = f"#: {word}"
+    if len(cmt_str) > 2:
+        print(cmt_str)  # noqa
+
     for s in rows:
         print(s)  # noqa

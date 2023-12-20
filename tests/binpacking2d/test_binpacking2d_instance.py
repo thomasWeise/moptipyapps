@@ -28,8 +28,8 @@ def test_load_all_from_resources() -> None:
     for name in Instance.list_resources():
         check_instance(Instance.from_resource(name), name)
         count += 1
-    if count != 553:
-        raise ValueError(f"Excepted 553 instances, got {count}.")
+    if count != 557:
+        raise ValueError(f"Excepted 557 instances, got {count}.")
 
 
 #: These are known lower bounds for the oriented 2D Bin Packing Problem.

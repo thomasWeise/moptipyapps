@@ -32,8 +32,8 @@ The total game plan length is computed as follows:
     3. if the current location != own hometown, add the travel distance back
        from the current location to the hometown to the total travel length.
 
-As penalty for the `bye` situation where no game is scheduled, we use the
-twice the maximum distance between any two teams plus 1.
+As penalty for the `bye` situation where no game is scheduled, we use twice
+the maximum distance between any two teams plus 1.
 The logic is that if a `bye` (i.e., a `0`) inserted into a game plan, it
 replaces one game. Since it replaces one game, it affects up to two travels,
 namely from the previous location to the game location and from the game
@@ -189,7 +189,7 @@ class GamePlanLength(Objective):
 
     def __str__(self) -> str:
         """Get the name of this objective function."""
-        return "gameLength"
+        return "planLength"
 
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
         """
