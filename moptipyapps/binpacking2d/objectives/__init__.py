@@ -21,4 +21,8 @@ The following objective functions are implemented:
   returns a combination of the number of bins occupied by a given packing and
   the smallest area under the skyline in any bin, where the "skyline" is the
   upper border of the space occupied by objects.
+- :mod:`~moptipyapps.binpacking2d.objectives.bin_count_and_last_skyline`
+  returns a combination of the number of bins occupied by a given packing and
+  the smallest area under the skyline in the last bin, where the "skyline" is
+  the upper border of the space occupied by objects.
 """

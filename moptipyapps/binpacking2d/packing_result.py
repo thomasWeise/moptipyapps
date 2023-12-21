@@ -60,6 +60,9 @@ from moptipyapps.binpacking2d.objectives.bin_count_and_empty import (
 from moptipyapps.binpacking2d.objectives.bin_count_and_last_empty import (
     BinCountAndLastEmpty,
 )
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_skyline import (
+    BinCountAndLastSkyline,
+)
 from moptipyapps.binpacking2d.objectives.bin_count_and_last_small import (
     BinCountAndLastSmall,
 )
@@ -102,7 +105,8 @@ _HEADER_3: Final[str] = (f"{KEY_RAND_SEED}{CSV_SEPARATOR}"
 #: the default objective functions
 DEFAULT_OBJECTIVES: Final[tuple[Callable[[Instance], Objective], ...]] = (
     BinCount, BinCountAndLastEmpty, BinCountAndLastSmall,
-    BinCountAndLowestSkyline, BinCountAndEmpty, BinCountAndSmall,
+    BinCountAndLastSkyline, BinCountAndEmpty, BinCountAndSmall,
+    BinCountAndLowestSkyline,
 )
 
 

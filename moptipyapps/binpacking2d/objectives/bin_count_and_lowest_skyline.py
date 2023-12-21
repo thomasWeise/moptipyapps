@@ -18,7 +18,8 @@ If we minimize the area below the skyline in the very last bin, then this will
 a similar impact as minimizing the overall object area in the last bin (see
 :mod:`~moptipyapps.binpacking2d.objectives.bin_count_and_last_small`). We push
 the skyline lower and lower and, if we are lucky, the last bin eventually
-becomes empty.
+becomes empty. This is done with the objective
+:mod:`~moptipyapps.binpacking2d.objectives.bin_count_and_last_skyline`.
 
 But we could also minimize the area under the skylines in the other bins.
 Because a) if we can get any skyline in any bin to become 0, then this bin

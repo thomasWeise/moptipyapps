@@ -1,4 +1,4 @@
-"""Test the bin-count-and-lowest-skyline objective."""
+"""Test the bin-count-and-last-skyline objective."""
 import numpy.random as rnd
 from moptipy.operators.signed_permutations.op0_shuffle_and_flip import (
     Op0ShuffleAndFlip,
@@ -13,8 +13,8 @@ from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
-from moptipyapps.binpacking2d.objectives.bin_count_and_lowest_skyline import (
-    BinCountAndLowestSkyline,
+from moptipyapps.binpacking2d.objectives.bin_count_and_last_skyline import (
+    BinCountAndLastSkyline,
 )
 from moptipyapps.binpacking2d.packing import Packing
 from moptipyapps.binpacking2d.packing_space import PackingSpace
@@ -33,7 +33,7 @@ def __check_for_instance(inst: Instance, random: rnd.Generator) -> None:
     solution_space = PackingSpace(inst)
     encoding = (ImprovedBottomLeftEncoding1 if random.integers(2) == 0
                 else ImprovedBottomLeftEncoding2)(inst)
-    objective = BinCountAndLowestSkyline(inst)
+    objective = BinCountAndLastSkyline(inst)
     op0 = Op0ShuffleAndFlip(search_space)
 
     def __make_valid(ra: rnd.Generator,
@@ -47,8 +47,8 @@ def __check_for_instance(inst: Instance, random: rnd.Generator) -> None:
     validate_objective(objective, solution_space, __make_valid)
 
 
-def test_bin_count_and_lowest_skyline_objective() -> None:
-    """Test the lowest-skyline objective function."""
+def test_bin_count_and_last_skyline_objective() -> None:
+    """Test the last-bin-skyline-area objective function."""
     random: rnd.Generator = rnd.default_rng()
 
     choices = list(Instance.list_resources())
@@ -60,11 +60,11 @@ def test_bin_count_and_lowest_skyline_objective() -> None:
     for s in checks:
         __check_for_instance(Instance.from_resource(s), random)
 
-    validate_objective_on_2dbinpacking(BinCountAndLowestSkyline, random)
+    validate_objective_on_2dbinpacking(BinCountAndLastSkyline, random)
 
 
-def test_bin_count_and_lowest_skyline_objective_2() -> None:
-    """Test the lowest-skyline objective function."""
+def test_bin_count_and_last_skyline_objective_2() -> None:
+    """Test the last-bin-skyline-area objective function."""
     random: rnd.Generator = rnd.default_rng()
     for inst in Instance.list_resources():
         if not inst.startswith(("a", "b")):
@@ -75,7 +75,7 @@ def test_bin_count_and_lowest_skyline_objective_2() -> None:
         solution_space = PackingSpace(instance)
         encoding = (ImprovedBottomLeftEncoding1 if random.integers(2) == 0
                     else ImprovedBottomLeftEncoding2)(instance)
-        objective = BinCountAndLowestSkyline(instance)
+        objective = BinCountAndLastSkyline(instance)
         op0 = Op0ShuffleAndFlip(search_space)
         x = search_space.create()
         op0.op0(random, x)
