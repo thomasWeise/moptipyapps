@@ -5,8 +5,8 @@ Codes for the two-dimensional bin packing problem.
   two-dimensional bin packing problems.
   The instance data comprises the object sizes and multiplicities as well as
   the bin sizes.
-  Several default instances from \
-[2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib)
+  Several default instances from 2DPackLib
+  (https://site.unibo.it/operations-research/en/research/2dpacklib)
   can be loaded from resources.
 - :mod:`~moptipyapps.binpacking2d.packing` can store a packing, i.e., an
   assignment of objects to coordinates and bins.

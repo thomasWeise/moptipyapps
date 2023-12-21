@@ -61,14 +61,12 @@ The additional dependencies for a [full `make` build](https://thomasweise.github
 
 
 ## 3. Applications
-
 Here we list the applications of [`moptipy`](https://thomasweise.github.io/moptipy).
 Step by step, we will add more and more interesting optimization problems.
 For each problem, we provide means to load the problem instances and a basic infrastructure to construct optimization algorithms for solving them.
 
 
 ### 3.1. Two-Dimensional Bin Packing Problem
-
 In the package [`moptipyapps.binpacking2d`](https://thomasweise.github.io/moptipyapps/moptipyapps.binpacking2d.html#module-moptipyapps.binpacking2d), we provide tools for experimenting and playing around with the two-dimensional bin packing problem.
 Bin packing is a classical domain from Operations Research.
 The goal is to pack objects into containers, the so-called bins.
@@ -101,7 +99,6 @@ Important work on this code has been contributed by Mr. Rui ZHAO (赵睿), <zr13
 
 
 ### 3.2. The Traveling Salesperson Problem (TSP)
-
 In the package [`moptipyapps.tsp`](https://thomasweise.github.io/moptipyapps/moptipyapps.tsp.html#module-moptipyapps.tsp), we provide tools to run experiments and play around with the Traveling Salesperson Problem (TSP) .
 A TSP instance is defined as a fully-connected graph with `n_cities` nodes.
 Each edge in  the graph has a weight, which identifies the distance between the nodes.
@@ -126,7 +123,6 @@ The Traveling Tournament Problem ([TTP](#34-the-traveling-tournament-problem-ttp
 
 
 ### 3.3. Dynamic Controller Synthesis
-
 Another interesting example for optimization is the synthesis of [active controllers for dynamic systems](https://thomasweise.github.io/moptipyapps/moptipyapps.dynamic_control.html).
 Dynamic systems have a state that changes over time based on some laws.
 These laws may be expressed as ordinary differential equations, for example.
@@ -170,6 +166,7 @@ The goal is to find a feasible game schedule where the overall travel distances 
 
 *Examples:*
 - [apply a local search to find a feasible TTP plan](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_rls_rs.html)
+- [tackle the TTP in a multi-objective manner](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_mo.html)
 
 
 ### 3.5. The Quadratic Assignment Problem (QAP)
@@ -189,6 +186,7 @@ To this end, solutions can be represented as permutations of facilities determin
 
 *Examples:*
 - See [one-dimensional ordering](#36-one-dimensional-ordering)
+- [run a QAP experiment with RLS and random sampling](https://thomasweise.github.io/moptipyapps/examples/qap_example_experiment_rls_rs.html)
 
 
 ### 3.6. One-Dimensional Ordering
@@ -230,7 +228,6 @@ Because we mainly do this for visualization purposes anyway.
 
 
 ## 4. Unit Tests and Static Analysis
-
 When developing and applying randomized algorithms, proper testing and checking of the source code is of utmost importance.
 If we apply a randomized metaheuristic to an optimization problem, then we usually do not which solution quality we can achieve.
 Therefore, we can usually not know whether we have implemented the algorithm correctly.
@@ -305,7 +302,6 @@ The build only works under Linux.
 
 
 ## 5. License
-
 [`moptipyapps`](https://thomasweise.github.io/moptipyapps) is a library for implementing, using, and experimenting with metaheuristic optimization algorithms.
 Our project is developed for scientific, educational, and industrial applications.
 
@@ -325,8 +321,7 @@ If you have any concerns regarding security, please visit our [security policy](
 
 
 ### 5.1. Exceptions
-
-- The included benchmark instance data of the [two-dimensional bin packing problem](#31-two-dimensional-bin-packing-problem) is taken from [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib).
+- Most of the included benchmark instance data of the [two-dimensional bin packing problem](#31-two-dimensional-bin-packing-problem) is taken from [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib).
   It has been stored in a more size-efficient way and some unnecessary information has been stripped from it (as we really only need the raw bin packing data).
   Nevertheless, the copyright of the original data lies with the authors [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib) or the original authors of the datasets used by them.
 - The included benchmark instances for the [Traveling Salesperson Problem](#32-the-traveling-salesperson-problem-tsp) are taken from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/).
@@ -339,11 +334,10 @@ If you have any concerns regarding security, please visit our [security policy](
 
 
 ## 6. Contact
-
 If you have any questions or suggestions, please contact
 Prof. Dr. [Thomas Weise](http://iao.hfuu.edu.cn/5) (汤卫思教授) of the 
 Institute of Applied Optimization (应用优化研究所, [IAO](http://iao.hfuu.edu.cn)) of the
 School of Artificial Intelligence and Big Data ([人工智能与大数据学院](http://www.hfuu.edu.cn/aibd/)) at
-[Hefei University](http://www.hfuu.edu.cn/english/) ([合肥学院](http://www.hfuu.edu.cn/)) in
+[Hefei University](http://www.hfuu.edu.cn/english/) ([合肥大学](http://www.hfuu.edu.cn/)) in
 Hefei, Anhui, China (中国安徽省合肥市) via
 email to [tweise@hfuu.edu.cn](mailto:tweise@hfuu.edu.cn) with CC to [tweise@ustc.edu.cn](mailto:tweise@ustc.edu.cn).
