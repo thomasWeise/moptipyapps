@@ -5,6 +5,7 @@ from typing import Callable, Final, Iterable
 import moptipy.utils.plot_defaults as pd
 import moptipy.utils.plot_utils as pu
 from matplotlib.artist import Artist  # type: ignore
+from matplotlib.axes import Axes  # type: ignore
 from matplotlib.figure import Figure  # type: ignore
 from matplotlib.patches import Rectangle  # type: ignore
 from matplotlib.text import Text  # type: ignore
@@ -95,8 +96,10 @@ def plot_packing(packing: Packing | str,
     # initialize the different plots
     bin_width: Final[int] = packing.instance.bin_width
     bin_height: Final[int] = packing.instance.bin_height
+    axes_list: Final[list[Axes]] = []
     for the_axes, _, _, _, _, _ in bin_figures:
         axes = pu.get_axes(the_axes)
+        axes_list.append(axes)
         axes.set_ylim(0, bin_width)  # pylint: disable=E1101
         axes.set_ybound(0, bin_height)  # pylint: disable=E1101
         axes.set_xlim(0, bin_width)  # pylint: disable=E1101
@@ -111,11 +114,10 @@ def plot_packing(packing: Packing | str,
     font_size: Final[float] = importance_to_font_size_func(-1)
 
     # get the transforms needed to obtain text dimensions
-    renderers: Final[list] = [
-        pu.get_renderer(axes) for axes, _, _, _, _, _ in bin_figures]
+    renderers: Final[list] = [pu.get_renderer(axes) for axes in axes_list]
     inverse: Final[list] = [
         axes.transData.inverted()  # type: ignore  # pylint: disable=E1101
-        for axes, _, _, _, _, _ in bin_figures]
+        for axes in axes_list]
 
     z_order: int = 0  # the z-order of all drawing elements
 
@@ -136,7 +138,7 @@ def plot_packing(packing: Packing | str,
         background = colors[item_id - 1]
         foreground = pd.text_color_for_background(colors[item_id - 1])
 
-        axes = pu.get_axes(bin_figures[item_bin - 1][0])
+        axes = axes_list[item_bin - 1]
         rend = renderers[item_bin - 1]
         inv = inverse[item_bin - 1]
 
