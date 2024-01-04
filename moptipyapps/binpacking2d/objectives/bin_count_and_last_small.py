@@ -23,10 +23,9 @@ from typing import Final
 
 import numba  # type: ignore
 import numpy as np
-from moptipy.api.objective import Objective
-from moptipy.utils.types import type_error
 
 from moptipyapps.binpacking2d.instance import Instance
+from moptipyapps.binpacking2d.objectives.bin_count import BinCount, ceil_div
 from moptipyapps.binpacking2d.packing import (
     IDX_BIN,
     IDX_BOTTOM_Y,
@@ -92,7 +91,7 @@ def bin_count_and_last_small(y: np.ndarray, bin_area: int) -> int:
     return (bin_area * (current_bin - 1)) + current_area  # return objective
 
 
-class BinCountAndLastSmall(Objective):
+class BinCountAndLastSmall(BinCount):
     """Compute the number of bins and the area in the last one."""
 
     def __init__(self, instance: Instance) -> None:
@@ -101,11 +100,7 @@ class BinCountAndLastSmall(Objective):
 
         :param instance: the instance to load the bounds from
         """
-        super().__init__()
-        if not isinstance(instance, Instance):
-            raise type_error(instance, "instance", Instance)
-        #: the internal instance reference
-        self.__instance: Final[Instance] = instance
+        super().__init__(instance)
         #: the bin size
         self._bin_size: Final[int] = instance.bin_width * instance.bin_height
 
@@ -117,6 +112,15 @@ class BinCountAndLastSmall(Objective):
         :return: the bin size and last-bin-small-area factor
         """
         return bin_count_and_last_small(x, self._bin_size)
+
+    def to_bin_count(self, z: int) -> int:
+        """
+        Convert an objective value to a bin count.
+
+        :param z: the objective value
+        :return: the bin count
+        """
+        return ceil_div(z, self._bin_size)
 
     def lower_bound(self) -> int:
         """
@@ -167,24 +171,16 @@ class BinCountAndLastSmall(Objective):
         >>> BinCountAndLastSmall(ins).lower_bound()
         525
         """
-        if self.__instance.lower_bound_bins == 1:
-            return self.__instance.total_item_area
+        if self._instance.lower_bound_bins == 1:
+            return self._instance.total_item_area
         smallest_area: int = -1
-        for row in self.__instance:
+        for row in self._instance:
             area: int = int(row[0]) * int(row[1])
             if (smallest_area < 0) or (area < smallest_area):
                 smallest_area = area
-        return int(((self.__instance.lower_bound_bins - 1)
-                    * self.__instance.bin_height
-                    * self.__instance.bin_width) + smallest_area)
-
-    def is_always_integer(self) -> bool:
-        """
-        Return `True` because there are only integer bins.
-
-        :retval True: always
-        """
-        return True
+        return int(((self._instance.lower_bound_bins - 1)
+                    * self._instance.bin_height
+                    * self._instance.bin_width) + smallest_area)
 
     def upper_bound(self) -> int:
         """
@@ -210,8 +206,8 @@ class BinCountAndLastSmall(Objective):
         >>> BinCountAndLastSmall(ins).upper_bound()
         10500
         """
-        return self.__instance.n_items * self.__instance.bin_height \
-            * self.__instance.bin_width
+        return self._instance.n_items * self._instance.bin_height \
+            * self._instance.bin_width
 
     def __str__(self) -> str:
         """

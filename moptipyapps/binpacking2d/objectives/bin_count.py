@@ -15,6 +15,48 @@ from moptipyapps.binpacking2d.packing import IDX_BIN
 BIN_COUNT_NAME: Final[str] = "binCount"
 
 
+def ceil_div(a: int, b: int) -> int:
+    """
+    Compute a ceiling division.
+
+    This function is needed by sub-classes.
+
+    :param a: the number to be divided by `b`
+    :param b: the number dividing `a`
+    :return: the rounded-up result of the division
+
+    >>> ceil_div(1, 1)
+    1
+    >>> ceil_div(98, 98)
+    1
+    >>> ceil_div(98, 99)
+    1
+    >>> ceil_div(98, 97)
+    2
+    >>> ceil_div(3, 1)
+    3
+    >>> ceil_div(3, 2)
+    2
+    >>> ceil_div(3, 3)
+    1
+    >>> ceil_div(3, 4)
+    1
+    >>> ceil_div(4, 1)
+    4
+    >>> ceil_div(4, 2)
+    2
+    >>> ceil_div(4, 3)
+    2
+    >>> ceil_div(4, 4)
+    1
+    >>> ceil_div(4, 5)
+    1
+    >>> ceil_div(4, 23242398)
+    1
+    """
+    return -((-a) // b)
+
+
 class BinCount(Objective):
     """Compute the number of bins."""
 
@@ -28,7 +70,7 @@ class BinCount(Objective):
         if not isinstance(instance, Instance):
             raise type_error(instance, "instance", Instance)
         #: the internal instance reference
-        self.__instance: Final[Instance] = instance
+        self._instance: Final[Instance] = instance
 
     def evaluate(self, x) -> int:
         """
@@ -65,7 +107,7 @@ lower_bound_bins`
         >>> BinCount(ins).lower_bound()
         4
         """
-        return self.__instance.lower_bound_bins
+        return self._instance.lower_bound_bins
 
     def is_always_integer(self) -> bool:
         """
@@ -100,7 +142,16 @@ lower_bound_bins`
         >>> BinCount(ins).upper_bound()
         31
         """
-        return self.__instance.n_items
+        return self._instance.n_items
+
+    def to_bin_count(self, z: int) -> int:
+        """
+        Get the bin count corresponding to an objective value.
+
+        :param z:
+        :return: the value itself
+        """
+        return z
 
     def __str__(self) -> str:
         """

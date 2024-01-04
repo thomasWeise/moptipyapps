@@ -129,13 +129,13 @@ _OBJECTIVE_LOWER: Final[str] = ".lowerBound"
 #: the upper bound of an objective
 _OBJECTIVE_UPPER: Final[str] = ".upperBound"
 #: the start string for bin bounds
-_BINS_START: Final[str] = f"bins{_OBJECTIVE_LOWER}"
+LOWER_BOUNDS_BIN_COUNT: Final[str] = f"bins{_OBJECTIVE_LOWER}"
 #: the default bounds
 _DEFAULT_BOUNDS: Final[Mapping[str, Callable[[Instance], int]]] = \
     immutable_mapping({
-        _BINS_START: lambda i: i.lower_bound_bins,
-        f"{_BINS_START}.geometric": __lb_geometric,
-        f"{_BINS_START}.damv": lambda i: _lower_bound_damv(
+        LOWER_BOUNDS_BIN_COUNT: lambda i: i.lower_bound_bins,
+        f"{LOWER_BOUNDS_BIN_COUNT}.geometric": __lb_geometric,
+        f"{LOWER_BOUNDS_BIN_COUNT}.damv": lambda i: _lower_bound_damv(
             i.bin_width, i.bin_height, i),
     })
 
@@ -322,13 +322,33 @@ class PackingResult(EvaluationDataElement):
                    immutable_mapping(obounds))
         if cache is not None:
             cache[instance.name] = row
+
+        objective_values: dict[str, int | float] = {}
+        bin_count: int = -1
+        bin_count_obj: str = ""
+        for objf in row[1]:
+            z: int | float = objf.evaluate(packing)
+            objfn: str = str(objf)
+            objective_values[objfn] = z
+            if not isinstance(z, int):
+                continue
+            if not isinstance(objf, BinCount):
+                continue
+            bc: int = objf.to_bin_count(z)
+            if bin_count == -1:
+                bin_count = bc
+                bin_count_obj = objfn
+            elif bin_count != bc:
+                raise ValueError(
+                    f"found bin count disagreement: {bin_count} of "
+                    f"{bin_count_obj!r} != {bc} of {objf!r}")
+
         return PackingResult(
             end_result=end_result,
             n_items=instance.n_items,
             n_different_items=instance.n_different_items,
             bin_width=instance.bin_width, bin_height=instance.bin_height,
-            objectives={str(objf): cast(Objective, objf).evaluate(packing)
-                        for objf in row[1]},
+            objectives=objective_values,
             objective_bounds=row[2],
             bin_bounds=row[0])
 
@@ -562,7 +582,7 @@ class PackingResult(EvaluationDataElement):
                     idx_max_fes = i
                 elif cell == KEY_MAX_TIME_MILLIS:
                     idx_max_ms = i
-                elif cell.startswith(_BINS_START):
+                elif cell.startswith(LOWER_BOUNDS_BIN_COUNT):
                     idx_bounds[cell] = i
                 elif cell.endswith((_OBJECTIVE_LOWER, _OBJECTIVE_UPPER)):
                     idx_objective_bounds[cell] = i

@@ -13,6 +13,7 @@ from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
+from moptipyapps.binpacking2d.objectives.bin_count import BinCount
 from moptipyapps.binpacking2d.objectives.bin_count_and_last_empty import (
     BinCountAndLastEmpty,
 )
@@ -45,6 +46,12 @@ def __check_for_instance(inst: Instance, random: rnd.Generator) -> None:
         return y
 
     validate_objective(objective, solution_space, __make_valid)
+
+    f1: BinCount = BinCount(inst)
+    for _ in range(10):
+        pa = __make_valid(random, Packing(inst))
+        assert f1.evaluate(pa) == objective.to_bin_count(
+            objective.evaluate(pa))
 
 
 def test_bin_count_and_last_empty_objective() -> None:

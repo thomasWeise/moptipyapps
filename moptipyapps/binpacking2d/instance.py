@@ -114,7 +114,8 @@ dtype('int16')
 
 from importlib import resources  # nosem
 from os.path import basename
-from typing import Final, cast
+from statistics import quantiles
+from typing import Final, Iterable, cast
 
 import moptipy.utils.nputils as npu
 import numpy as np
@@ -146,7 +147,7 @@ IDX_HEIGHT: Final[int] = 1
 #: the index of the repetitions element in an item of an instance
 IDX_REPETITION: Final[int] = 2
 
-#: the the list of instance names of the 2DPackLib bin packing set downloaded
+#: the list of instance names of the 2DPackLib bin packing set downloaded
 #: from https://site.unibo.it/operations-research/en/research/2dpacklib
 #: ('a*','beng*', 'cl*') as well as the four non-trivial 'Almost Squares in
 #: Almost Squares' instances ('asqas*').
@@ -258,6 +259,109 @@ _INSTANCES: Final[tuple[str, ...]] = (
     "cl10_080_09", "cl10_080_10", "cl10_100_01", "cl10_100_02", "cl10_100_03",
     "cl10_100_04", "cl10_100_05", "cl10_100_06", "cl10_100_07", "cl10_100_08",
     "cl10_100_09", "cl10_100_10")
+
+
+def __divide_based_on_size(instances: Iterable[str],
+                           divisions: int) -> list[list[str]]:
+    """
+    Divide the instances based on their size.
+
+    :param instances: the instances
+    :param divisions: the number of divisions
+    :return: the divided instances
+    """
+    insts: list[str] = list(instances)
+    if len(insts) <= 0:
+        return [insts]
+
+    try:
+        loaded: list[Instance] = [Instance.from_resource(n) for n in insts]
+    except (OSError, ValueError):
+        return [insts]
+
+    # get the quantiles = group divisions
+    qants: list[float | int] = quantiles((
+        inst.n_items for inst in loaded), n=divisions, method="inclusive")
+
+    # now put the instances into the groups
+    groups: list[list[str]] = []
+    for inst in loaded:
+        inst_size = inst.n_items
+        idx: int = 0
+        for q in qants:
+            if q > inst_size:
+                break
+            idx += 1
+        while idx >= len(groups):
+            groups.append([])
+        groups[idx].append(str(inst))
+
+    # remove useless groups
+    for idx in range(len(groups) - 1, -1, -1):
+        if len(groups[idx]) <= 0:
+            del groups[idx]
+    return groups
+
+
+def _make_instance_groups(instances: Iterable[str]) \
+        -> tuple[tuple[str, str | None, tuple[str, ...]], ...]:
+    """
+    Make the standard instance groups from an instance name list.
+
+    :return: the instance groups
+    """
+    groups: list[tuple[str, str | None, tuple[str, ...]]] = []
+
+    a_divided: list[list[str]] = __divide_based_on_size(sorted(
+        b for b in instances if b.startswith("a")
+        and (len(b) == 3) and b[-1].isdigit()
+        and b[-2].isdigit()), 3)
+    if len(a_divided) > 0:
+        subnames: list[str | None] = [None] if (len(a_divided) <= 1) else (
+            ["small", "large"] if (len(a_divided) <= 2) else
+            ["small", "med", "large"])
+        for a_idx, a_group in enumerate(a_divided):
+            v: tuple[str, str | None, tuple[str, ...]] = (
+                "a", subnames[a_idx], tuple(a_group))
+            if len(v[2]) > 0:
+                groups.append(v)
+
+    v = ("beng", "1-8", tuple(sorted(
+        b for b in instances if b.startswith("beng")
+        and (int(b[-2:]) < 9))))
+    if len(v[2]) > 0:
+        groups.append(v)
+
+    v = ("beng", "9-10", tuple(sorted(
+        b for b in instances if b.startswith("beng")
+        and (int(b[-2:]) >= 9))))
+    if len(v[2]) > 0:
+        groups.append(v)
+
+    for i in range(1, 11):
+        name: str = f"class {i}"
+        preprefix: str = f"cl0{i}" if i < 10 else f"cl{i}"
+        for n in (20, 40, 60, 80, 100):
+            prefix: str = f"{preprefix}_0{n}_" \
+                if n < 100 else f"{preprefix}_{n}_"
+            v = (name, str(n), tuple(sorted(
+                b for b in _INSTANCES if b.startswith(prefix))))
+            if len(v[2]) > 0:
+                groups.append(v)
+
+    v = ("asqas", None, tuple(sorted(
+        b for b in _INSTANCES if b.startswith("asqas"))))
+    if len(v[2]) > 0:
+        groups.append(v)
+
+    all_set: set[str] = set()
+    for g in groups:
+        all_set.update(g[2])
+    inst_set: set[str] = set(instances)
+    if all_set != inst_set:
+        raise ValueError(f"group instances is {all_set!r} but "
+                         f"instance set is {inst_set!r}!")
+    return tuple(groups)
 
 
 def __cutsq(matrix: np.ndarray) -> list[int]:
@@ -713,6 +817,65 @@ class Instance(Component, np.ndarray):
         557
         """
         return _INSTANCES
+
+    @staticmethod
+    def list_resources_groups() -> tuple[tuple[
+            str, str | None, tuple[str, ...]], ...]:
+        """
+        List the instance groups in the resources.
+
+        One problem of the benchmark set for 2-dimensional bin packing is that
+        it has many instances:
+
+        >>> len(Instance.list_resources())
+        557
+
+        With this function, we can group several of these instances together
+        in a way that is compliant with literature in order to then compute
+        statistics over these groups. Presenting data gathered over...
+
+        >>> len(Instance.list_resources_groups())
+        56
+
+        ...groups is much easier than dealing with over 500 instances.
+
+        :return: the instance groups, in a two level hierarchy. The result is
+            a sequence of tuples. Each tuple has the top-level group name and,
+            optionally, a second-level group name (or `None` if no second
+            level group exists). The third tuple element is a sequence of
+            instance names.
+
+        >>> [(v[0], v[1], len(v[2])) for v in
+        ...     Instance.list_resources_groups()]
+        [('a', 'small', 14), ('a', 'med', 14), ('a', 'large', 15), \
+('beng', '1-8', 8), ('beng', '9-10', 2), ('class 1', '20', 10), \
+('class 1', '40', 10), ('class 1', '60', 10), ('class 1', '80', 10), \
+('class 1', '100', 10), ('class 2', '20', 10), ('class 2', '40', 10), \
+('class 2', '60', 10), ('class 2', '80', 10), ('class 2', '100', 10), \
+('class 3', '20', 10), ('class 3', '40', 10), ('class 3', '60', 10), \
+('class 3', '80', 10), ('class 3', '100', 10), ('class 4', '20', 10), \
+('class 4', '40', 10), ('class 4', '60', 10), ('class 4', '80', 10), \
+('class 4', '100', 10), ('class 5', '20', 10), ('class 5', '40', 10), \
+('class 5', '60', 10), ('class 5', '80', 10), ('class 5', '100', 10), \
+('class 6', '20', 10), ('class 6', '40', 10), ('class 6', '60', 10), \
+('class 6', '80', 10), ('class 6', '100', 10), ('class 7', '20', 10), \
+('class 7', '40', 10), ('class 7', '60', 10), ('class 7', '80', 10), \
+('class 7', '100', 10), ('class 8', '20', 10), ('class 8', '40', 10), \
+('class 8', '60', 10), ('class 8', '80', 10), ('class 8', '100', 10), \
+('class 9', '20', 10), ('class 9', '40', 10), ('class 9', '60', 10), \
+('class 9', '80', 10), ('class 9', '100', 10), ('class 10', '20', 10), \
+('class 10', '40', 10), ('class 10', '60', 10), ('class 10', '80', 10), \
+('class 10', '100', 10), ('asqas', None, 4)]
+        """
+        obj: object = Instance.list_resources_groups
+        attr: str = "__gs"
+        if not hasattr(obj, attr):
+            gs: tuple[tuple[str, str | None, tuple[str, ...]], ...] =\
+                _make_instance_groups(Instance.list_resources())
+            setattr(obj, attr, gs)
+            return gs
+        return cast(tuple[tuple[str, str | None, tuple[str, ...]], ...],
+                    getattr(obj, attr))
 
     @staticmethod
     def from_resource(name: str) -> "Instance":

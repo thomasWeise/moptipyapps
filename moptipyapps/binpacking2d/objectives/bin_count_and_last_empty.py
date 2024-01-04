@@ -20,10 +20,8 @@ from typing import Final
 
 import numba  # type: ignore
 import numpy as np
-from moptipy.api.objective import Objective
-from moptipy.utils.types import type_error
 
-from moptipyapps.binpacking2d.instance import Instance
+from moptipyapps.binpacking2d.objectives.bin_count import BinCount, ceil_div
 from moptipyapps.binpacking2d.packing import IDX_BIN
 
 
@@ -69,20 +67,8 @@ def bin_count_and_last_empty(y: np.ndarray) -> int:
     return (n_items * (current_bin - 1)) + current_size  # return objective
 
 
-class BinCountAndLastEmpty(Objective):
+class BinCountAndLastEmpty(BinCount):
     """Compute the number of bins and the emptiness of the last one."""
-
-    def __init__(self, instance: Instance) -> None:
-        """
-        Initialize the objective function.
-
-        :param instance: the instance to load the bounds from
-        """
-        super().__init__()
-        if not isinstance(instance, Instance):
-            raise type_error(instance, "instance", Instance)
-        #: the internal instance reference
-        self.__instance: Final[Instance] = instance
 
     def evaluate(self, x) -> int:
         """
@@ -114,6 +100,7 @@ class BinCountAndLastEmpty(Objective):
 
         :return: `max(n_items, (lb - 1) * n_items + 1)`
 
+        >>> from moptipyapps.binpacking2d.instance import Instance
         >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])
         >>> ins.n_items
         3
@@ -138,17 +125,9 @@ class BinCountAndLastEmpty(Objective):
         >>> BinCountAndLastEmpty(ins).lower_bound()
         94
         """
-        return max(self.__instance.n_items,
-                   ((self.__instance.lower_bound_bins - 1)
-                    * self.__instance.n_items) + 1)
-
-    def is_always_integer(self) -> bool:
-        """
-        Return `True` because there are only integer bins.
-
-        :retval True: always
-        """
-        return True
+        return max(self._instance.n_items,
+                   ((self._instance.lower_bound_bins - 1)
+                    * self._instance.n_items) + 1)
 
     def upper_bound(self) -> int:
         """
@@ -156,6 +135,7 @@ class BinCountAndLastEmpty(Objective):
 
         :return: the number of items in the instance to the square
 
+        >>> from moptipyapps.binpacking2d.instance import Instance
         >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])
         >>> ins.n_items
         3
@@ -174,7 +154,16 @@ class BinCountAndLastEmpty(Objective):
         >>> BinCountAndLastEmpty(ins).upper_bound()
         961
         """
-        return self.__instance.n_items * self.__instance.n_items
+        return self._instance.n_items * self._instance.n_items
+
+    def to_bin_count(self, z: int) -> int:
+        """
+        Convert an objective value to a bin count.
+
+        :param z: the objective value
+        :return: the bin count
+        """
+        return ceil_div(z, self._instance.n_items)
 
     def __str__(self) -> str:
         """

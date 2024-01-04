@@ -13,6 +13,7 @@ from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
 )
 from moptipyapps.binpacking2d.instance import Instance
+from moptipyapps.binpacking2d.objectives.bin_count import BinCount
 from moptipyapps.binpacking2d.objectives.bin_count_and_small import (
     BinCountAndSmall,
 )
@@ -46,9 +47,15 @@ def __check_for_instance(inst: Instance, random: rnd.Generator) -> None:
 
     validate_objective(objective, solution_space, __make_valid)
 
+    f1: BinCount = BinCount(inst)
+    for _ in range(10):
+        pa = __make_valid(random, Packing(inst))
+        assert f1.evaluate(pa) == objective.to_bin_count(
+            objective.evaluate(pa))
+
 
 def test_bin_count_and_small_objective() -> None:
-    """Test the -bin-small-area objective function."""
+    """Test the bin-count-and--small-area objective function."""
     random: rnd.Generator = rnd.default_rng()
 
     choices = list(Instance.list_resources())
@@ -64,7 +71,7 @@ def test_bin_count_and_small_objective() -> None:
 
 
 def test_bin_count_and_small_objective_2() -> None:
-    """Test the bin-small-area objective function."""
+    """Test the bin-count-and--small-area function."""
     random: rnd.Generator = rnd.default_rng()
     for inst in Instance.list_resources():
         if not inst.startswith(("a", "b")):
