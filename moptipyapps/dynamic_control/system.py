@@ -23,8 +23,8 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import array_to_str
-from moptipy.utils.path import Path
-from moptipy.utils.types import check_int_range, type_error
+from pycommons.io.path import Path
+from pycommons.types import check_int_range, type_error
 
 from moptipyapps.dynamic_control.ode import multi_run_ode
 from moptipyapps.dynamic_control.results_log import ResultsLog
@@ -210,7 +210,7 @@ class System(Component):
         :return: the plotted file
         """
         name: Final[str] = f"{self.name}_points"
-        dest_folder: Final[Path] = Path.path(dest_dir)
+        dest_folder: Final[Path] = Path(dest_dir)
         dest_folder.ensure_dir_exists()
         dest_file: Final[Path] = dest_folder.resolve_inside(f"{name}.pdf")
         if dest_file.ensure_file_exists() and skip_if_exists:
@@ -314,7 +314,7 @@ class System(Component):
         :param skip_if_exists: if the file already exists
         :returns: the paths of the generated files
         """
-        dest: Final[Path] = Path.path(dest_dir)
+        dest: Final[Path] = Path(dest_dir)
         dest.ensure_dir_exists()
 
         the_title = f"{self.name} system"

@@ -37,14 +37,14 @@ from moptipy.evaluation.statistics import (
     EMPTY_CSV_ROW,
     Statistics,
 )
-from moptipy.utils.console import logger
-from moptipy.utils.help import argparser
 from moptipy.utils.logger import CSV_SEPARATOR
-from moptipy.utils.path import Path
 from moptipy.utils.strings import (
     num_to_str,
 )
-from moptipy.utils.types import check_int_range, immutable_mapping, type_error
+from pycommons.ds.immutable_map import immutable_mapping
+from pycommons.io.console import logger
+from pycommons.io.path import Path
+from pycommons.types import check_int_range, type_error
 
 from moptipyapps.binpacking2d.objectives.bin_count import BIN_COUNT_NAME
 from moptipyapps.binpacking2d.packing_result import (
@@ -56,6 +56,7 @@ from moptipyapps.binpacking2d.packing_result import (
     KEY_N_ITEMS,
     PackingResult,
 )
+from moptipyapps.shared import moptipyapps_argparser
 
 
 @dataclass(frozen=True, init=False, order=False, eq=False)
@@ -304,9 +305,9 @@ class PackingStatistics(EvaluationDataElement):
         :param file: the path
         :return: the path of the file that was written
         """
-        path: Final[Path] = Path.path(file)
+        path: Final[Path] = Path(file)
         logger(f"Writing packing results to CSV file {path!r}.")
-        Path.path(os.path.dirname(path)).ensure_dir_exists()
+        Path(os.path.dirname(path)).ensure_dir_exists()
 
         # get a nicely sorted view on the statistics
         use_stats = sorted(results)
@@ -615,7 +616,7 @@ class PackingStatistics(EvaluationDataElement):
 
 # Run packing-results to stat file if executed as script
 if __name__ == "__main__":
-    parser: Final[argparse.ArgumentParser] = argparser(
+    parser: Final[argparse.ArgumentParser] = moptipyapps_argparser(
         __file__, "Build an end-results statistics CSV file.",
         "This program computes statistics over packing results")
     def_src: str = "./evaluation/end_results.txt"
@@ -624,9 +625,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "source", nargs="?", default=def_src,
         help="either the directory with moptipy log files or the path to the "
-             "end-results CSV file", type=Path.path)
+             "end-results CSV file", type=Path)
     parser.add_argument(
-        "dest", type=Path.path, nargs="?",
+        "dest", type=Path, nargs="?",
         default="./evaluation/end_statistics.txt",
         help="the path to the end results statistics CSV file to be created")
     args: Final[argparse.Namespace] = parser.parse_args()

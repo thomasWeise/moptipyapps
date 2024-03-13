@@ -5,8 +5,8 @@ from typing import Callable, Final, cast
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
 from moptipy.evaluation.end_results import EndResult
-from moptipy.utils.temp import TempDir
 from numpy.random import Generator, default_rng
+from pycommons.io.temp import temp_dir
 
 from moptipyapps.dynamic_control.experiment_surrogate import (
     base_setup,
@@ -76,7 +76,7 @@ def test_experiment_surrogate(random: Generator = default_rng()) -> None:
     insts: list[Callable[[], SystemModel]] = list(__make_instances(random))
     insts = [insts[random.integers(len(insts))]]
 
-    with TempDir.create() as use_dir:
+    with temp_dir() as use_dir:
         er.clear()
         run_experiment(base_dir=use_dir,
                        instances=insts,

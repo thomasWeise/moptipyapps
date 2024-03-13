@@ -20,8 +20,7 @@ from moptipy.algorithms.so.vector.cmaes_lib import BiPopCMAES
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import Parallelism, run_experiment
 from moptipy.api.process import Process
-from moptipy.utils.help import argparser
-from moptipy.utils.path import Path
+from pycommons.io.path import Path, directory_path
 
 from moptipyapps.dynamic_control.controllers.ann import anns
 from moptipyapps.dynamic_control.controllers.cubic import cubic
@@ -37,6 +36,7 @@ from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.objective import FigureOfMeritLE
 from moptipyapps.dynamic_control.systems.lorenz import LORENZ_111
 from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_111
+from moptipyapps.shared import moptipyapps_argparser
 
 
 def make_instances() -> Iterable[Callable[[], Instance]]:
@@ -92,7 +92,7 @@ def on_completion(instance: Any, log_file: Path, process: Process) -> None:
     :param process: the process
     """
     inst: Final[Instance] = cast(Instance, instance)
-    dest_dir: Final[Path] = Path.directory(dirname(log_file))
+    dest_dir: Final[Path] = directory_path(dirname(log_file))
     base_name: str = basename(log_file)
     base_name = base_name[:base_name.rindex(".")]
     result: np.ndarray = cast(np.ndarray, process.create())
@@ -108,7 +108,7 @@ def run(base_dir: str, n_runs: int = 5) -> None:
     :param base_dir: the base directory
     :param n_runs: the number of runs
     """
-    use_dir: Final[Path] = Path.path(base_dir)
+    use_dir: Final[Path] = Path(base_dir)
     use_dir.ensure_dir_exists()
     instances: Final[Iterable[Callable[[], Instance]]] = make_instances()
     for maker in instances:
@@ -129,10 +129,10 @@ def run(base_dir: str, n_runs: int = 5) -> None:
 
 # Run the experiment from the command line
 if __name__ == "__main__":
-    parser: Final[argparse.ArgumentParser] = argparser(
+    parser: Final[argparse.ArgumentParser] = moptipyapps_argparser(
         __file__, "Dynamic Control", "Run the dynamic control experiment.")
     parser.add_argument(
         "dest", help="the directory to store the experimental results under",
-        type=Path.path, nargs="?", default="./results/")
+        type=Path, nargs="?", default="./results/")
     args: Final[argparse.Namespace] = parser.parse_args()
     run(args.dest)

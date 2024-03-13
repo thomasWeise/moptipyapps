@@ -7,7 +7,7 @@ from typing import Any, Callable, cast
 import numpy as np
 import psutil
 from moptipy.utils.nputils import rand_generator
-from moptipy.utils.types import type_name
+from pycommons.types import type_name
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,

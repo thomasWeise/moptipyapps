@@ -25,7 +25,7 @@ from typing import Final
 
 import numba  # type: ignore
 import numpy as np
-from moptipy.utils.types import check_int_range
+from pycommons.types import check_int_range
 
 from moptipyapps.dynamic_control.starting_points import (
     make_interesting_starting_points,

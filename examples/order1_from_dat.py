@@ -62,18 +62,18 @@ from moptipy.algorithms.so.rls import RLS
 from moptipy.api.execution import Execution
 from moptipy.operators.permutations.op0_shuffle import Op0Shuffle
 from moptipy.operators.permutations.op1_swap2 import Op1Swap2
-from moptipy.utils.console import logger
-from moptipy.utils.help import argparser
 from moptipy.utils.nputils import rand_seeds_from_str
-from moptipy.utils.path import Path
 from moptipy.utils.plot_defaults import distinct_colors, distinct_markers
 from moptipy.utils.plot_utils import create_figure, get_axes, save_figure
-from moptipy.utils.types import check_to_int_range
+from pycommons.io.console import logger
+from pycommons.io.path import Path, directory_path
+from pycommons.types import check_to_int_range
 
 from moptipyapps.order1d.distances import swap_distance
 from moptipyapps.order1d.instance import Instance
 from moptipyapps.order1d.space import OrderingSpace
 from moptipyapps.qap.objective import QAPObjective
+from moptipyapps.shared import moptipyapps_argparser
 
 #: the impact of rank differences
 POWER: Final[float] = 2.0
@@ -100,7 +100,7 @@ def parse_data(path: str, collector: Callable[[
     :param fitness_limit: the minimum acceptable fitness
     :param pattern: the file name pattern
     """
-    the_path: Final[Path] = Path.path(path)
+    the_path: Final[Path] = Path(path)
     if isdir(the_path):  # recursively parse directories
         logger(f"recursing into directory '{the_path}'.")
         for subpath in listdir(the_path):
@@ -191,7 +191,7 @@ def run(source: str, dest: str, max_fes: int, fitness_limit: int,
     del data  # free the now useless data
 
     # run the algorithm
-    dest_file: Final[Path] = Path.path(f"{dest}.txt")
+    dest_file: Final[Path] = Path(f"{dest}.txt")
     logger(f"finished constructing matrix with {instance.n} rows, "
            "now doing optimization for "
            f"{max_fes} FEs and, afterwards, writing result to '{dest_file}'.")
@@ -211,7 +211,7 @@ def run(source: str, dest: str, max_fes: int, fitness_limit: int,
 
     files: Final[list[str]] = sorted({f[0][0] for f in instance.tags})
     logger(f"now we begin plotting the data from {len(files)} files.")
-    dest_dir: Final[Path] = Path.directory(dirname(dest_file))
+    dest_dir: Final[Path] = directory_path(dirname(dest_file))
     figure: Final[Figure] = create_figure()
     colors: Final[tuple[tuple[float, float, float], ...]] \
         = distinct_colors(len(files))
@@ -231,15 +231,15 @@ def run(source: str, dest: str, max_fes: int, fitness_limit: int,
 
 # Perform the optimization
 if __name__ == "__main__":
-    parser: Final[argparse.ArgumentParser] = argparser(
+    parser: Final[argparse.ArgumentParser] = moptipyapps_argparser(
         __file__, "One-Dimensional Ordering of Permutations",
         "Run the one-dimensional order of permutations experiment.")
     parser.add_argument(
         "source", help="the directory or file with the input data",
-        type=Path.path, nargs="?", default="./")
+        type=Path, nargs="?", default="./")
     parser.add_argument(
         "dest", help="the file to write the output to",
-        type=Path.path, nargs="?", default="./result.txt")
+        type=Path, nargs="?", default="./result.txt")
     parser.add_argument("fitnessLimit", help="the minimum acceptable fitness",
                         type=int, nargs="?", default=1_000_000_000)
     parser.add_argument("maxFEs", help="the maximum FEs to perform",

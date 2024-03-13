@@ -1,6 +1,6 @@
 """Test that downloading and making the instances is consistent."""
 
-from moptipy.utils.temp import TempFile
+from pycommons.io.temp import temp_file
 
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.make_instances import (
@@ -12,10 +12,10 @@ def test_make_instances() -> None:
     """Test that the instance resource is the same as the current download."""
     insts = list(Instance.list_resources())
 
-    with TempFile.create() as tf:
+    with temp_file() as tf:
         assert len(list(make_2dpacklib_resource(dest_file=tf)[1])) \
                == len(insts)
-        for i, row in enumerate(tf.read_all_list()):
+        for i, row in enumerate(str.splitlines(tf.read_all_str())):
             i1 = Instance.from_compact_str(row)
             i2 = Instance.from_resource(insts[i])
             assert i1.name == i2.name

@@ -6,8 +6,8 @@ from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
 from moptipy.evaluation.end_results import EndResult
 from moptipy.utils.nputils import rand_seeds_from_str
-from moptipy.utils.temp import TempDir
 from numpy.random import Generator, default_rng
+from pycommons.io.temp import temp_dir
 
 from moptipyapps.dynamic_control.experiment_raw import cmaes, make_instances
 from moptipyapps.dynamic_control.instance import Instance
@@ -63,7 +63,7 @@ def test_experiment_raw(random: Generator = default_rng()) -> None:
     insts: list[Callable[[], Instance]] = __make_instances()
     insts = [insts[random.integers(len(insts))]]
 
-    with TempDir.create() as use_dir:
+    with temp_dir() as use_dir:
         er.clear()
         run_experiment(base_dir=use_dir,
                        instances=insts,

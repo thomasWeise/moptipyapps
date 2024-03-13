@@ -6,7 +6,7 @@ This function returns the number of bins.
 from typing import Final
 
 from moptipy.api.objective import Objective
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing import IDX_BIN

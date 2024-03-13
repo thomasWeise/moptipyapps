@@ -21,7 +21,7 @@ instances of :class:`~moptipyapps.dynamic_control.controller.Controller`.
 from typing import Callable, Final, Iterable, cast
 
 import numpy as np
-from moptipy.utils.types import check_int_range, type_error
+from pycommons.types import check_int_range, type_error
 
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.controllers.codegen import CodeGenerator

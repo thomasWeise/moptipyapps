@@ -6,8 +6,8 @@ from typing import Final
 import numpy as np
 from moptipy.spaces.permutations import Permutations
 from moptipy.utils.nputils import int_range_to_dtype
-from moptipy.utils.types import type_error
 from numpy.random import Generator, default_rng
+from pycommons.types import type_error
 
 from moptipyapps.ttp.game_encoding import (
     map_games,

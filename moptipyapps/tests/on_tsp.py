@@ -8,8 +8,8 @@ from moptipy.api.objective import Objective
 from moptipy.spaces.permutations import Permutations
 from moptipy.tests.algorithm import validate_algorithm
 from moptipy.tests.objective import validate_objective
-from moptipy.utils.types import type_error
 from numpy.random import Generator, default_rng
+from pycommons.types import type_error
 
 from moptipyapps.tsp.instance import Instance
 from moptipyapps.tsp.tour_length import TourLength

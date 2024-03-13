@@ -48,7 +48,7 @@ from moptipy.utils.nputils import (
     is_np_int,
 )
 from moptipy.utils.strings import sanitize_name
-from moptipy.utils.types import check_int_range, check_to_int_range, type_error
+from pycommons.types import check_int_range, check_to_int_range, type_error
 
 from moptipyapps.qap.qaplib import open_resource_stream
 

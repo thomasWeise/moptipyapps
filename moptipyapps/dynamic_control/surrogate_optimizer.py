@@ -99,9 +99,9 @@ from moptipy.operators.vectors.op0_uniform import Op0Uniform
 from moptipy.spaces.vectorspace import VectorSpace
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import rand_seed_generate
-from moptipy.utils.path import Path
-from moptipy.utils.types import check_int_range, type_error
 from numpy.random import Generator
+from pycommons.io.path import Path
+from pycommons.types import check_int_range, type_error
 
 from moptipyapps.dynamic_control.model_objective import ModelObjective
 from moptipyapps.dynamic_control.objective import FigureOfMerit
@@ -335,7 +335,7 @@ objective.FigureOfMerit.set_model`. We then train a completely new controller
         controllers_dir: Path | None = None
         controllers_name: str | None = None
         if log_dir_name is not None:
-            log_dir: Final[Path] = Path.path(log_dir_name)
+            log_dir: Final[Path] = Path(log_dir_name)
             log_dir.ensure_dir_exists()
             prefix: str = "modelTraining"
             model_training_dir = log_dir.resolve_inside(prefix)

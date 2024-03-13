@@ -11,7 +11,7 @@ from moptipy.utils.strings import (
     num_to_str_for_name,
     sanitize_name,
 )
-from moptipy.utils.types import check_int_range, type_error
+from pycommons.types import check_int_range, type_error
 from scipy.stats import rankdata  # type: ignore
 
 from moptipyapps.qap.instance import Instance as QAPInstance

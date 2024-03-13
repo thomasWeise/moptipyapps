@@ -38,7 +38,7 @@ from typing import Final
 import numpy as np
 from moptipy.api.component import Component
 from moptipy.utils.logger import CSV_SEPARATOR
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.ttp.instance import Instance
 

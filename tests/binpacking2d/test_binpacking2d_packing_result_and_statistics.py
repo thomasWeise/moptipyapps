@@ -14,8 +14,8 @@ from moptipy.operators.signed_permutations.op1_swap_2_or_flip import (
     Op1Swap2OrFlip,
 )
 from moptipy.spaces.signed_permutations import SignedPermutations
-from moptipy.utils.temp import TempDir, TempFile
 from numpy.random import Generator, default_rng
+from pycommons.io.temp import temp_dir, temp_file
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
@@ -89,7 +89,7 @@ def test_packing_results_experiment() -> None:
 
     n_runs: Final[int] = int(random.integers(2, 7))
 
-    with TempDir.create() as td:
+    with temp_dir() as td:
         run_experiment(base_dir=td,
                        instances=instance_factories,
                        setups=algorithms,
@@ -109,7 +109,7 @@ def test_packing_results_experiment() -> None:
             all_algorithms.add(res.end_result.algorithm)
         assert len(all_algorithms) == len(algorithms)
         assert len(all_objectives) == 2
-        with TempFile.create() as tf:
+        with temp_file() as tf:
             PackingResult.to_csv(results_1, tf)
             PackingResult.from_csv(tf, results_2.append)
             assert len(results_2) == len(results_1)
@@ -122,5 +122,5 @@ def test_packing_results_experiment() -> None:
         end_stats_2: Final[list[PackingStatistics]] = []
         PackingStatistics.from_packing_results(results_2, end_stats_2.append)
         assert len(end_stats_1) == len(end_stats_2)
-        with TempFile.create() as tf2:
+        with temp_file() as tf2:
             PackingStatistics.to_csv(end_stats_1, tf2)

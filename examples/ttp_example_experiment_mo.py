@@ -24,9 +24,9 @@ from moptipy.operators.permutations.op2_gap import (
     Op2GeneralizedAlternatingPosition,
 )
 from moptipy.spaces.permutations import Permutations
-from moptipy.utils.help import argparser
-from moptipy.utils.path import Path
+from pycommons.io.path import Path
 
+from moptipyapps.shared import moptipyapps_argparser
 from moptipyapps.ttp.errors import Errors
 from moptipyapps.ttp.game_encoding import GameEncoding
 from moptipyapps.ttp.game_plan_space import GamePlanSpace
@@ -92,7 +92,7 @@ def run(base_dir: str, n_runs: int = 3) -> None:
     :param base_dir: the base directory
     :param n_runs: the number of runs
     """
-    use_dir: Final[Path] = Path.path(base_dir)
+    use_dir: Final[Path] = Path(base_dir)
     use_dir.ensure_dir_exists()
 
     run_experiment(
@@ -105,11 +105,11 @@ def run(base_dir: str, n_runs: int = 3) -> None:
 
 # Run the experiment from the command line
 if __name__ == "__main__":
-    parser: Final[argparse.ArgumentParser] = argparser(
+    parser: Final[argparse.ArgumentParser] = moptipyapps_argparser(
         __file__, "Traveling Tournament Problem (TTP)",
         "Run the Multi-Objective TTP experiment.")
     parser.add_argument(
         "dest", help="the directory to store the experimental results under",
-        type=Path.path, nargs="?", default="./results/")
+        type=Path, nargs="?", default="./results/")
     args: Final[argparse.Namespace] = parser.parse_args()
     run(args.dest)

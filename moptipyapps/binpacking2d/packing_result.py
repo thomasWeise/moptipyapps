@@ -35,19 +35,19 @@ from moptipy.evaluation.base import (
 )
 from moptipy.evaluation.end_results import EndResult
 from moptipy.evaluation.log_parser import LogParser
-from moptipy.utils.console import logger
-from moptipy.utils.help import argparser
 from moptipy.utils.logger import CSV_SEPARATOR
-from moptipy.utils.path import Path
-from moptipy.utils.strings import (
-    intfloatnone_to_str,
-    intnone_to_str,
+from pycommons.ds.immutable_map import immutable_mapping
+from pycommons.io.console import logger
+from pycommons.io.path import Path, file_path
+from pycommons.strings.string_conv import (
+    int_or_none_to_str,
+    num_or_none_to_str,
     num_to_str,
-    str_to_intfloat,
-    str_to_intfloatnone,
-    str_to_intnone,
+    str_to_int_or_none,
+    str_to_num,
+    str_to_num_or_none,
 )
-from moptipy.utils.types import check_int_range, immutable_mapping, type_error
+from pycommons.types import check_int_range, type_error
 
 from moptipyapps.binpacking2d.instance import Instance, _lower_bound_damv
 from moptipyapps.binpacking2d.objectives.bin_count import (
@@ -73,6 +73,7 @@ from moptipyapps.binpacking2d.objectives.bin_count_and_small import (
     BinCountAndSmall,
 )
 from moptipyapps.binpacking2d.packing import Packing
+from moptipyapps.shared import moptipyapps_argparser
 
 #: the number of items
 KEY_N_ITEMS: Final[str] = "nItems"
@@ -372,15 +373,15 @@ class PackingResult(EvaluationDataElement):
             called repeatedly
         :return: the packing result
         """
-        file_path = Path.file(file)
+        the_file_path = file_path(file)
         end_results: Final[list[EndResult]] = []
-        EndResult.from_logs(file_path, end_results.append)
+        EndResult.from_logs(the_file_path, end_results.append)
         if len(end_results) != 1:
             raise ValueError(
-                f"needs one end result record in file {file_path!r}, "
+                f"needs one end result record in file {the_file_path!r}, "
                 f"but got {end_results}.")
 
-        packing = Packing.from_log(file_path)
+        packing = Packing.from_log(the_file_path)
         if not isinstance(packing, Packing):
             raise type_error(packing, f"packing from {file!r}", Packing)
         return PackingResult.from_packing_and_end_result(
@@ -414,9 +415,9 @@ class PackingResult(EvaluationDataElement):
         :param file: the path
         :return: the path of the file that was written
         """
-        path: Final[Path] = Path.path(file)
+        path: Final[Path] = Path(file)
         logger(f"Writing packing results to CSV file {path!r}.")
-        Path.path(os.path.dirname(path)).ensure_dir_exists()
+        Path(os.path.dirname(path)).ensure_dir_exists()
 
         # get a nicely sorted view on the results
         use_results = sorted(results)
@@ -492,11 +493,11 @@ class PackingResult(EvaluationDataElement):
                     f"{e.total_fes}{CSV_SEPARATOR}"
                     f"{e.total_time_millis}")
                 if needs_goal_f:
-                    line.append(intfloatnone_to_str(e.goal_f))
+                    line.append(num_or_none_to_str(e.goal_f))
                 if needs_max_fes:
-                    line.append(intnone_to_str(e.max_fes))
+                    line.append(int_or_none_to_str(e.max_fes))
                 if needs_max_ms:
-                    line.append(intnone_to_str(e.max_time_millis))
+                    line.append(int_or_none_to_str(e.max_time_millis))
                 for ob in objectives:
                     line.append(num_to_str(pr.objectives[ob])
                                 if ob in pr.objectives else "")
@@ -516,7 +517,7 @@ class PackingResult(EvaluationDataElement):
         :param file: the file to read from
         :param collector: the collector for the results
         """
-        path = Path.file(file)
+        path = file_path(file)
         if not callable(collector):
             raise type_error(collector, "collector", call=True)
 
@@ -679,25 +680,25 @@ class PackingResult(EvaluationDataElement):
                     splt[idx_objective].strip(),  # objective
                     encoding,  # encoding
                     int((splt[idx_seed])[2:], 16),  # rand seed
-                    str_to_intfloat(splt[idx_best_f]),  # best_f
+                    str_to_num(splt[idx_best_f]),  # best_f
                     int(splt[idx_li_fe]),  # last_improvement_fe
                     int(splt[idx_li_ms]),  # last_improvement_time_millis
                     int(splt[idx_tt_fe]),  # total_fes
                     int(splt[idx_tt_ms]),  # total_time_millis
                     None if idx_goal_f < 0 else
-                    str_to_intfloatnone(splt[idx_goal_f]),  # goal_f
+                    str_to_num_or_none(splt[idx_goal_f]),  # goal_f
                     None if idx_max_fes < 0 else
-                    str_to_intnone(splt[idx_max_fes]),  # max_fes
+                    str_to_int_or_none(splt[idx_max_fes]),  # max_fes
                     None if idx_max_ms < 0 else
-                    str_to_intnone(splt[idx_max_ms]))  # max_time_millis
+                    str_to_int_or_none(splt[idx_max_ms]))  # max_time_millis
 
                 the_objectives: dict[str, int | float] = {
-                    on: str_to_intfloat(splt[idx_objectives[on]])
+                    on: str_to_num(splt[idx_objectives[on]])
                     for on in objectives}
                 the_bin_bounds: dict[str, int] = {
                     on: int(splt[idx_bounds[on]]) for on in bounds}
                 the_objective_bounds: dict[str, int | float] = {
-                    on: str_to_intfloat(splt[idxx])
+                    on: str_to_num(splt[idxx])
                     for on, idxx in idx_objective_bounds.items()}
 
                 collector(PackingResult(
@@ -760,17 +761,17 @@ class _LogParser(LogParser):
 
 # Run log files to end results if executed as script
 if __name__ == "__main__":
-    parser: Final[argparse.ArgumentParser] = argparser(
+    parser: Final[argparse.ArgumentParser] = moptipyapps_argparser(
         __file__,
         "Convert log files for the bin packing experiment to a CSV file.",
         "Re-evaluate all results based on different objective functions.")
     parser.add_argument(
         "source", nargs="?", default="./results",
         help="the location of the experimental results, i.e., the root folder "
-             "under which to search for log files", type=Path.path)
+             "under which to search for log files", type=Path)
     parser.add_argument(
         "dest", help="the path to the end results CSV file to be created",
-        type=Path.path, nargs="?", default="./evaluation/end_results.txt")
+        type=Path, nargs="?", default="./evaluation/end_results.txt")
     args: Final[argparse.Namespace] = parser.parse_args()
 
     packing_results: Final[list[PackingResult]] = []

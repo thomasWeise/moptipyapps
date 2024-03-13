@@ -30,7 +30,7 @@ from moptipy.algorithms.so.vector.cmaes_lib import BiPopCMAES
 from moptipy.api.execution import Execution
 from moptipy.api.objective import Objective
 from moptipy.spaces.vectorspace import VectorSpace
-from moptipy.utils.console import logger
+from pycommons.io.console import logger
 
 
 @numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)

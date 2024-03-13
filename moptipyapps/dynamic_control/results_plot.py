@@ -20,11 +20,11 @@ import numpy as np
 from matplotlib.axes import Axes  # type: ignore
 from matplotlib.figure import Figure  # type: ignore
 from matplotlib.lines import Line2D  # type: ignore
-from moptipy.utils.console import logger
-from moptipy.utils.path import Path
 from moptipy.utils.strings import float_to_str
-from moptipy.utils.types import check_int_range
 from mpl_toolkits.mplot3d.art3d import Line3D  # type: ignore
+from pycommons.io.console import logger
+from pycommons.io.path import Path
+from pycommons.types import check_int_range
 
 
 def _str(f: float) -> str:
@@ -222,7 +222,7 @@ class ResultsPlot(AbstractContextManager):
         """
         super().__init__()
         #: the destination file
-        self.__dest_file: Final[Path] = Path.path(dest_file)
+        self.__dest_file: Final[Path] = Path(dest_file)
         logger(f"plotting data to file {self.__dest_file!r}.")
         #: the state dimensions
         self.__state_dims: Final[int] = check_int_range(

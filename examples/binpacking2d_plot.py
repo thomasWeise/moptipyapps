@@ -24,7 +24,7 @@ import numpy as np
 from moptipy.utils.nputils import rand_generator
 from moptipy.utils.plot_utils import save_figure
 from moptipy.utils.sys_info import is_make_build
-from moptipy.utils.temp import TempDir
+from pycommons.io.temp import temp_dir
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
@@ -50,7 +50,8 @@ encodings = [ImprovedBottomLeftEncoding1(instance),  # the 1st encoding
 # can occur multiple times, i.e., may occur repeatedly.
 # So we include each of n_different_items item IDs exactly as often as
 # it should be repeated. We sometimes include it directly and sometimes
-# in the negated form, which is interpreted as a 90° rotation by the encoding.
+# in the negated form, which is interpreted as a 90deg rotation by the
+# encoding.
 # Then, we convert the list of item IDs to a numpy array and, finally, shuffle
 # the array. The encoding then inserts the items in the same sequence they
 # appear in the array into bins.
@@ -78,10 +79,10 @@ for encoding in encodings:
 
 
 # We can now plot the packing.  We create the figures in a temp directory.
-# To keep the figures, you would put an existing directory path into `td`
-# by doing `from moptipy.utils.path import Path; td = Path.directory("mydir")`
-# and not use the `with` block.
-with TempDir.create() as td:  # create temporary directory `td`
+# To keep the figures, you would put an existing directory path into `td` by
+# doing `from pycommons.io.path import Path; td = Path("mydir")` and not use
+# the `with` block.
+with temp_dir() as td:  # create temporary directory `td`
     files = []  # the collection of files
 
 # Plot the packings. The default plotting includes the item ID into each

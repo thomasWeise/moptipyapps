@@ -5,7 +5,7 @@ from typing import Any, Callable, Final
 
 import numba  # type: ignore
 import numpy as np
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 
 class CodeGenerator:

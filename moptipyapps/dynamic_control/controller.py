@@ -21,7 +21,7 @@ from moptipy.api.component import Component
 from moptipy.spaces.vectorspace import VectorSpace
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.strings import sanitize_name
-from moptipy.utils.types import check_to_int_range, type_error
+from pycommons.types import check_to_int_range, type_error
 
 
 class Controller(Component):

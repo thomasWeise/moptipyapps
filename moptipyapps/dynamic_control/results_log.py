@@ -5,10 +5,10 @@ from io import TextIOBase
 from typing import Callable, Final
 
 import numpy as np
-from moptipy.utils.console import logger
 from moptipy.utils.logger import CSV_SEPARATOR
-from moptipy.utils.path import Path
 from moptipy.utils.strings import float_to_str
+from pycommons.io.console import logger
+from pycommons.io.path import Path
 
 
 class ResultsLog(AbstractContextManager):
@@ -52,7 +52,7 @@ class ResultsLog(AbstractContextManager):
         """
         super().__init__()
         if isinstance(out, str):
-            pp = Path.path(out)
+            pp = Path(out)
             logger(f"logging data to file {pp!r}.")
             out = pp.open_for_write()
         #: the internal output destination

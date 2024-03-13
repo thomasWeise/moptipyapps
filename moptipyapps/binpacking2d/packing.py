@@ -6,7 +6,7 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.api.logging import SECTION_RESULT_Y, SECTION_SETUP
 from moptipy.evaluation.log_parser import LogParser
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.binpacking2d.instance import Instance
 

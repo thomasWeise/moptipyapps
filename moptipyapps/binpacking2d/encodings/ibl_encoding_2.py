@@ -94,7 +94,7 @@ import numba  # type: ignore
 import numpy as np
 from moptipy.api.encoding import Encoding
 from moptipy.utils.logger import KeyValueLogSection
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.binpacking2d.instance import (
     IDX_HEIGHT,

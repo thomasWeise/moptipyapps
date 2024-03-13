@@ -38,7 +38,7 @@ import numba  # type: ignore
 import numpy as np
 from moptipy.api.encoding import Encoding
 from moptipy.spaces.permutations import Permutations
-from moptipy.utils.types import check_int_range
+from pycommons.types import check_int_range
 
 from moptipyapps.ttp.instance import Instance
 

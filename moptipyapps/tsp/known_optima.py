@@ -28,8 +28,8 @@ from typing import Final, TextIO, cast
 
 import moptipy.utils.nputils as npu
 import numpy as np
-from moptipy.utils.path import Path
-from moptipy.utils.types import check_to_int_range, type_error
+from pycommons.io.path import Path, file_path
+from pycommons.types import check_to_int_range, type_error
 
 from moptipyapps.tsp.tsplib import open_resource_stream
 
@@ -88,7 +88,7 @@ def opt_tour_from_file(path: str) -> np.ndarray:
     :param path: the path to the file
     :return: the tour
     """
-    file: Final[Path] = Path.file(path)
+    file: Final[Path] = file_path(path)
     with file.open_for_read() as stream:
         try:
             return _from_stream(cast(TextIO, stream))

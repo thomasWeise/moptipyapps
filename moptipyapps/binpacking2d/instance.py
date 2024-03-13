@@ -122,9 +122,9 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.utils.logger import CSV_SEPARATOR, KeyValueLogSection
 from moptipy.utils.nputils import int_range_to_dtype
-from moptipy.utils.path import Path
 from moptipy.utils.strings import sanitize_name
-from moptipy.utils.types import check_int_range, check_to_int_range, type_error
+from pycommons.io.path import Path, file_path
+from pycommons.types import check_int_range, check_to_int_range, type_error
 
 #: the instances resource name
 INSTANCES_RESOURCE: Final[str] = "instances.txt"
@@ -682,12 +682,12 @@ class Instance(Component, np.ndarray):
         :param file: the file path
         :return: the instance
         """
-        path: Final[Path] = Path.file(file)
+        path: Final[Path] = file_path(file)
         name: str = basename(path).lower()
         if name.endswith(".ins2d"):
             name = sanitize_name(name[:-6])
 
-        lines: Final[list[str]] = path.read_all_list()
+        lines: Final[list[str]] = str.splitlines(path.read_all_str())
         n_different_items: Final[int] = check_to_int_range(
             lines[0], "n_different_items", 1, 100_000_000)
 

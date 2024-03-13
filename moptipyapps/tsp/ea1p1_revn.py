@@ -44,8 +44,8 @@ import numpy as np
 from moptipy.api.algorithm import Algorithm
 from moptipy.api.process import Process
 from moptipy.utils.logger import KeyValueLogSection
-from moptipy.utils.types import type_error
 from numpy.random import Generator
+from pycommons.types import type_error
 
 from moptipyapps.shared import SCOPE_INSTANCE
 from moptipyapps.tsp.instance import Instance

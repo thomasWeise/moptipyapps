@@ -27,7 +27,7 @@ from moptipy.operators.signed_permutations.op1_swap_2_or_flip import (
 )
 from moptipy.spaces.signed_permutations import SignedPermutations
 from moptipy.utils.plot_utils import save_figure
-from moptipy.utils.temp import TempDir
+from pycommons.io.temp import temp_dir
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
     ImprovedBottomLeftEncoding2,
@@ -72,10 +72,10 @@ with Execution()\
     process.get_copy_of_best_y(y)
 
 # We can now plot the best packing. We create the figures in a temp directory.
-# To keep the figures, you would put an existing directory path into `td`
-# by doing `from moptipy.utils.path import Path; td = Path.directory("mydir")`
-# and not use the `with` block.
-with TempDir.create() as td:  # create temporary directory `td`
+# To keep the figures, you would put an existing directory path into `td` by
+# doing `from pycommons.io.path import Path; td = Path("mydir")` and not use
+# the `with` block.
+with temp_dir() as td:  # create temporary directory `td`
     files = []  # the collection of files
 
 # Plot the packing. The default plotting includes the item ID into each

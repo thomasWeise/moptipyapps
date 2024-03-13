@@ -25,7 +25,7 @@ import numpy as np
 from moptipy.spaces.permutations import Permutations
 from moptipy.utils.logger import CSV_SEPARATOR
 from moptipy.utils.strings import float_to_str
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.order1d.instance import (
     _SUGGESTED_X_IN_0_1,

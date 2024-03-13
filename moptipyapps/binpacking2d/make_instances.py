@@ -25,9 +25,9 @@ import certifi  # type: ignore
 
 # noinspection PyPackageRequirements
 import urllib3  # type: ignore
-from moptipy.utils.path import Path
-from moptipy.utils.temp import TempDir
-from moptipy.utils.types import type_error
+from pycommons.io.path import Path, directory_path, file_path, write_lines
+from pycommons.io.temp import temp_dir
+from pycommons.types import type_error
 
 import moptipyapps.binpacking2d.instance as inst_mod
 from moptipyapps.binpacking2d.instance import (
@@ -65,7 +65,7 @@ def download_2dpacklib_instances(
     :param http: the HTTP pool
     :return: the list of unpackaged files
     """
-    dest: Final[Path] = Path.directory(dest_dir)
+    dest: Final[Path] = directory_path(dest_dir)
     if not isinstance(source_urls, Iterable):
         raise type_error(source_urls, "source_urls", Iterable)
     result: Final[list[Path]] = []
@@ -153,15 +153,16 @@ def join_instances_to_compact(
         raise type_error(binpacklib2d_files, "files", Iterable)
     if not callable(normalizer):
         raise type_error(normalizer, "normalizer", call=True)
-    dest_path = Path.path(dest_file)
+    dest_path = Path(dest_file)
     data: Final[list[tuple[str, str]]] = []
     for file in binpacklib2d_files:
-        inst: Instance = Instance.from_2dpacklib(Path.file(file))
+        inst: Instance = Instance.from_2dpacklib(file_path(file))
         inst.name = normalizer(inst.name)
         data.append((inst.name, inst.to_compact_str()))
     append_almost_squares_strings(data.append)  # add the asquas instances
     data.sort()
-    dest_path.write_all([content for _, content in data])
+    with dest_path.open_for_write() as wd:
+        write_lines((content for _, content in data), wd)
     dest_path.enforce_file()
     return dest_path, [thename for thename, _ in data]
 
@@ -181,10 +182,10 @@ def make_2dpacklib_resource(
         and/or transforms an instance name
     :return: the canonical path to the and the list of instance names stored
     """
-    dest_path: Final[Path] = Path.directory(dirname(inst_mod.__file__))\
+    dest_path: Final[Path] = directory_path(dirname(inst_mod.__file__))\
         .resolve_inside(INSTANCES_RESOURCE) if dest_file is None \
-        else Path.path(dest_file)
-    with TempDir.create() as temp:
+        else Path(dest_file)
+    with temp_dir() as temp:
         files: Iterable[Path] = download_2dpacklib_instances(
             dest_dir=temp, source_urls=source_urls)
         return join_instances_to_compact(

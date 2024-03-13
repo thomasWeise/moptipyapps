@@ -60,7 +60,7 @@ Shenzhen, China (哈尔滨工业大学(深圳)).
 from typing import Final
 
 from moptipy.utils.logger import KeyValueLogSection
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.instance import Instance

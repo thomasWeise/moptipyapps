@@ -19,7 +19,7 @@ from typing import Final
 import numpy as np
 from moptipy.api.space import Space
 from moptipy.utils.logger import CSV_SEPARATOR, KeyValueLogSection
-from moptipy.utils.types import check_int_range, type_error
+from pycommons.types import check_int_range, type_error
 
 from moptipyapps.binpacking2d.instance import (
     IDX_HEIGHT,

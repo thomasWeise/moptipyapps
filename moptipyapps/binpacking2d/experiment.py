@@ -16,8 +16,7 @@ from moptipy.operators.signed_permutations.op1_swap_2_or_flip import (
     Op1Swap2OrFlip,
 )
 from moptipy.spaces.signed_permutations import SignedPermutations
-from moptipy.utils.help import argparser
-from moptipy.utils.path import Path
+from pycommons.io.path import Path
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
@@ -25,6 +24,7 @@ from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing_result import DEFAULT_OBJECTIVES
 from moptipyapps.binpacking2d.packing_space import PackingSpace
+from moptipyapps.shared import moptipyapps_argparser
 
 #: the maximum number of FEs
 MAX_FES: Final[int] = 1_000_000
@@ -91,7 +91,7 @@ def run(base_dir: str, n_runs: int = 23) -> None:
     :param base_dir: the base directory
     :param n_runs: the number of runs, by default `23`
     """
-    use_dir: Final[Path] = Path.path(base_dir)
+    use_dir: Final[Path] = Path(base_dir)
     use_dir.ensure_dir_exists()
 
     encodings: Final[tuple[Callable[[Instance], Encoding], ...]] = (
@@ -128,10 +128,10 @@ def run(base_dir: str, n_runs: int = 23) -> None:
 
 # Run the experiment from the command line
 if __name__ == "__main__":
-    parser: Final[argparse.ArgumentParser] = argparser(
+    parser: Final[argparse.ArgumentParser] = moptipyapps_argparser(
         __file__, "2D Bin Packing", "Run the 2D Bin Packing experiment.")
     parser.add_argument(
         "dest", help="the directory to store the experimental results under",
-        type=Path.path, nargs="?", default="./results/")
+        type=Path, nargs="?", default="./results/")
     args: Final[argparse.Namespace] = parser.parse_args()
     run(args.dest)

@@ -9,7 +9,7 @@ from matplotlib.axes import Axes  # type: ignore
 from matplotlib.figure import Figure  # type: ignore
 from matplotlib.patches import Rectangle  # type: ignore
 from matplotlib.text import Text  # type: ignore
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.binpacking2d.packing import (
     IDX_BIN,

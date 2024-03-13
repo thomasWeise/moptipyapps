@@ -15,8 +15,8 @@ from moptipy.tests.algorithm import validate_algorithm
 from moptipy.tests.encoding import validate_encoding
 from moptipy.tests.objective import validate_objective
 from moptipy.tests.space import validate_space
-from moptipy.utils.types import type_error
 from numpy.random import Generator, default_rng
+from pycommons.types import type_error
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,

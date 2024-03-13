@@ -16,8 +16,8 @@ from moptipy.operators.signed_permutations.op1_swap_2_or_flip import (
     Op1Swap2OrFlip,
 )
 from moptipy.spaces.signed_permutations import SignedPermutations
-from moptipy.utils.path import Path
-from moptipy.utils.temp import TempDir
+from pycommons.io.path import Path
+from pycommons.io.temp import temp_dir
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
@@ -188,7 +188,7 @@ def __evaluate(results: Path, evaluation: Path) -> None:
 
 def test_experiment_empty_1() -> None:
     """Test the bin packing with BinCountAndLastEmpty and encoding 1."""
-    with TempDir.create() as td:
+    with temp_dir() as td:
         results = td.resolve_inside("results")
         results.ensure_dir_exists()
         evaluation = td.resolve_inside("evaluation")
@@ -205,7 +205,7 @@ def test_experiment_empty_1() -> None:
 
 def test_experiment_empty_2() -> None:
     """Test the bin packing with BinCountAndLastEmpty and encoding 2."""
-    with TempDir.create() as td:
+    with temp_dir() as td:
         results = td.resolve_inside("results")
         results.ensure_dir_exists()
         evaluation = td.resolve_inside("evaluation")
@@ -222,7 +222,7 @@ def test_experiment_empty_2() -> None:
 
 def test_experiment_small_1() -> None:
     """Test the bin packing with BinCountAndLastSmall and encoding 1."""
-    with TempDir.create() as td:
+    with temp_dir() as td:
         results = td.resolve_inside("results")
         results.ensure_dir_exists()
         evaluation = td.resolve_inside("evaluation")
@@ -239,7 +239,7 @@ def test_experiment_small_1() -> None:
 
 def test_experiment_small_2() -> None:
     """Test the bin packing with BinCountAndLastSmall and encoding 2."""
-    with TempDir.create() as td:
+    with temp_dir() as td:
         results = td.resolve_inside("results")
         results.ensure_dir_exists()
         evaluation = td.resolve_inside("evaluation")

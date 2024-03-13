@@ -143,9 +143,9 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import int_range_to_dtype
-from moptipy.utils.path import Path
 from moptipy.utils.strings import sanitize_name
-from moptipy.utils.types import check_int_range, check_to_int_range, type_error
+from pycommons.io.path import Path, file_path
+from pycommons.types import check_int_range, check_to_int_range, type_error
 
 from moptipyapps.tsp.tsplib import open_resource_stream
 
@@ -919,7 +919,7 @@ symmetric: T@dtype: i@END_I'
         >>> inst.name
         'br17'
         """
-        file: Final[Path] = Path.file(path)
+        file: Final[Path] = file_path(path)
         with file.open_for_read() as stream:
             try:
                 return _from_stream(

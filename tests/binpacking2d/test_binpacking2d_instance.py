@@ -1,7 +1,7 @@
 """Test loading and validity of bin packing 2D instances."""
 
 
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.binpacking2d.instance import Instance
 

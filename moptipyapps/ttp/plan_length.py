@@ -56,7 +56,7 @@ import numba  # type: ignore
 import numpy as np
 from moptipy.api.objective import Objective
 from moptipy.utils.logger import KeyValueLogSection
-from moptipy.utils.types import type_error
+from pycommons.types import type_error
 
 from moptipyapps.ttp.game_plan import GamePlan
 from moptipyapps.ttp.instance import Instance

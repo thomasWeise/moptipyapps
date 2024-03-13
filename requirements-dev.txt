@@ -31,6 +31,8 @@
 # Here we only list the top-level dependencies that are actually used in the
 # `moptipyapps` build process.
 #
+# the common tools package
+pycommons[dev] == 0.8.11
 
 # We need pytest to run the unit tests.
 # Unit tests test components of our package, e.g., functions or objects, and
