@@ -1,0 +1,82 @@
+moptipyapps.dynamic\_control.controllers package
+================================================
+
+.. automodule:: moptipyapps.dynamic_control.controllers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Submodules
+----------
+
+moptipyapps.dynamic\_control.controllers.ann module
+---------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.ann
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.controllers.codegen module
+-------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.codegen
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.controllers.cubic module
+-----------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.cubic
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.controllers.linear module
+------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.linear
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.controllers.min\_ann module
+--------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.min_ann
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.controllers.partially\_linear module
+-----------------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.partially_linear
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.controllers.peaks module
+-----------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.peaks
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.controllers.predefined module
+----------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.predefined
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.controllers.quadratic module
+---------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controllers.quadratic
+   :members:
+   :undoc-members:
+   :show-inheritance:

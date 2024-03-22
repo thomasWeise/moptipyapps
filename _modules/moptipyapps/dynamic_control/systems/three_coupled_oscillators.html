@@ -1,0 +1,157 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.systems.three_coupled_oscillators — moptipyapps 0.8.45 documentation</title><link href="../../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=532c1bf3"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=4a850b51"></script><script src="../../../../_static/doctools.js?v=888ff710"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/systems/three_coupled_oscillators.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.45 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.systems.three_coupled_oscillators</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.systems.three_coupled_oscillators</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A system of three coupled oscillators.</span>
+
+<span class=sd>There are three oscillators located in a two-dimensional plane. Thus, there</span>
+<span class=sd>are a total of six coordinates.</span>
+
+<span class=sd>The initial starting point of the work here were conversations with</span>
+<span class=sd>Prof. Dr. Bernd NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute</span>
+<span class=sd>of Technology in Shenzhen, China (哈尔滨工业大学(深圳)) as well as the</span>
+<span class=sd>following paper:</span>
+
+<span class=sd>1. Ruiying Li, Bernd R. Noack, Laurent Cordier, Jacques Borée, Eurika Kaiser,</span>
+<span class=sd>   and Fabien Harambat. Linear genetic programming control for strongly</span>
+<span class=sd>   nonlinear dynamics with frequency crosstalk. *Archives of Mechanics.*</span>
+<span class=sd>   70(6):505-534. Warszawa 2018. Seventy Years of the Archives of Mechanics.</span>
+<span class=sd>   https://doi.org/10.24423/aom.3000. Also: arXiv:1705.00367v1</span>
+<span class=sd>   [physics.flu-dyn] 30 Apr 2017. https://arxiv.org/abs/1705.00367.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span> <span class=nn>math</span> <span class=kn>import</span> <span class=n>pi</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span> <span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>pycommons.io.path</span> <span class=kn>import</span> <span class=n>Path</span>
+<span class=kn>from</span> <span class=nn>pycommons.types</span> <span class=kn>import</span> <span class=n>check_int_range</span>
+
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.starting_points</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>make_interesting_starting_points</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.system</span> <span class=kn>import</span> <span class=n>System</span>
+
+<span class=c1>#: pi to the square</span>
+<span class=n>__PI2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>pi</span> <span class=o>*</span> <span class=n>pi</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__3_coupled_oscillators</span><span class=p>(</span><span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>_</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                            <span class=n>control</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the differential equations of a controlled 3-oscillators system.</span>
+
+<span class=sd>    The system is six-dimensional. There are three oscillators, and each one</span>
+<span class=sd>    is updated. There is one control value.</span>
+<span class=sd>    This function implements equation (3.1) of the paper.</span>
+
+<span class=sd>    :param state: the state of the system</span>
+<span class=sd>    :param _: the time index, which is ignored</span>
+<span class=sd>    :param control: the output of the controller</span>
+<span class=sd>    :param out: the differential, i.e., the output of this function</span>
+<span class=sd>    """</span>
+    <span class=n>a1</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>state</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+    <span class=n>a2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>state</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span>
+    <span class=n>a3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>state</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span>
+    <span class=n>a4</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>state</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span>
+    <span class=n>a5</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>state</span><span class=p>[</span><span class=mi>4</span><span class=p>]</span>
+    <span class=n>a6</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>state</span><span class=p>[</span><span class=mi>5</span><span class=p>]</span>
+
+    <span class=n>r1sqr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>a1</span> <span class=o>*</span> <span class=n>a1</span><span class=p>)</span> <span class=o>+</span> <span class=p>(</span><span class=n>a2</span> <span class=o>*</span> <span class=n>a2</span><span class=p>)</span>
+    <span class=n>r2sqr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>a3</span> <span class=o>*</span> <span class=n>a3</span><span class=p>)</span> <span class=o>+</span> <span class=p>(</span><span class=n>a4</span> <span class=o>*</span> <span class=n>a4</span><span class=p>)</span>
+    <span class=n>r3sqr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>a5</span> <span class=o>*</span> <span class=n>a5</span><span class=p>)</span> <span class=o>+</span> <span class=p>(</span><span class=n>a6</span> <span class=o>*</span> <span class=n>a6</span><span class=p>)</span>
+    <span class=n>sigma1</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=o>-</span><span class=n>r1sqr</span> <span class=o>+</span> <span class=n>r2sqr</span> <span class=o>-</span> <span class=n>r3sqr</span>
+    <span class=n>sigma2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=mf>0.1</span> <span class=o>-</span> <span class=n>r2sqr</span>
+    <span class=n>sigma3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=o>-</span><span class=mf>0.1</span>
+
+    <span class=n>b</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>control</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+
+    <span class=c1># compute the differential system</span>
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>sigma1</span> <span class=o>*</span> <span class=n>a1</span><span class=p>)</span> <span class=o>-</span> <span class=n>a2</span>
+    <span class=n>out</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>sigma1</span> <span class=o>*</span> <span class=n>a2</span><span class=p>)</span> <span class=o>+</span> <span class=n>a1</span>
+    <span class=n>out</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>sigma2</span> <span class=o>*</span> <span class=n>a3</span><span class=p>)</span> <span class=o>-</span> <span class=p>(</span><span class=n>pi</span> <span class=o>*</span> <span class=n>a4</span><span class=p>)</span>
+    <span class=n>out</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>sigma2</span> <span class=o>*</span> <span class=n>a4</span><span class=p>)</span> <span class=o>+</span> <span class=p>(</span><span class=n>pi</span> <span class=o>*</span> <span class=n>a3</span><span class=p>)</span> <span class=o>+</span> <span class=n>b</span>
+    <span class=n>out</span><span class=p>[</span><span class=mi>4</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>sigma3</span> <span class=o>*</span> <span class=n>a5</span><span class=p>)</span> <span class=o>-</span> <span class=p>(</span><span class=n>__PI2</span> <span class=o>*</span> <span class=n>a6</span><span class=p>)</span>
+    <span class=n>out</span><span class=p>[</span><span class=mi>5</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>sigma3</span> <span class=o>*</span> <span class=n>a6</span><span class=p>)</span> <span class=o>+</span> <span class=p>(</span><span class=n>__PI2</span> <span class=o>*</span> <span class=n>a5</span><span class=p>)</span> <span class=o>+</span> <span class=n>b</span>
+
+
+<span class=k>def</span> <span class=nf>_sinus_control</span><span class=p>(</span>
+        <span class=n>_</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>__</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Present the sinus-based control law from the paper.</span>
+
+<span class=sd>    :param _: the state, ignored</span>
+<span class=sd>    :param time: the time</span>
+<span class=sd>    :param __: ignored</span>
+<span class=sd>    :param out: the output destination</span>
+<span class=sd>    """</span>
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=mf>0.07</span> <span class=o>*</span> <span class=n>np</span><span class=o>.</span><span class=n>sin</span><span class=p>(</span><span class=n>__PI2</span> <span class=o>*</span> <span class=n>time</span><span class=p>)</span>
+
+
+<span class=k>def</span> <span class=nf>_lgpc3_36</span><span class=p>(</span>
+        <span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>_</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Present the LGPC-3 equation 3.6.</span>
+
+<span class=sd>    :param state: the state</span>
+<span class=sd>    :param time: the time</span>
+<span class=sd>    :param _: ignored</span>
+<span class=sd>    :param out: the output destination</span>
+<span class=sd>    """</span>
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>tanh</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>sin</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>tanh</span><span class=p>(</span>
+        <span class=mf>3.0</span> <span class=o>*</span> <span class=n>state</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>*</span> <span class=n>np</span><span class=o>.</span><span class=n>sin</span><span class=p>(</span><span class=n>time</span><span class=p>)</span> <span class=o>*</span> <span class=n>np</span><span class=o>.</span><span class=n>sin</span><span class=p>(</span><span class=n>__PI2</span> <span class=o>*</span> <span class=n>time</span><span class=p>)</span> <span class=o>-</span> <span class=n>state</span><span class=p>[</span><span class=mi>3</span><span class=p>])))</span>
+
+
+<span class=k>class</span> <span class=nc>__TO</span><span class=p>(</span><span class=n>System</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""The internal three oscillators class."""</span>
+
+    <span class=k>def</span> <span class=nf>describe_system_without_control</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>skip_if_exists</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> \
+            <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Path</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+        <span class=n>result</span> <span class=o>=</span> <span class=nb>list</span><span class=p>(</span><span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>describe_system_without_control</span><span class=p>(</span>
+            <span class=n>dest_dir</span><span class=p>,</span> <span class=n>skip_if_exists</span><span class=p>))</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>describe_system</span><span class=p>(</span>
+            <span class=s2>"open loop 0.07sin(</span><span class=se>\u03C0</span><span class=s2>²t)"</span><span class=p>,</span> <span class=n>_sinus_control</span><span class=p>,</span> <span class=mf>0.0</span><span class=p>,</span>
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2>_open_loop"</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>,</span> <span class=n>skip_if_exists</span><span class=p>))</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>describe_system</span><span class=p>(</span>
+            <span class=s2>"LGPC-3"</span><span class=p>,</span> <span class=n>_lgpc3_36</span><span class=p>,</span> <span class=mf>0.0</span><span class=p>,</span>
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2>_lgpc3"</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>,</span> <span class=n>skip_if_exists</span><span class=p>))</span>
+        <span class=k>return</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>result</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=make_3_couple_oscillators>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.systems.html#moptipyapps.dynamic_control.systems.three_coupled_oscillators.make_3_couple_oscillators>[docs]</a>
+<span class=k>def</span> <span class=nf>make_3_couple_oscillators</span><span class=p>(</span><span class=n>n_points</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=n>System</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the oscillator system.</span>
+
+<span class=sd>    :param n_points: the number of training points</span>
+<span class=sd>    :return: the Lorenz system</span>
+<span class=sd>    """</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_points</span><span class=p>,</span> <span class=s2>"n_points"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000</span><span class=p>)</span>
+    <span class=n>tests</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> \
+        <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>([[</span><span class=mf>0.1</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mf>0.1</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mf>0.1</span><span class=p>,</span> <span class=mi>0</span><span class=p>]],</span> <span class=nb>float</span><span class=p>)</span>
+    <span class=c1># similar to training = make_interesting_starting_points(111, tests)</span>
+    <span class=n>training</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>([[</span>
+        <span class=o>-</span><span class=mf>0.00721145</span><span class=p>,</span> <span class=o>-</span><span class=mf>0.00399194</span><span class=p>,</span> <span class=o>-</span><span class=mf>0.01078522</span><span class=p>,</span> <span class=mf>0.0795534</span><span class=p>,</span> <span class=mf>0.02929588</span><span class=p>,</span>
+        <span class=mf>0.01588136</span><span class=p>],</span> <span class=p>[</span>
+        <span class=mf>0.13202113</span><span class=p>,</span> <span class=mf>0.05538969</span><span class=p>,</span> <span class=o>-</span><span class=mf>0.01011213</span><span class=p>,</span> <span class=o>-</span><span class=mf>0.06584996</span><span class=p>,</span> <span class=mf>0.02154825</span><span class=p>,</span>
+        <span class=o>-</span><span class=mf>0.07136868</span><span class=p>],</span> <span class=p>[</span>
+        <span class=mf>0.18476107</span><span class=p>,</span> <span class=mf>0.10267522</span><span class=p>,</span> <span class=o>-</span><span class=mf>0.05342748</span><span class=p>,</span> <span class=mf>0.12922333</span><span class=p>,</span> <span class=o>-</span><span class=mf>0.06481063</span><span class=p>,</span>
+        <span class=o>-</span><span class=mf>0.0133719</span><span class=p>],</span> <span class=p>[</span>
+        <span class=o>-</span><span class=mf>0.20572899</span><span class=p>,</span> <span class=mf>0.08377647</span><span class=p>,</span> <span class=mf>0.21218986</span><span class=p>,</span> <span class=mf>0.00109397</span><span class=p>,</span> <span class=mf>0.16296447</span><span class=p>,</span>
+        <span class=mf>0.03239565</span><span class=p>]])</span> <span class=k>if</span> <span class=n>n_points</span> <span class=o>==</span> <span class=mi>4</span> <span class=k>else</span> <span class=p>(</span>
+        <span class=n>make_interesting_starting_points</span><span class=p>(</span><span class=n>n_points</span><span class=p>,</span> <span class=n>tests</span><span class=p>))</span>
+
+    <span class=n>three</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>System</span><span class=p>]</span> <span class=o>=</span> <span class=n>__TO</span><span class=p>(</span>
+        <span class=s2>"3oscillators"</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mf>1.0</span><span class=p>,</span>
+        <span class=n>tests</span><span class=p>,</span> <span class=n>training</span><span class=p>,</span> <span class=mi>5000</span><span class=p>,</span> <span class=mf>50.0</span><span class=p>,</span> <span class=mi>5000</span><span class=p>,</span> <span class=mf>50.0</span><span class=p>,</span>
+        <span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=n>training</span><span class=p>)</span> <span class=o>+</span> <span class=nb>len</span><span class=p>(</span><span class=n>tests</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span><span class=p>))</span>
+    <span class=n>three</span><span class=o>.</span><span class=n>equations</span> <span class=o>=</span> <span class=n>__3_coupled_oscillators</span>  <span class=c1># type: ignore</span>
+    <span class=k>return</span> <span class=n>three</span></div>
+
+
+
+<span class=c1>#: The 3 oscillators system with 4 training points.</span>
+<span class=n>THREE_COUPLED_OSCILLATORS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>System</span><span class=p>]</span> <span class=o>=</span> <span class=n>make_3_couple_oscillators</span><span class=p>(</span><span class=mi>4</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label="main navigation"class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><div id=searchbox role=search style=display:none><h3 id=searchlabel>Quick search</h3><div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div></div><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.45 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.systems.three_coupled_oscillators</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>

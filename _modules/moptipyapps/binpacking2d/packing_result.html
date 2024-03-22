@@ -1,0 +1,799 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.packing_result — moptipyapps 0.8.45 documentation</title><link href="../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../_static/bizstyle.css?v=532c1bf3"rel=stylesheet><script src="../../../_static/documentation_options.js?v=4a850b51"></script><script src="../../../_static/doctools.js?v=888ff710"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/packing_result.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.45 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.packing_result</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.packing_result</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An extended end result record to represent packings.</span>
+
+<span class=sd>This class extends the information provided by</span>
+<span class=sd>:mod:`~moptipy.evaluation.end_results`. It allows us to compare the results</span>
+<span class=sd>of experiments over different objective functions. It also represents the</span>
+<span class=sd>bounds for the number of bins and for the objective functions. It also</span>
+<span class=sd>includes the problem-specific information of two-dimensional bin packing</span>
+<span class=sd>instances.</span>
+<span class=sd>"""</span>
+<span class=kn>import</span> <span class=nn>argparse</span>
+<span class=kn>import</span> <span class=nn>os.path</span>
+<span class=kn>from</span> <span class=nn>dataclasses</span> <span class=kn>import</span> <span class=n>dataclass</span>
+<span class=kn>from</span> <span class=nn>math</span> <span class=kn>import</span> <span class=n>isfinite</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>from</span> <span class=nn>moptipy.api.logging</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>KEY_ALGORITHM</span><span class=p>,</span>
+    <span class=n>KEY_BEST_F</span><span class=p>,</span>
+    <span class=n>KEY_GOAL_F</span><span class=p>,</span>
+    <span class=n>KEY_INSTANCE</span><span class=p>,</span>
+    <span class=n>KEY_LAST_IMPROVEMENT_FE</span><span class=p>,</span>
+    <span class=n>KEY_LAST_IMPROVEMENT_TIME_MILLIS</span><span class=p>,</span>
+    <span class=n>KEY_MAX_FES</span><span class=p>,</span>
+    <span class=n>KEY_MAX_TIME_MILLIS</span><span class=p>,</span>
+    <span class=n>KEY_RAND_SEED</span><span class=p>,</span>
+    <span class=n>KEY_TOTAL_FES</span><span class=p>,</span>
+    <span class=n>KEY_TOTAL_TIME_MILLIS</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.objective</span> <span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span> <span class=nn>moptipy.evaluation.base</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>KEY_ENCODING</span><span class=p>,</span>
+    <span class=n>KEY_OBJECTIVE_FUNCTION</span><span class=p>,</span>
+    <span class=n>EvaluationDataElement</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipy.evaluation.end_results</span> <span class=kn>import</span> <span class=n>EndResult</span>
+<span class=kn>from</span> <span class=nn>moptipy.evaluation.log_parser</span> <span class=kn>import</span> <span class=n>LogParser</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.logger</span> <span class=kn>import</span> <span class=n>CSV_SEPARATOR</span>
+<span class=kn>from</span> <span class=nn>pycommons.ds.immutable_map</span> <span class=kn>import</span> <span class=n>immutable_mapping</span>
+<span class=kn>from</span> <span class=nn>pycommons.io.console</span> <span class=kn>import</span> <span class=n>logger</span>
+<span class=kn>from</span> <span class=nn>pycommons.io.path</span> <span class=kn>import</span> <span class=n>Path</span><span class=p>,</span> <span class=n>file_path</span>
+<span class=kn>from</span> <span class=nn>pycommons.strings.string_conv</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>int_or_none_to_str</span><span class=p>,</span>
+    <span class=n>num_or_none_to_str</span><span class=p>,</span>
+    <span class=n>num_to_str</span><span class=p>,</span>
+    <span class=n>str_to_int_or_none</span><span class=p>,</span>
+    <span class=n>str_to_num</span><span class=p>,</span>
+    <span class=n>str_to_num_or_none</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>pycommons.types</span> <span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.instance</span> <span class=kn>import</span> <span class=n>Instance</span><span class=p>,</span> <span class=n>_lower_bound_damv</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.objectives.bin_count</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BIN_COUNT_NAME</span><span class=p>,</span>
+    <span class=n>BinCount</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.objectives.bin_count_and_empty</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BinCountAndEmpty</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.objectives.bin_count_and_last_empty</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BinCountAndLastEmpty</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.objectives.bin_count_and_last_skyline</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BinCountAndLastSkyline</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.objectives.bin_count_and_last_small</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BinCountAndLastSmall</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.objectives.bin_count_and_lowest_skyline</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BinCountAndLowestSkyline</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.objectives.bin_count_and_small</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BinCountAndSmall</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.binpacking2d.packing</span> <span class=kn>import</span> <span class=n>Packing</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.shared</span> <span class=kn>import</span> <span class=n>moptipyapps_argparser</span>
+
+<span class=c1>#: the number of items</span>
+<span class=n>KEY_N_ITEMS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"nItems"</span>
+<span class=c1>#: the number of different items</span>
+<span class=n>KEY_N_DIFFERENT_ITEMS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"nDifferentItems"</span>
+<span class=c1>#: the bin width</span>
+<span class=n>KEY_BIN_WIDTH</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"binWidth"</span>
+<span class=c1>#: the bin height</span>
+<span class=n>KEY_BIN_HEIGHT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"binHeight"</span>
+
+<span class=c1>#: The internal CSV header part 1, after which the encoding may come</span>
+<span class=n>_HEADER_1</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_ALGORITHM</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_INSTANCE</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_OBJECTIVE_FUNCTION</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+<span class=c1>#: The internal CSV header part 2, after which the bounds are inserted</span>
+<span class=n>_HEADER_2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_ITEMS</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_DIFFERENT_ITEMS</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_BIN_WIDTH</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_BIN_HEIGHT</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+<span class=c1>#: The internal CSV header part 3, after which the objective values are listed</span>
+<span class=n>_HEADER_3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_RAND_SEED</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_BEST_F</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_LAST_IMPROVEMENT_FE</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_LAST_IMPROVEMENT_TIME_MILLIS</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_TOTAL_FES</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_TOTAL_TIME_MILLIS</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+
+<span class=c1>#: the default objective functions</span>
+<span class=n>DEFAULT_OBJECTIVES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+    <span class=n>BinCount</span><span class=p>,</span> <span class=n>BinCountAndLastEmpty</span><span class=p>,</span> <span class=n>BinCountAndLastSmall</span><span class=p>,</span>
+    <span class=n>BinCountAndLastSkyline</span><span class=p>,</span> <span class=n>BinCountAndEmpty</span><span class=p>,</span> <span class=n>BinCountAndSmall</span><span class=p>,</span>
+    <span class=n>BinCountAndLowestSkyline</span><span class=p>,</span>
+<span class=p>)</span>
+
+
+<span class=k>def</span> <span class=nf>__lb_geometric</span><span class=p>(</span><span class=n>inst</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the geometric lower bound.</span>
+
+<span class=sd>    :param inst: the instance</span>
+<span class=sd>    :return: the lower bound</span>
+<span class=sd>    """</span>
+    <span class=n>area</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>sum</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span> <span class=o>*</span> <span class=nb>int</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span> <span class=o>*</span> <span class=nb>int</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span>
+                           <span class=k>for</span> <span class=n>row</span> <span class=ow>in</span> <span class=n>inst</span><span class=p>)</span>
+    <span class=n>bin_size</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>inst</span><span class=o>.</span><span class=n>bin_width</span> <span class=o>*</span> <span class=n>inst</span><span class=o>.</span><span class=n>bin_height</span>
+    <span class=n>res</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>area</span> <span class=o>//</span> <span class=n>bin_size</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>res</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=k>if</span> <span class=p>((</span><span class=n>res</span> <span class=o>*</span> <span class=n>bin_size</span><span class=p>)</span> <span class=o>!=</span> <span class=n>area</span><span class=p>)</span> <span class=k>else</span> <span class=n>res</span>
+
+
+<span class=c1>#: the lower bound of an objective</span>
+<span class=n>_OBJECTIVE_LOWER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>".lowerBound"</span>
+<span class=c1>#: the upper bound of an objective</span>
+<span class=n>_OBJECTIVE_UPPER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>".upperBound"</span>
+<span class=c1>#: the start string for bin bounds</span>
+<span class=n>LOWER_BOUNDS_BIN_COUNT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"bins</span><span class=si>{</span><span class=n>_OBJECTIVE_LOWER</span><span class=si>}</span><span class=s2>"</span>
+<span class=c1>#: the default bounds</span>
+<span class=n>_DEFAULT_BOUNDS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]]</span> <span class=o>=</span> \
+    <span class=n>immutable_mapping</span><span class=p>({</span>
+        <span class=n>LOWER_BOUNDS_BIN_COUNT</span><span class=p>:</span> <span class=k>lambda</span> <span class=n>i</span><span class=p>:</span> <span class=n>i</span><span class=o>.</span><span class=n>lower_bound_bins</span><span class=p>,</span>
+        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>LOWER_BOUNDS_BIN_COUNT</span><span class=si>}</span><span class=s2>.geometric"</span><span class=p>:</span> <span class=n>__lb_geometric</span><span class=p>,</span>
+        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>LOWER_BOUNDS_BIN_COUNT</span><span class=si>}</span><span class=s2>.damv"</span><span class=p>:</span> <span class=k>lambda</span> <span class=n>i</span><span class=p>:</span> <span class=n>_lower_bound_damv</span><span class=p>(</span>
+            <span class=n>i</span><span class=o>.</span><span class=n>bin_width</span><span class=p>,</span> <span class=n>i</span><span class=o>.</span><span class=n>bin_height</span><span class=p>,</span> <span class=n>i</span><span class=p>),</span>
+    <span class=p>})</span>
+
+
+<div class=viewcode-block id=PackingResult>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_result.PackingResult>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>init</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>order</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>eq</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>class</span> <span class=nc>PackingResult</span><span class=p>(</span><span class=n>EvaluationDataElement</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    An end result record of one run of one packing algorithm on one problem.</span>
+
+<span class=sd>    This record provides the information of the outcome of one application of</span>
+<span class=sd>    one algorithm to one problem instance in an immutable way.</span>
+<span class=sd>    """</span>
+
+    <span class=c1>#: the original end result record</span>
+    <span class=n>end_result</span><span class=p>:</span> <span class=n>EndResult</span>
+    <span class=c1>#: the number of items in the instance</span>
+    <span class=n>n_items</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the number of different items in the instance</span>
+    <span class=n>n_different_items</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the bin width</span>
+    <span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the bin heigth</span>
+    <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the objective values evaluated after the optimization</span>
+    <span class=n>objectives</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span>
+    <span class=c1>#: the bounds for the objective values (append ".lowerBound" and</span>
+    <span class=c1>#: ".upperBound" to all objective function names)</span>
+    <span class=n>objective_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span>
+    <span class=c1>#: the bounds for the minimum number of bins of the instance</span>
+    <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span>
+
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span>
+                 <span class=n>end_result</span><span class=p>:</span> <span class=n>EndResult</span><span class=p>,</span>
+                 <span class=n>n_items</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>n_different_items</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>objectives</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span>
+                 <span class=n>objective_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span>
+                 <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a consistent instance of :class:`PackingResult`.</span>
+
+<span class=sd>        :param end_result: the end result</span>
+<span class=sd>        :param n_items: the number of items</span>
+<span class=sd>        :param n_different_items: the number of different items</span>
+<span class=sd>        :param bin_width: the bin width</span>
+<span class=sd>        :param bin_height: the bin height</span>
+<span class=sd>        :param objectives: the objective values computed after the</span>
+<span class=sd>            optimization</span>
+<span class=sd>        :param bin_bounds: the different bounds for the number of bins</span>
+<span class=sd>        :param objective_bounds: the bounds for the objective functions</span>
+<span class=sd>        :raises TypeError: if any parameter has a wrong type</span>
+<span class=sd>        :raises ValueError: if the parameter values are inconsistent</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>end_result</span><span class=p>,</span> <span class=n>EndResult</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>end_result</span><span class=p>,</span> <span class=s2>"end_result"</span><span class=p>,</span> <span class=n>EndResult</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>end_result</span><span class=o>.</span><span class=n>best_f</span> <span class=o>!=</span> <span class=n>objectives</span><span class=p>[</span><span class=n>end_result</span><span class=o>.</span><span class=n>objective</span><span class=p>]:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"end_result.best_f=</span><span class=si>{</span><span class=n>end_result</span><span class=o>.</span><span class=n>best_f</span><span class=si>}</span><span class=s2>, but objectives["</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>end_result</span><span class=o>.</span><span class=n>objective</span><span class=si>!r}</span><span class=s2>]="</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>objectives</span><span class=p>[</span><span class=n>end_result</span><span class=o>.</span><span class=n>objective</span><span class=p>]</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>objectives</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>objectives</span><span class=p>,</span> <span class=s2>"objectives"</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>,</span> <span class=s2>"objective_bounds"</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=s2>"bin_bounds"</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>)</span> <span class=o>!=</span> <span class=p>(</span><span class=mi>2</span> <span class=o>*</span> <span class=nb>len</span><span class=p>(</span><span class=n>objectives</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"it is required that there is a lower and an "</span>
+                             <span class=sa>f</span><span class=s2>"upper bound for each of the </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>objectives</span><span class=p>)</span><span class=si>}</span><span class=s2> "</span>
+                             <span class=sa>f</span><span class=s2>"functions, but we got </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>)</span><span class=si>}</span><span class=s2> "</span>
+                             <span class=sa>f</span><span class=s2>"bounds, objectives=</span><span class=si>{</span><span class=n>objectives</span><span class=si>}</span><span class=s2>, "</span>
+                             <span class=sa>f</span><span class=s2>"objective_bounds=</span><span class=si>{</span><span class=n>objective_bounds</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=k>for</span> <span class=n>name</span><span class=p>,</span> <span class=n>value</span> <span class=ow>in</span> <span class=n>objectives</span><span class=o>.</span><span class=n>items</span><span class=p>():</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                    <span class=n>name</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"name of evaluation[</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>]=</span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>value</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                    <span class=n>value</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"value of evaluation[</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>]=</span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span>
+                    <span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=nb>float</span><span class=p>))</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>value</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"non-finite value of evaluation[</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>]=</span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span>
+            <span class=n>lower</span> <span class=o>=</span> <span class=n>objective_bounds</span><span class=p>[</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}{</span><span class=n>_OBJECTIVE_LOWER</span><span class=si>}</span><span class=s2>"</span><span class=p>]</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>lower</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}{</span><span class=n>_OBJECTIVE_LOWER</span><span class=si>}</span><span class=s2>==</span><span class=si>{</span><span class=n>lower</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>upper</span> <span class=o>=</span> <span class=n>objective_bounds</span><span class=p>[</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}{</span><span class=n>_OBJECTIVE_UPPER</span><span class=si>}</span><span class=s2>"</span><span class=p>]</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>lower</span> <span class=o><=</span> <span class=n>value</span> <span class=o><=</span> <span class=n>upper</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"it is required that </span><span class=si>{</span><span class=n>name</span><span class=si>}{</span><span class=n>_OBJECTIVE_LOWER</span><span class=si>}</span><span class=s2><=f<=</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>"</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_OBJECTIVE_UPPER</span><span class=si>}</span><span class=s2>, but got </span><span class=si>{</span><span class=n>lower</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>value</span><span class=si>}</span><span class=s2>, and "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>upper</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>bins</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=n>objectives</span><span class=p>[</span><span class=n>BIN_COUNT_NAME</span><span class=p>])</span> \
+            <span class=k>if</span> <span class=n>BIN_COUNT_NAME</span> <span class=ow>in</span> <span class=n>objectives</span> <span class=k>else</span> <span class=kc>None</span>
+        <span class=k>for</span> <span class=n>name</span><span class=p>,</span> <span class=n>value</span> <span class=ow>in</span> <span class=n>bin_bounds</span><span class=o>.</span><span class=n>items</span><span class=p>():</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                    <span class=n>name</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"name of bounds[</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>]=</span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+            <span class=n>check_int_range</span><span class=p>(</span><span class=n>value</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"bounds[</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>]"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>bins</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>bins</span> <span class=o><</span> <span class=n>value</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"number of bins=</span><span class=si>{</span><span class=n>bins</span><span class=si>}</span><span class=s2> is inconsistent with "</span>
+                    <span class=sa>f</span><span class=s2>"bound </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>=</span><span class=si>{</span><span class=n>value</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"end_result"</span><span class=p>,</span> <span class=n>end_result</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"objectives"</span><span class=p>,</span> <span class=n>immutable_mapping</span><span class=p>(</span><span class=n>objectives</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"objective_bounds"</span><span class=p>,</span>
+                           <span class=n>immutable_mapping</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"bin_bounds"</span><span class=p>,</span> <span class=n>immutable_mapping</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"n_different_items"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_different_items</span><span class=p>,</span> <span class=s2>"n_different_items"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"n_items"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_items</span><span class=p>,</span> <span class=s2>"n_items"</span><span class=p>,</span> <span class=n>n_different_items</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>bin_width</span><span class=p>,</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>bin_height</span><span class=p>,</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+
+    <span class=k>def</span> <span class=nf>_tuple</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Any</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a tuple with all the data of this data class for comparison.</span>
+
+<span class=sd>        :returns: a tuple with all the data of this class, where `None` values</span>
+<span class=sd>            are masked out</span>
+<span class=sd>        """</span>
+        <span class=c1># noinspection PyProtectedMember</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>_tuple</span><span class=p>()</span>
+
+<div class=viewcode-block id=PackingResult.from_packing_and_end_result>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_result.PackingResult.from_packing_and_end_result>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span> <span class=nf>from_packing_and_end_result</span><span class=p>(</span>  <span class=c1># pylint: disable=W0102</span>
+            <span class=n>end_result</span><span class=p>:</span> <span class=n>EndResult</span><span class=p>,</span> <span class=n>packing</span><span class=p>:</span> <span class=n>Packing</span><span class=p>,</span>
+            <span class=n>objectives</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>]]</span> <span class=o>=</span>
+            <span class=n>DEFAULT_OBJECTIVES</span><span class=p>,</span>
+            <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span>
+            <span class=n>_DEFAULT_BOUNDS</span><span class=p>,</span>
+            <span class=n>cache</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>],</span> <span class=nb>tuple</span><span class=p>[</span>
+                <span class=n>Objective</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]]]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span>
+            <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"PackingResult"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a `PackingResult` from an `EndResult` and a `Packing`.</span>
+
+<span class=sd>        :param end_result: the end results record</span>
+<span class=sd>        :param packing: the packing</span>
+<span class=sd>        :param bin_bounds: the bounds computing functions</span>
+<span class=sd>        :param objectives: the objective function factories</span>
+<span class=sd>        :param cache: a cache that can store stuff if this function is to be</span>
+<span class=sd>            called repeatedly</span>
+<span class=sd>        :return: the packing result</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>end_result</span><span class=p>,</span> <span class=n>EndResult</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>end_result</span><span class=p>,</span> <span class=s2>"end_result"</span><span class=p>,</span> <span class=n>EndResult</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>packing</span><span class=p>,</span> <span class=n>Packing</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>packing</span><span class=p>,</span> <span class=s2>"packing"</span><span class=p>,</span> <span class=n>Packing</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>objectives</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>objectives</span><span class=p>,</span> <span class=s2>"objectives"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=s2>"bin_bounds"</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>cache</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>cache</span><span class=p>,</span> <span class=nb>dict</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>cache</span><span class=p>,</span> <span class=s2>"cache"</span><span class=p>,</span> <span class=p>(</span><span class=kc>None</span><span class=p>,</span> <span class=nb>dict</span><span class=p>))</span>
+
+        <span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>packing</span><span class=o>.</span><span class=n>instance</span>
+        <span class=k>if</span> <span class=n>instance</span><span class=o>.</span><span class=n>name</span> <span class=o>!=</span> <span class=n>end_result</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"packing.instance.name=</span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>name</span><span class=si>!r}</span><span class=s2>, but "</span>
+                <span class=sa>f</span><span class=s2>"end_result.instance=</span><span class=si>{</span><span class=n>end_result</span><span class=o>.</span><span class=n>instance</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>row</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>],</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Objective</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span>
+                   <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span> \
+            <span class=k>if</span> <span class=p>(</span><span class=n>cache</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>)</span> <span class=k>else</span> <span class=n>cache</span><span class=o>.</span><span class=n>get</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>name</span><span class=p>,</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>row</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>objfs</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>((</span><span class=n>obj</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span> <span class=k>for</span> <span class=n>obj</span> <span class=ow>in</span> <span class=n>objectives</span><span class=p>),</span>
+                                 <span class=n>key</span><span class=o>=</span><span class=nb>str</span><span class=p>))</span>
+            <span class=n>obounds</span> <span class=o>=</span> <span class=p>{}</span>
+            <span class=k>for</span> <span class=n>objf</span> <span class=ow>in</span> <span class=n>objfs</span><span class=p>:</span>
+                <span class=n>obounds</span><span class=p>[</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>objf</span><span class=si>}{</span><span class=n>_OBJECTIVE_LOWER</span><span class=si>}</span><span class=s2>"</span><span class=p>]</span> <span class=o>=</span> <span class=n>objf</span><span class=o>.</span><span class=n>lower_bound</span><span class=p>()</span>
+                <span class=n>obounds</span><span class=p>[</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>objf</span><span class=si>}{</span><span class=n>_OBJECTIVE_UPPER</span><span class=si>}</span><span class=s2>"</span><span class=p>]</span> <span class=o>=</span> <span class=n>objf</span><span class=o>.</span><span class=n>upper_bound</span><span class=p>()</span>
+            <span class=n>row</span> <span class=o>=</span> <span class=p>({</span><span class=n>key</span><span class=p>:</span> <span class=n>bin_bounds</span><span class=p>[</span><span class=n>key</span><span class=p>](</span><span class=n>instance</span><span class=p>)</span>
+                    <span class=k>for</span> <span class=n>key</span> <span class=ow>in</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>bin_bounds</span><span class=o>.</span><span class=n>keys</span><span class=p>())},</span> <span class=n>objfs</span><span class=p>,</span>
+                   <span class=n>immutable_mapping</span><span class=p>(</span><span class=n>obounds</span><span class=p>))</span>
+        <span class=k>if</span> <span class=n>cache</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>cache</span><span class=p>[</span><span class=n>instance</span><span class=o>.</span><span class=n>name</span><span class=p>]</span> <span class=o>=</span> <span class=n>row</span>
+
+        <span class=n>objective_values</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+        <span class=n>bin_count</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+        <span class=n>bin_count_obj</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>""</span>
+        <span class=k>for</span> <span class=n>objf</span> <span class=ow>in</span> <span class=n>row</span><span class=p>[</span><span class=mi>1</span><span class=p>]:</span>
+            <span class=n>z</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>objf</span><span class=o>.</span><span class=n>evaluate</span><span class=p>(</span><span class=n>packing</span><span class=p>)</span>
+            <span class=n>objfn</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=p>(</span><span class=n>objf</span><span class=p>)</span>
+            <span class=n>objective_values</span><span class=p>[</span><span class=n>objfn</span><span class=p>]</span> <span class=o>=</span> <span class=n>z</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>z</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+                <span class=k>continue</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>objf</span><span class=p>,</span> <span class=n>BinCount</span><span class=p>):</span>
+                <span class=k>continue</span>
+            <span class=n>bc</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>objf</span><span class=o>.</span><span class=n>to_bin_count</span><span class=p>(</span><span class=n>z</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>bin_count</span> <span class=o>==</span> <span class=o>-</span><span class=mi>1</span><span class=p>:</span>
+                <span class=n>bin_count</span> <span class=o>=</span> <span class=n>bc</span>
+                <span class=n>bin_count_obj</span> <span class=o>=</span> <span class=n>objfn</span>
+            <span class=k>elif</span> <span class=n>bin_count</span> <span class=o>!=</span> <span class=n>bc</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"found bin count disagreement: </span><span class=si>{</span><span class=n>bin_count</span><span class=si>}</span><span class=s2> of "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>bin_count_obj</span><span class=si>!r}</span><span class=s2> != </span><span class=si>{</span><span class=n>bc</span><span class=si>}</span><span class=s2> of </span><span class=si>{</span><span class=n>objf</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=k>return</span> <span class=n>PackingResult</span><span class=p>(</span>
+            <span class=n>end_result</span><span class=o>=</span><span class=n>end_result</span><span class=p>,</span>
+            <span class=n>n_items</span><span class=o>=</span><span class=n>instance</span><span class=o>.</span><span class=n>n_items</span><span class=p>,</span>
+            <span class=n>n_different_items</span><span class=o>=</span><span class=n>instance</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>,</span>
+            <span class=n>bin_width</span><span class=o>=</span><span class=n>instance</span><span class=o>.</span><span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=o>=</span><span class=n>instance</span><span class=o>.</span><span class=n>bin_height</span><span class=p>,</span>
+            <span class=n>objectives</span><span class=o>=</span><span class=n>objective_values</span><span class=p>,</span>
+            <span class=n>objective_bounds</span><span class=o>=</span><span class=n>row</span><span class=p>[</span><span class=mi>2</span><span class=p>],</span>
+            <span class=n>bin_bounds</span><span class=o>=</span><span class=n>row</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span></div>
+
+
+<div class=viewcode-block id=PackingResult.from_single_log>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_result.PackingResult.from_single_log>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span> <span class=nf>from_single_log</span><span class=p>(</span>  <span class=c1># pylint: disable=W0102</span>
+            <span class=n>file</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+            <span class=n>objectives</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>]]</span> <span class=o>=</span>
+            <span class=n>DEFAULT_OBJECTIVES</span><span class=p>,</span>
+            <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span>
+            <span class=n>_DEFAULT_BOUNDS</span><span class=p>,</span>
+            <span class=n>cache</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>],</span> <span class=nb>tuple</span><span class=p>[</span>
+                <span class=n>Objective</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]]]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span>
+            <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"PackingResult"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a `PackingResult` from a file.</span>
+
+<span class=sd>        :param file: the file path</span>
+<span class=sd>        :param objectives: the objective function factories</span>
+<span class=sd>        :param bin_bounds: the bounds computing functions</span>
+<span class=sd>        :param cache: a cache that can store stuff if this function is to be</span>
+<span class=sd>            called repeatedly</span>
+<span class=sd>        :return: the packing result</span>
+<span class=sd>        """</span>
+        <span class=n>the_file_path</span> <span class=o>=</span> <span class=n>file_path</span><span class=p>(</span><span class=n>file</span><span class=p>)</span>
+        <span class=n>end_results</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>EndResult</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>EndResult</span><span class=o>.</span><span class=n>from_logs</span><span class=p>(</span><span class=n>the_file_path</span><span class=p>,</span> <span class=n>end_results</span><span class=o>.</span><span class=n>append</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>end_results</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"needs one end result record in file </span><span class=si>{</span><span class=n>the_file_path</span><span class=si>!r}</span><span class=s2>, "</span>
+                <span class=sa>f</span><span class=s2>"but got </span><span class=si>{</span><span class=n>end_results</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>packing</span> <span class=o>=</span> <span class=n>Packing</span><span class=o>.</span><span class=n>from_log</span><span class=p>(</span><span class=n>the_file_path</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>packing</span><span class=p>,</span> <span class=n>Packing</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>packing</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"packing from </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=n>Packing</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>PackingResult</span><span class=o>.</span><span class=n>from_packing_and_end_result</span><span class=p>(</span>
+            <span class=n>end_result</span><span class=o>=</span><span class=n>end_results</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=n>packing</span><span class=o>=</span><span class=n>packing</span><span class=p>,</span>
+            <span class=n>objectives</span><span class=o>=</span><span class=n>objectives</span><span class=p>,</span> <span class=n>bin_bounds</span><span class=o>=</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=n>cache</span><span class=o>=</span><span class=n>cache</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PackingResult.from_logs>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_result.PackingResult.from_logs>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span> <span class=nf>from_logs</span><span class=p>(</span>  <span class=c1># pylint: disable=W0102</span>
+            <span class=n>directory</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+            <span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=s2>"PackingResult"</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+            <span class=n>objectives</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>]]</span> <span class=o>=</span>
+            <span class=n>DEFAULT_OBJECTIVES</span><span class=p>,</span>
+            <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]</span>
+            <span class=o>=</span> <span class=n>_DEFAULT_BOUNDS</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Parse a directory recursively to get all packing results.</span>
+
+<span class=sd>        :param directory: the directory to parse</span>
+<span class=sd>        :param collector: the collector for receiving the results</span>
+<span class=sd>        :param objectives: the objective function factories</span>
+<span class=sd>        :param bin_bounds: the bin bounds calculators</span>
+<span class=sd>        """</span>
+        <span class=n>_LogParser</span><span class=p>(</span><span class=n>collector</span><span class=p>,</span> <span class=n>objectives</span><span class=p>,</span> <span class=n>bin_bounds</span><span class=p>)</span><span class=o>.</span><span class=n>parse_dir</span><span class=p>(</span><span class=n>directory</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PackingResult.to_csv>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_result.PackingResult.to_csv>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span> <span class=nf>to_csv</span><span class=p>(</span><span class=n>results</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=s2>"PackingResult"</span><span class=p>],</span> <span class=n>file</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=n>Path</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Write a sequence of packing results to a file in CSV format.</span>
+
+<span class=sd>        :param results: the end results</span>
+<span class=sd>        :param file: the path</span>
+<span class=sd>        :return: the path of the file that was written</span>
+<span class=sd>        """</span>
+        <span class=n>path</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>file</span><span class=p>)</span>
+        <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Writing packing results to CSV file </span><span class=si>{</span><span class=n>path</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>Path</span><span class=p>(</span><span class=n>os</span><span class=o>.</span><span class=n>path</span><span class=o>.</span><span class=n>dirname</span><span class=p>(</span><span class=n>path</span><span class=p>))</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+
+        <span class=c1># get a nicely sorted view on the results</span>
+        <span class=n>use_results</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>results</span><span class=p>)</span>
+
+        <span class=c1># get the names of the bounds and objectives</span>
+        <span class=n>bin_bounds_set</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=n>objectives_set</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=n>needs_encoding</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=n>needs_max_fes</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=n>needs_max_ms</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=n>needs_goal_f</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>for</span> <span class=n>pr</span> <span class=ow>in</span> <span class=n>use_results</span><span class=p>:</span>
+            <span class=n>bin_bounds_set</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>bin_bounds</span><span class=o>.</span><span class=n>keys</span><span class=p>())</span>
+            <span class=n>objectives_set</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>objectives</span><span class=o>.</span><span class=n>keys</span><span class=p>())</span>
+            <span class=n>er</span> <span class=o>=</span> <span class=n>pr</span><span class=o>.</span><span class=n>end_result</span>
+            <span class=k>if</span> <span class=n>er</span><span class=o>.</span><span class=n>encoding</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>needs_encoding</span> <span class=o>=</span> <span class=kc>True</span>
+            <span class=k>if</span> <span class=n>er</span><span class=o>.</span><span class=n>max_fes</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>needs_max_fes</span> <span class=o>=</span> <span class=kc>True</span>
+            <span class=k>if</span> <span class=n>er</span><span class=o>.</span><span class=n>max_time_millis</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>needs_max_ms</span> <span class=o>=</span> <span class=kc>True</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>er</span><span class=o>.</span><span class=n>goal_f</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>isfinite</span><span class=p>(</span><span class=n>er</span><span class=o>.</span><span class=n>goal_f</span><span class=p>)):</span>
+                <span class=n>needs_goal_f</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>bin_bounds_set</span><span class=p>)</span>
+        <span class=n>objectives</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>objectives_set</span><span class=p>)</span>
+
+        <span class=n>line</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=n>_HEADER_1</span><span class=p>]</span>
+        <span class=k>if</span> <span class=n>needs_encoding</span><span class=p>:</span>
+            <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>KEY_ENCODING</span><span class=p>)</span>
+        <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>_HEADER_2</span><span class=p>)</span>
+        <span class=n>line</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>ob</span> <span class=ow>in</span> <span class=n>objectives</span><span class=p>:</span>
+            <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ob</span><span class=si>}{</span><span class=n>_OBJECTIVE_LOWER</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ob</span><span class=si>}{</span><span class=n>_OBJECTIVE_UPPER</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>_HEADER_3</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>needs_goal_f</span><span class=p>:</span>
+            <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>KEY_GOAL_F</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>needs_max_fes</span><span class=p>:</span>
+            <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>KEY_MAX_FES</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>needs_max_ms</span><span class=p>:</span>
+            <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>KEY_MAX_TIME_MILLIS</span><span class=p>)</span>
+        <span class=n>line</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>objectives</span><span class=p>)</span>
+
+        <span class=k>with</span> <span class=n>path</span><span class=o>.</span><span class=n>open_for_write</span><span class=p>()</span> <span class=k>as</span> <span class=n>out</span><span class=p>:</span>
+            <span class=n>out</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>line</span><span class=p>))</span>
+            <span class=n>line</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+            <span class=n>out</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span>
+            <span class=k>for</span> <span class=n>pr</span> <span class=ow>in</span> <span class=n>use_results</span><span class=p>:</span>
+                <span class=n>e</span><span class=p>:</span> <span class=n>EndResult</span> <span class=o>=</span> <span class=n>pr</span><span class=o>.</span><span class=n>end_result</span>
+                <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>e</span><span class=o>.</span><span class=n>algorithm</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>e</span><span class=o>.</span><span class=n>instance</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}{</span><span class=n>e</span><span class=o>.</span><span class=n>objective</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>needs_encoding</span><span class=p>:</span>
+                    <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=s2>""</span> <span class=k>if</span> <span class=n>e</span><span class=o>.</span><span class=n>encoding</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=n>e</span><span class=o>.</span><span class=n>encoding</span><span class=p>)</span>
+                <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>n_items</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>n_different_items</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>bin_width</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>bin_height</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>for</span> <span class=n>bb</span> <span class=ow>in</span> <span class=n>bin_bounds</span><span class=p>:</span>
+                    <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span>
+                        <span class=nb>str</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>bin_bounds</span><span class=p>[</span><span class=n>bb</span><span class=p>])</span> <span class=k>if</span> <span class=n>bb</span> <span class=ow>in</span> <span class=n>pr</span><span class=o>.</span><span class=n>bin_bounds</span> <span class=k>else</span> <span class=s2>""</span><span class=p>)</span>
+                <span class=k>for</span> <span class=n>ob</span> <span class=ow>in</span> <span class=n>objectives</span><span class=p>:</span>
+                    <span class=n>ox</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ob</span><span class=si>}{</span><span class=n>_OBJECTIVE_LOWER</span><span class=si>}</span><span class=s2>"</span>
+                    <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>num_to_str</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>objective_bounds</span><span class=p>[</span><span class=n>ox</span><span class=p>])</span>
+                                <span class=k>if</span> <span class=n>ox</span> <span class=ow>in</span> <span class=n>pr</span><span class=o>.</span><span class=n>objective_bounds</span> <span class=k>else</span> <span class=s2>""</span><span class=p>)</span>
+                    <span class=n>ox</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ob</span><span class=si>}{</span><span class=n>_OBJECTIVE_UPPER</span><span class=si>}</span><span class=s2>"</span>
+                    <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>num_to_str</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>objective_bounds</span><span class=p>[</span><span class=n>ox</span><span class=p>])</span>
+                                <span class=k>if</span> <span class=n>ox</span> <span class=ow>in</span> <span class=n>pr</span><span class=o>.</span><span class=n>objective_bounds</span> <span class=k>else</span> <span class=s2>""</span><span class=p>)</span>
+                <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=nb>hex</span><span class=p>(</span><span class=n>e</span><span class=o>.</span><span class=n>rand_seed</span><span class=p>)</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>num_to_str</span><span class=p>(</span><span class=n>e</span><span class=o>.</span><span class=n>best_f</span><span class=p>)</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>e</span><span class=o>.</span><span class=n>last_improvement_fe</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>e</span><span class=o>.</span><span class=n>last_improvement_time_millis</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>e</span><span class=o>.</span><span class=n>total_fes</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>e</span><span class=o>.</span><span class=n>total_time_millis</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>needs_goal_f</span><span class=p>:</span>
+                    <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>num_or_none_to_str</span><span class=p>(</span><span class=n>e</span><span class=o>.</span><span class=n>goal_f</span><span class=p>))</span>
+                <span class=k>if</span> <span class=n>needs_max_fes</span><span class=p>:</span>
+                    <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>int_or_none_to_str</span><span class=p>(</span><span class=n>e</span><span class=o>.</span><span class=n>max_fes</span><span class=p>))</span>
+                <span class=k>if</span> <span class=n>needs_max_ms</span><span class=p>:</span>
+                    <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>int_or_none_to_str</span><span class=p>(</span><span class=n>e</span><span class=o>.</span><span class=n>max_time_millis</span><span class=p>))</span>
+                <span class=k>for</span> <span class=n>ob</span> <span class=ow>in</span> <span class=n>objectives</span><span class=p>:</span>
+                    <span class=n>line</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>num_to_str</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>objectives</span><span class=p>[</span><span class=n>ob</span><span class=p>])</span>
+                                <span class=k>if</span> <span class=n>ob</span> <span class=ow>in</span> <span class=n>pr</span><span class=o>.</span><span class=n>objectives</span> <span class=k>else</span> <span class=s2>""</span><span class=p>)</span>
+                <span class=n>out</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>line</span><span class=p>))</span>
+                <span class=n>line</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+                <span class=n>out</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Done writing end results to CSV file </span><span class=si>{</span><span class=n>path</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>path</span></div>
+
+
+<div class=viewcode-block id=PackingResult.from_csv>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_result.PackingResult.from_csv>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span> <span class=nf>from_csv</span><span class=p>(</span><span class=n>file</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+                 <span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=s2>"PackingResult"</span><span class=p>],</span> <span class=kc>None</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Load the packing results from a CSV file.</span>
+
+<span class=sd>        :param file: the file to read from</span>
+<span class=sd>        :param collector: the collector for the results</span>
+<span class=sd>        """</span>
+        <span class=n>path</span> <span class=o>=</span> <span class=n>file_path</span><span class=p>(</span><span class=n>file</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>collector</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>collector</span><span class=p>,</span> <span class=s2>"collector"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+
+        <span class=k>with</span> <span class=p>(</span><span class=n>path</span><span class=o>.</span><span class=n>open_for_read</span><span class=p>()</span> <span class=k>as</span> <span class=n>stream</span><span class=p>):</span>
+            <span class=n>header</span> <span class=o>=</span> <span class=n>stream</span><span class=o>.</span><span class=n>readline</span><span class=p>()</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>header</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>header</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>[0]"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+
+            <span class=n>idx_algorithm</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_instance</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_objective</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_encoding</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_seed</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_li_fe</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_li_ms</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_best_f</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_tt_fe</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_tt_ms</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_goal_f</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_max_fes</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_max_ms</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_n_items</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_n_different</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_bin_width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_bin_height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>idx_bounds</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+            <span class=n>idx_objective_bounds</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+            <span class=n>idx_objectives</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+
+            <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>cellstr</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>header</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>)):</span>
+                <span class=n>cell</span> <span class=o>=</span> <span class=n>cellstr</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+                <span class=k>if</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_N_ITEMS</span><span class=p>:</span>
+                    <span class=n>idx_n_items</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_N_DIFFERENT_ITEMS</span><span class=p>:</span>
+                    <span class=n>idx_n_different</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_BIN_WIDTH</span><span class=p>:</span>
+                    <span class=n>idx_bin_width</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_BIN_HEIGHT</span><span class=p>:</span>
+                    <span class=n>idx_bin_height</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_ALGORITHM</span><span class=p>:</span>
+                    <span class=n>idx_algorithm</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_INSTANCE</span><span class=p>:</span>
+                    <span class=n>idx_instance</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_OBJECTIVE_FUNCTION</span><span class=p>:</span>
+                    <span class=n>idx_objective</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_ENCODING</span><span class=p>:</span>
+                    <span class=n>idx_encoding</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_RAND_SEED</span><span class=p>:</span>
+                    <span class=n>idx_seed</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_LAST_IMPROVEMENT_FE</span><span class=p>:</span>
+                    <span class=n>idx_li_fe</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_LAST_IMPROVEMENT_TIME_MILLIS</span><span class=p>:</span>
+                    <span class=n>idx_li_ms</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_BEST_F</span><span class=p>:</span>
+                    <span class=n>idx_best_f</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_TOTAL_FES</span><span class=p>:</span>
+                    <span class=n>idx_tt_fe</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_TOTAL_TIME_MILLIS</span><span class=p>:</span>
+                    <span class=n>idx_tt_ms</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_GOAL_F</span><span class=p>:</span>
+                    <span class=n>idx_goal_f</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_MAX_FES</span><span class=p>:</span>
+                    <span class=n>idx_max_fes</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span> <span class=o>==</span> <span class=n>KEY_MAX_TIME_MILLIS</span><span class=p>:</span>
+                    <span class=n>idx_max_ms</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>LOWER_BOUNDS_BIN_COUNT</span><span class=p>):</span>
+                    <span class=n>idx_bounds</span><span class=p>[</span><span class=n>cell</span><span class=p>]</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>elif</span> <span class=n>cell</span><span class=o>.</span><span class=n>endswith</span><span class=p>((</span><span class=n>_OBJECTIVE_LOWER</span><span class=p>,</span> <span class=n>_OBJECTIVE_UPPER</span><span class=p>)):</span>
+                    <span class=n>idx_objective_bounds</span><span class=p>[</span><span class=n>cell</span><span class=p>]</span> <span class=o>=</span> <span class=n>i</span>
+                <span class=k>else</span><span class=p>:</span>
+                    <span class=n>idx_objectives</span><span class=p>[</span><span class=n>cell</span><span class=p>]</span> <span class=o>=</span> <span class=n>i</span>
+
+            <span class=k>if</span> <span class=n>idx_n_items</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_N_ITEMS</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_n_different</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_N_DIFFERENT_ITEMS</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_bin_width</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_BIN_WIDTH</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_bin_height</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_BIN_HEIGHT</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_algorithm</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_ALGORITHM</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_instance</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_INSTANCE</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_objective</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_OBJECTIVE_FUNCTION</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_seed</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_RAND_SEED</span><span class=si>!r}</span><span class=s2> in "</span>
+                    <span class=sa>f</span><span class=s2>"header </span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_li_fe</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_LAST_IMPROVEMENT_FE</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_li_ms</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_LAST_IMPROVEMENT_TIME_MILLIS</span><span class=si>!r}</span><span class=s2> in "</span>
+                    <span class=sa>f</span><span class=s2>"header </span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_best_f</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_BEST_F</span><span class=si>!r}</span><span class=s2> in header "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_tt_fe</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_TOTAL_FES</span><span class=si>!r}</span><span class=s2> in "</span>
+                    <span class=sa>f</span><span class=s2>"header </span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>idx_tt_ms</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Missing key </span><span class=si>{</span><span class=n>KEY_TOTAL_TIME_MILLIS</span><span class=si>!r}</span><span class=s2> in "</span>
+                    <span class=sa>f</span><span class=s2>"header </span><span class=si>{</span><span class=n>header</span><span class=si>!r}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+            <span class=n>objectives</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>idx_objectives</span><span class=o>.</span><span class=n>keys</span><span class=p>())</span>
+            <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>objectives</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"no objectives found in file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>for</span> <span class=n>kk</span> <span class=ow>in</span> <span class=n>objectives</span><span class=p>:</span>
+                <span class=k>if</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>kk</span><span class=si>}{</span><span class=n>_OBJECTIVE_LOWER</span><span class=si>}</span><span class=s2>"</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>idx_objective_bounds</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"objective </span><span class=si>{</span><span class=n>kk</span><span class=si>!r}</span><span class=s2> has no lower bound in header "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=k>if</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>kk</span><span class=si>}{</span><span class=n>_OBJECTIVE_UPPER</span><span class=si>}</span><span class=s2>"</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>idx_objective_bounds</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"objective </span><span class=si>{</span><span class=n>kk</span><span class=si>!r}</span><span class=s2> has no upper bound in header "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>header</span><span class=si>}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>idx_objective_bounds</span><span class=p>)</span> <span class=o>!=</span> <span class=p>(</span><span class=mi>2</span> <span class=o>*</span> <span class=nb>len</span><span class=p>(</span><span class=n>objectives</span><span class=p>)):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"inconsistent bounds </span><span class=si>{</span><span class=n>idx_objective_bounds</span><span class=o>.</span><span class=n>keys</span><span class=p>()</span><span class=si>}</span><span class=s2> in "</span>
+                    <span class=sa>f</span><span class=s2>"header </span><span class=si>{</span><span class=n>header</span><span class=si>}</span><span class=s2> of file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+            <span class=n>bounds</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>idx_bounds</span><span class=o>.</span><span class=n>keys</span><span class=p>())</span>
+            <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>bounds</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"no bounds found in file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+            <span class=k>for</span> <span class=n>line</span> <span class=ow>in</span> <span class=n>stream</span><span class=p>:</span>
+                <span class=n>splt</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>)</span>
+                <span class=n>encoding</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span>
+                <span class=k>if</span> <span class=n>idx_encoding</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=n>encoding</span> <span class=o>=</span> <span class=kc>None</span>
+                <span class=k>else</span><span class=p>:</span>
+                    <span class=n>encoding</span> <span class=o>=</span> <span class=n>splt</span><span class=p>[</span><span class=n>idx_encoding</span><span class=p>]</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+                    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>encoding</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                        <span class=n>encoding</span> <span class=o>=</span> <span class=kc>None</span>
+
+                <span class=n>er</span> <span class=o>=</span> <span class=n>EndResult</span><span class=p>(</span>
+                    <span class=n>splt</span><span class=p>[</span><span class=n>idx_algorithm</span><span class=p>]</span><span class=o>.</span><span class=n>strip</span><span class=p>(),</span>  <span class=c1># algorithm</span>
+                    <span class=n>splt</span><span class=p>[</span><span class=n>idx_instance</span><span class=p>]</span><span class=o>.</span><span class=n>strip</span><span class=p>(),</span>  <span class=c1># instance</span>
+                    <span class=n>splt</span><span class=p>[</span><span class=n>idx_objective</span><span class=p>]</span><span class=o>.</span><span class=n>strip</span><span class=p>(),</span>  <span class=c1># objective</span>
+                    <span class=n>encoding</span><span class=p>,</span>  <span class=c1># encoding</span>
+                    <span class=nb>int</span><span class=p>((</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_seed</span><span class=p>])[</span><span class=mi>2</span><span class=p>:],</span> <span class=mi>16</span><span class=p>),</span>  <span class=c1># rand seed</span>
+                    <span class=n>str_to_num</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_best_f</span><span class=p>]),</span>  <span class=c1># best_f</span>
+                    <span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_li_fe</span><span class=p>]),</span>  <span class=c1># last_improvement_fe</span>
+                    <span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_li_ms</span><span class=p>]),</span>  <span class=c1># last_improvement_time_millis</span>
+                    <span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_tt_fe</span><span class=p>]),</span>  <span class=c1># total_fes</span>
+                    <span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_tt_ms</span><span class=p>]),</span>  <span class=c1># total_time_millis</span>
+                    <span class=kc>None</span> <span class=k>if</span> <span class=n>idx_goal_f</span> <span class=o><</span> <span class=mi>0</span> <span class=k>else</span>
+                    <span class=n>str_to_num_or_none</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_goal_f</span><span class=p>]),</span>  <span class=c1># goal_f</span>
+                    <span class=kc>None</span> <span class=k>if</span> <span class=n>idx_max_fes</span> <span class=o><</span> <span class=mi>0</span> <span class=k>else</span>
+                    <span class=n>str_to_int_or_none</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_max_fes</span><span class=p>]),</span>  <span class=c1># max_fes</span>
+                    <span class=kc>None</span> <span class=k>if</span> <span class=n>idx_max_ms</span> <span class=o><</span> <span class=mi>0</span> <span class=k>else</span>
+                    <span class=n>str_to_int_or_none</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_max_ms</span><span class=p>]))</span>  <span class=c1># max_time_millis</span>
+
+                <span class=n>the_objectives</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>{</span>
+                    <span class=n>on</span><span class=p>:</span> <span class=n>str_to_num</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_objectives</span><span class=p>[</span><span class=n>on</span><span class=p>]])</span>
+                    <span class=k>for</span> <span class=n>on</span> <span class=ow>in</span> <span class=n>objectives</span><span class=p>}</span>
+                <span class=n>the_bin_bounds</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>{</span>
+                    <span class=n>on</span><span class=p>:</span> <span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_bounds</span><span class=p>[</span><span class=n>on</span><span class=p>]])</span> <span class=k>for</span> <span class=n>on</span> <span class=ow>in</span> <span class=n>bounds</span><span class=p>}</span>
+                <span class=n>the_objective_bounds</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>{</span>
+                    <span class=n>on</span><span class=p>:</span> <span class=n>str_to_num</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idxx</span><span class=p>])</span>
+                    <span class=k>for</span> <span class=n>on</span><span class=p>,</span> <span class=n>idxx</span> <span class=ow>in</span> <span class=n>idx_objective_bounds</span><span class=o>.</span><span class=n>items</span><span class=p>()}</span>
+
+                <span class=n>collector</span><span class=p>(</span><span class=n>PackingResult</span><span class=p>(</span>
+                    <span class=n>n_items</span><span class=o>=</span><span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_n_items</span><span class=p>]),</span>
+                    <span class=n>n_different_items</span><span class=o>=</span><span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_n_different</span><span class=p>]),</span>
+                    <span class=n>bin_width</span><span class=o>=</span><span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_bin_width</span><span class=p>]),</span>
+                    <span class=n>bin_height</span><span class=o>=</span><span class=nb>int</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=n>idx_bin_height</span><span class=p>]),</span>
+                    <span class=n>end_result</span><span class=o>=</span><span class=n>er</span><span class=p>,</span>
+                    <span class=n>objectives</span><span class=o>=</span><span class=n>the_objectives</span><span class=p>,</span>
+                    <span class=n>objective_bounds</span><span class=o>=</span><span class=n>the_objective_bounds</span><span class=p>,</span>
+                    <span class=n>bin_bounds</span><span class=o>=</span><span class=n>the_bin_bounds</span><span class=p>))</span></div>
+</div>
+
+
+
+<span class=k>class</span> <span class=nc>_LogParser</span><span class=p>(</span><span class=n>LogParser</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""The internal log parser class."""</span>
+
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=s2>"PackingResult"</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+                 <span class=n>objectives</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>]],</span>
+                 <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>int</span><span class=p>]])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Parse a directory recursively to get all packing results.</span>
+
+<span class=sd>        :param collector: the collector for receiving the results</span>
+<span class=sd>        :param objectives: the objective function factories</span>
+<span class=sd>        :param bin_bounds: the bin bounds calculators</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>collector</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>collector</span><span class=p>,</span> <span class=s2>"collector"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>objectives</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>objectives</span><span class=p>,</span> <span class=s2>"objectives"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=s2>"bin_bounds"</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span>
+        <span class=c1>#: the internal collector</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collector</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>PackingResult</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>collector</span>
+        <span class=c1>#: the objectives holder</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span>
+            <span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>]]]</span> <span class=o>=</span> <span class=n>objectives</span>
+        <span class=c1>#: the bin bounds</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span>
+            <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]]</span> <span class=o>=</span> <span class=n>bin_bounds</span>
+        <span class=c1>#: the internal cache</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__cache</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Mapping</span><span class=p>[</span>
+            <span class=nb>str</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>],</span> <span class=nb>tuple</span><span class=p>[</span>
+                <span class=n>Objective</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]]]]</span> <span class=o>=</span> <span class=p>{}</span>
+
+    <span class=k>def</span> <span class=nf>parse_file</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>path</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Parse a log file.</span>
+
+<span class=sd>        :param path: the path to the log file</span>
+<span class=sd>        :return: `True`</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collector</span><span class=p>(</span><span class=n>PackingResult</span><span class=o>.</span><span class=n>from_single_log</span><span class=p>(</span>
+            <span class=n>path</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__cache</span><span class=p>))</span>
+        <span class=k>return</span> <span class=kc>True</span>
+
+
+<span class=c1># Evaluate an experiment from the command line</span>
+
+<span class=c1># Run log files to end results if executed as script</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span>
+        <span class=s2>"Convert log files for the bin packing experiment to a CSV file."</span><span class=p>,</span>
+        <span class=s2>"Re-evaluate all results based on different objective functions."</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"source"</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./results"</span><span class=p>,</span>
+        <span class=n>help</span><span class=o>=</span><span class=s2>"the location of the experimental results, i.e., the root folder "</span>
+             <span class=s2>"under which to search for log files"</span><span class=p>,</span> <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the path to the end results CSV file to be created"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./evaluation/end_results.txt"</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+
+    <span class=n>packing_results</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>PackingResult</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>PackingResult</span><span class=o>.</span><span class=n>from_logs</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>source</span><span class=p>,</span> <span class=n>packing_results</span><span class=o>.</span><span class=n>append</span><span class=p>)</span>
+    <span class=n>PackingResult</span><span class=o>.</span><span class=n>to_csv</span><span class=p>(</span><span class=n>packing_results</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label="main navigation"class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><div id=searchbox role=search style=display:none><h3 id=searchlabel>Quick search</h3><div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div></div><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.45 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.packing_result</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>
