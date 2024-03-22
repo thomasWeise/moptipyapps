@@ -35,7 +35,7 @@ You can install the newest version of this library from [PyPi](https://pypi.org/
 pip install moptipyapps
 ```
 
-This will install the latest official release of our package as well as [all dependencies](https://thomasweise.github.io/moptipyapps/requirements.html).
+This will install the latest official release of our package as well as [all dependencies](https://thomasweise.github.io/moptipyapps/requirements_txt.html).
 If you want to install the latest source code version from GitHub (which may not yet be officially released), you can do
 
 ```shell
@@ -53,11 +53,11 @@ This may sometimes work better if you are having trouble reaching GitHub via `ht
 
 You can also clone the repository and then run a [`make` build](https://thomasweise.github.io/moptipyapps/Makefile.html), which will automatically install all dependencies, run all the tests, and then install the package on your system, too.
 This will work only on Linux, though.
-It also installs the [dependencies for building](https://thomasweise.github.io/moptipyapps/requirements-dev.html), which include, e.g., those for [unit testing and static analysis](#4-unit-tests-and-static-analysis).
+It also installs the [dependencies for building](https://thomasweise.github.io/moptipyapps/requirements-dev_txt.html), which include, e.g., those for [unit testing and static analysis](#4-unit-tests-and-static-analysis).
 If this build completes successful, you can be sure that [`moptipyapps`](https://thomasweise.github.io/moptipyapps) will work properly on your machine.
 
-All dependencies for using and running `moptipyapps` are listed at [here](https://thomasweise.github.io/moptipyapps/requirements.html).
-The additional dependencies for a [full `make` build](https://thomasweise.github.io/moptipyapps/Makefile.html), including unit tests, static analysis, and the generation of documentation are listed [here](https://thomasweise.github.io/moptipyapps/requirements-dev.html).
+All dependencies for using and running `moptipyapps` are listed at [here](https://thomasweise.github.io/moptipyapps/requirements_txt.html).
+The additional dependencies for a [full `make` build](https://thomasweise.github.io/moptipyapps/Makefile.html), including unit tests, static analysis, and the generation of documentation are listed [here](https://thomasweise.github.io/moptipyapps/requirements-dev_txt.html).
 
 
 ## 3. Applications
@@ -91,9 +91,9 @@ We can then apply a black-box metaheuristic to search in the space of these sign
 The objective function would be some measure consistent with the goal of minimizing the number of bins used.
 
 *Examples:*
-- [plot a packing chart](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_plot.html)
-- [apply a randomized local search to one 2D bin packing instance](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_rls.html)
-- [measure the runtime of the different encodings for the 2D bin packing problem](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_timing.html)
+- [plot a packing chart](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_plot_py.html)
+- [apply a randomized local search to one 2D bin packing instance](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_rls_py.html)
+- [measure the runtime of the different encodings for the 2D bin packing problem](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_timing_py.html)
 
 Important work on this code has been contributed by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
 
@@ -114,8 +114,8 @@ We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/softw
 110 of these instances are included as resources in this package.
 
 *Examples:*
-- [apply a randomized local search to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_rls.html)
-- [apply a some FFA-based algorithms to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_special_algorithms.html)
+- [apply a randomized local search to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_rls_py.html)
+- [apply a some FFA-based algorithms to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_special_algorithms_py.html)
 
 Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 
@@ -165,8 +165,8 @@ For each TTP, a distance matrix is defined, very much like for the [TSP](#32-the
 The goal is to find a feasible game schedule where the overall travel distances are minimal.
 
 *Examples:*
-- [apply a local search to find a feasible TTP plan](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_rls_rs.html)
-- [tackle the TTP in a multi-objective manner](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_mo.html)
+- [apply a local search to find a feasible TTP plan](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_rls_rs_py.html)
+- [tackle the TTP in a multi-objective manner](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_mo_py.html)
 
 
 ### 3.5. The Quadratic Assignment Problem (QAP)
@@ -186,7 +186,7 @@ To this end, solutions can be represented as permutations of facilities determin
 
 *Examples:*
 - See [one-dimensional ordering](#36-one-dimensional-ordering)
-- [run a QAP experiment with RLS and random sampling](https://thomasweise.github.io/moptipyapps/examples/qap_example_experiment_rls_rs.html)
+- [run a QAP experiment with RLS and random sampling](https://thomasweise.github.io/moptipyapps/examples/qap_example_experiment_rls_rs_py.html)
 
 
 ### 3.6. One-Dimensional Ordering
@@ -224,7 +224,7 @@ But that's OK.
 Because we mainly do this for visualization purposes anyway.
 
 *Examples:*
-- [use one-dimensional ordering to for search trajectory charts](https://thomasweise.github.io/moptipyapps/examples/order1_from_dat.html)
+- [use one-dimensional ordering to for search trajectory charts](https://thomasweise.github.io/moptipyapps/examples/order1_from_dat_py.html)
 
 
 ## 4. Unit Tests and Static Analysis
@@ -296,7 +296,7 @@ We *always* must maintain high coding and documentation standards from the very 
 While `moptipy` may still be far from achieving these goals, at least we try to get there.
 
 Anyway, you can find our [full `make` build](https://thomasweise.github.io/moptipyapps/Makefile.html) running all the tests, doing all the static analyses, creating the documentation, and creating and packaging the distribution files [here](https://thomasweise.github.io/moptipyapps/Makefile.html).
-Besides the [basic `moptipyapps` dependencies](https://thomasweise.github.io/moptipyapps/requirements-dev.html), it requires [a set of additional dependencies](https://thomasweise.github.io/moptipyapps/requirements-dev.html).
+Besides the [basic `moptipyapps` dependencies](https://thomasweise.github.io/moptipyapps/requirements-dev_txt.html), it requires [a set of additional dependencies](https://thomasweise.github.io/moptipyapps/requirements-dev_txt.html).
 These are all automatically installed during the build procedure.
 The build only works under Linux.
 
@@ -316,8 +316,8 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should have received a copy of the GNU General Public License along with this program.
 If not, see <https://www.gnu.org/licenses/>.
 
-Please visit the [contributions guidelines](https://thomasweise.github.io/moptipyapps/CONTRIBUTING.html) for `moptipy` if you would like to contribute to our package.
-If you have any concerns regarding security, please visit our [security policy](https://thomasweise.github.io/moptipyapps/SECURITY.html).
+Please visit the [contributions guidelines](https://thomasweise.github.io/moptipyapps/CONTRIBUTING_md.html) for `moptipy` if you would like to contribute to our package.
+If you have any concerns regarding security, please visit our [security policy](https://thomasweise.github.io/moptipyapps/SECURITY_md.html).
 
 
 ### 5.1. Exceptions
