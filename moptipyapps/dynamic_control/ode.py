@@ -141,8 +141,7 @@ class __IntegrationState:
                 self.max_ok_t = t
         else:  # no: there was some error, either in state or controller
             self.is_ok = False  # then we are no longer OK
-            if t < self.min_error_t:  # update the minimum error time
-                self.min_error_t = t
+            self.min_error_t = min(self.min_error_t, t)
             if self.max_ok_t > t:  # what? an earlier error?
                 self.max_ok_t = np.nextafter(t, -inf)  # ok, reset ok time
 

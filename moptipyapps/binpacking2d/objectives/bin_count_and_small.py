@@ -88,8 +88,7 @@ def bin_count_and_small(y: np.ndarray, bin_area: int,
         bin_idx: int = int(y[i, IDX_BIN]) - 1  # get the bin index of the item
         temp[bin_idx] += ((y[i, IDX_RIGHT_X] - y[i, IDX_LEFT_X])
                           * (y[i, IDX_TOP_Y] - y[i, IDX_BOTTOM_Y]))
-        if bin_idx > total_bins:  # is it a new last bin?
-            total_bins = bin_idx  # and we remember it
+        total_bins = max(total_bins, bin_idx)
     return (bin_area * total_bins) + temp[0:total_bins + 1].min()
 
 

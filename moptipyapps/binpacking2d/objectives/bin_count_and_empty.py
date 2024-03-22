@@ -63,8 +63,7 @@ def bin_count_and_empty(y: np.ndarray, temp: np.ndarray) -> int:
     for i in range(n_items):  # iterate over all packed items
         bin_idx: int = int(y[i, IDX_BIN]) - 1  # get the bin index of the item
         temp[bin_idx] += 1  # increase number of items
-        if bin_idx > total_bins:  # it's a new biggest bin = new last bin?
-            total_bins = bin_idx  # and we remember it
+        total_bins = max(total_bins, bin_idx)
     return (n_items * total_bins) + temp[0:total_bins + 1].min()
 
 

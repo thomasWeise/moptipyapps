@@ -123,7 +123,7 @@ from moptipy.api.component import Component
 from moptipy.utils.logger import CSV_SEPARATOR, KeyValueLogSection
 from moptipy.utils.nputils import int_range_to_dtype
 from moptipy.utils.strings import sanitize_name
-from pycommons.io.path import Path, file_path
+from pycommons.io.path import UTF8, Path, file_path
 from pycommons.types import check_int_range, check_to_int_range, type_error
 
 #: the instances resource name
@@ -907,8 +907,8 @@ class Instance(Component, np.ndarray):
         if hasattr(container, text_attr):  # ok, we got the text already
             text = cast(list[str], getattr(container, text_attr))
         else:  # the first time we load the text
-            with resources.open_text(package=str(__package__),
-                                     resource=INSTANCES_RESOURCE) as stream:
+            with resources.files(__package__).joinpath(
+                    INSTANCES_RESOURCE).open("r", encoding=UTF8) as stream:
                 text = [line for line in (line_raw.strip() for line_raw
                                           in stream.readlines())
                         if len(line) > 0]

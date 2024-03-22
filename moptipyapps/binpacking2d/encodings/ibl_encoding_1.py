@@ -162,9 +162,8 @@ def __move_down(packing: np.ndarray, bin_start: int, i1: int) -> bool:
                 (packing[i0, IDX_LEFT_X] < packing_i1_right_x) and \
                 (packing[i0, IDX_BOTTOM_Y] < packing_i1_top_y):
             # The object would horizontally intersect with the current object
-            diff: int = int(packing_i1_bottom_y - packing[i0, IDX_TOP_Y])
-            if diff < min_down:  # we can move down only a shorter distance
-                min_down = diff  # ok, a shorter distance was found
+            min_down = min(min_down, int(
+                packing_i1_bottom_y - packing[i0, IDX_TOP_Y]))
     if min_down > 0:  # Can we move down? If yes, update box.
         packing[i1, IDX_BOTTOM_Y] = packing_i1_bottom_y - min_down
         packing[i1, IDX_TOP_Y] = packing_i1_top_y - min_down
@@ -239,14 +238,12 @@ def __move_left(packing: np.ndarray, bin_start: int, i1: int) -> bool:
             if packing[i0, IDX_TOP_Y] == packing_i1_bottom_y:
                 # only consider those the box *directly* below and move the
                 # right end of the new box to the left end of that box below
-                diff = int(packing_i1_right_x - packing[i0, IDX_LEFT_X])
-                if diff < min_left:
-                    min_left = diff
+                min_left = min(min_left, int(
+                    packing_i1_right_x - packing[i0, IDX_LEFT_X]))
         elif (packing_i1_top_y > packing[i0, IDX_BOTTOM_Y]) \
                 and (packing_i1_bottom_y < packing[i0, IDX_TOP_Y]):
-            diff = int(packing_i1_left_x - packing[i0, IDX_RIGHT_X])
-            if diff < min_left:
-                min_left = diff
+            min_left = min(min_left, int(
+                packing_i1_left_x - packing[i0, IDX_RIGHT_X]))
     if min_left > 0:
         # move the box to the left
         packing[i1, IDX_LEFT_X] = packing_i1_left_x - min_left

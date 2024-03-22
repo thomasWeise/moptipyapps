@@ -376,7 +376,7 @@ class Instance(Component):
         if hasattr(container, inst_attr):  # instance loaded?
             return cast(Instance, getattr(container, inst_attr))
 
-        lb: int | None = _BOUNDS[name] if name in _BOUNDS else None
+        lb: int | None = _BOUNDS.get(name, None)
         with open_resource_stream(f"{name}.dat") as stream:
             inst: Final[Instance] = Instance.from_qaplib_stream(
                 stream, name=name, lower_bound=lb)

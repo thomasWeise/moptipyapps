@@ -823,10 +823,8 @@ class Instance(Component, np.ndarray):
                             f"if i=j={i}, then dist must be zero "
                             f"but is {dist}.")
                     continue
-                if dist > farthest_neighbor:
-                    farthest_neighbor = dist
-                if dist < nearest_neighbor:
-                    nearest_neighbor = dist
+                farthest_neighbor = max(farthest_neighbor, dist)
+                nearest_neighbor = min(nearest_neighbor, dist)
                 if dist != matrix[j, i]:
                     is_symmetric = False
             if farthest_neighbor <= 0:

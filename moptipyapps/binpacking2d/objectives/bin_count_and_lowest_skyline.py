@@ -122,12 +122,11 @@ def bin_count_and_lowest_skyline(y: np.ndarray, bin_width: int,
                 if cur_left < left < next_left:
                     next_left = left
 
-            if next_left < use_right:
-                use_right = next_left
+            use_right = min(use_right, next_left)
             area_under_skyline += (use_right - cur_left) * use_top
             cur_left = use_right
-        if area_under_skyline <= min_area_under_skyline:
-            min_area_under_skyline = area_under_skyline
+        min_area_under_skyline = min(min_area_under_skyline,
+                                     area_under_skyline)
     return ((bins - 1) * bin_size) + min_area_under_skyline
 
 

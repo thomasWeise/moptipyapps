@@ -72,8 +72,7 @@ def _from_stream(stream: TextIO) -> np.ndarray:
                 if node in done_nodes:
                     raise ValueError(f"encountered node {node} twice")
                 done_nodes.add(node)
-                if node > max_node:
-                    max_node = node
+                max_node = max(max_node, node)
                 nodes.append(node - 1)
     if len(nodes) != max_node:
         raise ValueError(
