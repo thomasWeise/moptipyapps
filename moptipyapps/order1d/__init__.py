@@ -22,9 +22,10 @@ either at the beginning or end of the order, in which case it has exactly one
 closest neighbor. Based on the actual distance metric, an object may have any
 number of closest neighbors, maybe only one, or maybe three equally-far away
 objects. So it is not clear whether a perfect mapping to the one-dimensional
-permutations even exists.
+permutations even exists. Probably it will not, but this shall not bother us.
 
-But we can try to find one that comes as close as possible to the real deal.
+Either way, we can try to find one that comes as close as possible to the real
+deal.
 
 Another way to describe this problem is as follows:
 Imagine that you have `n` objects and only know their mutual distances.
@@ -52,14 +53,14 @@ The objects should be arranged in such a way that, for each object,
 
 We do not care about the actual precise distances (e.g., something like
 "0.001") between the objects on either the one-dimensional nor the original
-space. Only about the distance ranks, i.e., about "2nd nearest neighbor," but
-not "0.012 distance units away." The solutions of this problem are thus
-permutations (orders) of the objects. Of course, if we really want to plot the
-objects, such a permutation can easily be translated to `x`-coordinates, say,
-by dividing the index of an object by the number of objects, which nets values
-in `[0,1]`. But basically, we reduce the task to finding permutations of
-objects that reflect the neighbor structure of the original space as closely
-as possible.
+space. We only care about the distance ranks, i.e., about "2nd nearest
+neighbor," but not "0.012 distance units away." The solutions of this problem
+are thus permutations (orders) of the objects. Of course, if we really want
+to plot the objects, such a permutation can easily be translated to
+`x`-coordinates, say, by dividing the index of an object by the number of
+objects, which nets values in `[0,1]`. But basically, we reduce the task to
+finding permutations of objects that reflect the neighbor structure of the
+original space as closely as possible.
 
 If such a problem is solved correctly, then the arrangement on the
 one-dimensional axis should properly reflect the arrangement of the objects in
@@ -101,7 +102,7 @@ The distance between two numbers `a` and `b` be `abs(a - b)`.
 >>> def dist(a, b):
 ...     return abs(a - b)
 
-The **original** distance matrix that we could be would be
+The **original** distance matrix would be
 
 >>> dm = [[dist(i, j) for j in range(n)] for i in range(n)]
 >>> print(dm)

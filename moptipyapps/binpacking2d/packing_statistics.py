@@ -5,46 +5,39 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Any, Callable, Final, Iterable, Mapping, cast
 
-from moptipy.api.logging import (
-    KEY_ALGORITHM,
-    KEY_BEST_F,
-    KEY_GOAL_F,
-    KEY_INSTANCE,
-    KEY_LAST_IMPROVEMENT_FE,
-    KEY_LAST_IMPROVEMENT_TIME_MILLIS,
-    KEY_MAX_FES,
-    KEY_MAX_TIME_MILLIS,
-    KEY_TOTAL_FES,
-    KEY_TOTAL_TIME_MILLIS,
-)
 from moptipy.evaluation.base import (
-    KEY_ENCODING,
     KEY_N,
-    KEY_OBJECTIVE_FUNCTION,
     EvaluationDataElement,
 )
 from moptipy.evaluation.end_results import EndResult
+from moptipy.evaluation.end_statistics import CsvReader as EsCsvReader
+from moptipy.evaluation.end_statistics import CsvWriter as EsCsvWriter
 from moptipy.evaluation.end_statistics import (
-    KEY_BEST_F_SCALED,
-    KEY_ERT_FES,
-    KEY_ERT_TIME_MILLIS,
-    KEY_N_SUCCESS,
-    KEY_SUCCESS_FES,
-    KEY_SUCCESS_TIME_MILLIS,
     EndStatistics,
 )
-from moptipy.evaluation.statistics import (
-    EMPTY_CSV_ROW,
-    Statistics,
+from moptipy.evaluation.end_statistics import (
+    from_end_results as es_from_end_results,
 )
-from moptipy.utils.logger import CSV_SEPARATOR
 from moptipy.utils.strings import (
     num_to_str,
 )
 from pycommons.ds.immutable_map import immutable_mapping
 from pycommons.io.console import logger
-from pycommons.io.path import Path
-from pycommons.types import check_int_range, type_error
+from pycommons.io.csv import (
+    SCOPE_SEPARATOR,
+    csv_column,
+    csv_read,
+    csv_scope,
+    csv_select_scope,
+    csv_write,
+)
+from pycommons.io.path import Path, file_path, line_writer
+from pycommons.math.sample_statistics import CsvReader as SsCsvReader
+from pycommons.math.sample_statistics import CsvWriter as SsCsvWriter
+from pycommons.math.sample_statistics import SampleStatistics
+from pycommons.math.sample_statistics import from_samples as ss_from_samples
+from pycommons.strings.string_conv import str_to_num
+from pycommons.types import check_int_range, reiterable, type_error
 
 from moptipyapps.binpacking2d.objectives.bin_count import BIN_COUNT_NAME
 from moptipyapps.binpacking2d.packing_result import (
@@ -54,8 +47,11 @@ from moptipyapps.binpacking2d.packing_result import (
     KEY_BIN_WIDTH,
     KEY_N_DIFFERENT_ITEMS,
     KEY_N_ITEMS,
+    LOWER_BOUNDS_BIN_COUNT,
     PackingResult,
 )
+from moptipyapps.binpacking2d.packing_result import from_csv as pr_from_csv
+from moptipyapps.binpacking2d.packing_result import from_logs as pr_from_logs
 from moptipyapps.shared import moptipyapps_argparser
 
 
@@ -76,13 +72,13 @@ class PackingStatistics(EvaluationDataElement):
     n_different_items: int
     #: the bin width
     bin_width: int
-    #: the bin heigth
+    #: the bin height
     bin_height: int
     #: the objective values evaluated after the optimization
-    objectives: Mapping[str, Statistics]
+    objectives: Mapping[str, SampleStatistics]
     #: the bounds for the objective values (append ".lowerBound" and
     #: ".upperBound" to all objective function names)
-    objective_bounds: Mapping[str, int]
+    objective_bounds: Mapping[str, int | float]
     #: the bounds for the minimum number of bins of the instance
     bin_bounds: Mapping[str, int]
 
@@ -92,7 +88,7 @@ class PackingStatistics(EvaluationDataElement):
                  n_different_items: int,
                  bin_width: int,
                  bin_height: int,
-                 objectives: Mapping[str, Statistics],
+                 objectives: Mapping[str, SampleStatistics],
                  objective_bounds: Mapping[str, int | float],
                  bin_bounds: Mapping[str, int]):
         """
@@ -131,36 +127,41 @@ class PackingStatistics(EvaluationDataElement):
                              f"bounds, objectives={objectives}, "
                              f"objective_bounds={objective_bounds}.")
 
-        for name, value in objectives.items():
+        for name, stat in objectives.items():
             if not isinstance(name, str):
                 raise type_error(
-                    name, f"name of evaluation[{name!r}]={value!r}", str)
-            if not isinstance(value, Statistics):
+                    name, f"name of evaluation[{name!r}]={stat!r}", str)
+            if not isinstance(stat, int | float | SampleStatistics):
                 raise type_error(
-                    value, f"value of evaluation[{name!r}]={value!r}",
-                    Statistics)
-            lower = objective_bounds[f"{name}{_OBJECTIVE_LOWER}"]
+                    stat, f"value of evaluation[{name!r}]={stat!r}",
+                    (int, float, SampleStatistics))
+            lll: str = csv_scope(name, _OBJECTIVE_LOWER)
+            lower = objective_bounds[lll]
             if not isfinite(lower):
-                raise ValueError(f"{name}{_OBJECTIVE_LOWER}=={lower}.")
-            upper = objective_bounds[f"{name}{_OBJECTIVE_UPPER}"]
-            if not (lower <= value.minimum <= value.maximum <= upper):
-                raise ValueError(
-                    f"it is required that {name}{_OBJECTIVE_LOWER}<={name}."
-                    f"min<={name}.max<={name}{_OBJECTIVE_UPPER}, but got "
-                    f"{lower}, {value.minimum}, {value.maximum} and {upper}.")
-
-        bins: Final[Statistics | None] = cast(
-            Statistics, objectives[BIN_COUNT_NAME]) \
+                raise ValueError(f"{lll}=={lower}.")
+            uuu = csv_scope(name, _OBJECTIVE_UPPER)
+            upper = objective_bounds[uuu]
+            for value in (stat.minimum, stat.maximum) \
+                    if isinstance(stat, SampleStatistics) else (stat, ):
+                if not isfinite(value):
+                    raise ValueError(
+                        f"non-finite value of evaluation[{name!r}]={value!r}")
+                if not (lower <= value <= upper):
+                    raise ValueError(
+                        f"it is required that {lll}<=f<={uuu}, but got "
+                        f"{lower}, {value}, and {upper}.")
+        bins: Final[SampleStatistics | None] = cast(
+            SampleStatistics, objectives[BIN_COUNT_NAME]) \
             if BIN_COUNT_NAME in objectives else None
-        for name, value2 in bin_bounds.items():
-            if not isinstance(name, str):
+        for name2, value2 in bin_bounds.items():
+            if not isinstance(name2, str):
                 raise type_error(
-                    name, f"name of bounds[{name!r}]={value2!r}", str)
-            check_int_range(value2, f"bounds[{name!r}]", 1, 1_000_000_000)
+                    name2, f"name of bounds[{name2!r}]={value2!r}", str)
+            check_int_range(value2, f"bounds[{name2!r}]", 1, 1_000_000_000)
             if (bins is not None) and (bins.minimum < value2):
                 raise ValueError(
                     f"number of bins={bins} is inconsistent with "
-                    f"bound {name!r}={value2}.")
+                    f"bound {name2!r}={value2}.")
 
         object.__setattr__(self, "end_statistics", end_statistics)
         object.__setattr__(self, "objectives", immutable_mapping(objectives))
@@ -186,432 +187,383 @@ class PackingStatistics(EvaluationDataElement):
         # noinspection PyProtectedMember
         return self.end_statistics._tuple()
 
-    @staticmethod
-    def from_packing_results(
-            results: Iterable[PackingResult],
-            collector: Callable[["PackingStatistics"], None]) -> None:
-        """
-        Create packing statistics from a sequence of packing results.
 
-        :param results: the packing results
-        :param collector: the collector receiving the created packing
-            statistics
-        """
-        if not isinstance(results, Iterable):
-            raise type_error(results, "results", Iterable)
-        if not callable(collector):
-            raise type_error(collector, "collector", call=True)
-        groups: Final[dict[tuple[str, str, str, str], list[PackingResult]]] \
-            = {}
-        objectives_set: set[str] = set()
-        for i, pr in enumerate(results):
-            if not isinstance(pr, PackingResult):
-                raise type_error(pr, f"end_results[{i}]", PackingResult)
-            setting: tuple[str, str, str, str] = \
-                (pr.end_result.algorithm, pr.end_result.instance,
-                 pr.end_result.objective, "" if pr.end_result.encoding is None
-                 else pr.end_result.encoding)
-            if setting in groups:
-                groups[setting].append(pr)
-            else:
-                groups[setting] = [pr]
-            objectives_set.update(pr.objectives.keys())
+def from_packing_results(
+        results: Iterable[PackingResult],
+        consumer: Callable[[PackingStatistics], None]) -> None:
+    """
+    Create packing statistics from a sequence of packing results.
 
-        if len(groups) <= 0:
-            raise ValueError("results is empty!")
-        if len(objectives_set) <= 0:
-            raise ValueError("results has not objectives!")
-        end_stats: Final[list[EndStatistics]] = []
-        objectives: Final[list[str]] = sorted(objectives_set)
+    :param results: the packing results
+    :param consumer: the consumer receiving the created packing
+        statistics
+    """
+    if not isinstance(results, Iterable):
+        raise type_error(results, "results", Iterable)
+    if not callable(consumer):
+        raise type_error(consumer, "consumer", call=True)
+    groups: Final[dict[tuple[str, str, str, str], list[PackingResult]]] \
+        = {}
+    objectives_set: set[str] = set()
+    for i, pr in enumerate(results):
+        if not isinstance(pr, PackingResult):
+            raise type_error(pr, f"end_results[{i}]", PackingResult)
+        setting: tuple[str, str, str, str] = \
+            (pr.end_result.algorithm, pr.end_result.instance,
+             pr.end_result.objective, "" if pr.end_result.encoding is None
+             else pr.end_result.encoding)
+        if setting in groups:
+            groups[setting].append(pr)
+        else:
+            groups[setting] = [pr]
+        objectives_set.update(pr.objectives.keys())
 
-        for key in sorted(groups.keys()):
-            data = groups[key]
+    if len(groups) <= 0:
+        raise ValueError("results is empty!")
+    if len(objectives_set) <= 0:
+        raise ValueError("results has not objectives!")
+    end_stats: Final[list[EndStatistics]] = []
+    objectives: Final[list[str]] = sorted(objectives_set)
 
-            pr0 = data[0]
-            n_items: int = pr0.n_items
-            n_different_items: int = pr0.n_different_items
-            bin_width: int = pr0.bin_width
-            bin_height: int = pr0.bin_height
-            used_objective: str = pr0.end_result.objective
-            encoding: str | None = pr0.end_result.encoding
-            if used_objective not in objectives_set:
+    for key in sorted(groups.keys()):
+        data = groups[key]
+        pr0 = data[0]
+        n_items: int = pr0.n_items
+        n_different_items: int = pr0.n_different_items
+        bin_width: int = pr0.bin_width
+        bin_height: int = pr0.bin_height
+        used_objective: str = pr0.end_result.objective
+        encoding: str | None = pr0.end_result.encoding
+        if used_objective not in objectives_set:
+            raise ValueError(
+                f"{used_objective!r} not in {objectives_set!r}.")
+        if used_objective != key[2]:
+            raise ValueError(
+                f"used objective={used_objective!r} different "
+                f"from key[2]={key[2]}!?")
+        if (encoding is not None) and (encoding != key[3]):
+            raise ValueError(
+                f"used encoding={encoding!r} different "
+                f"from key[3]={key[3]}!?")
+        objective_bounds: Mapping[str, int | float] = pr0.objective_bounds
+        bin_bounds: Mapping[str, int] = pr0.bin_bounds
+        for i, pr in enumerate(data):
+            if n_items != pr.n_items:
+                raise ValueError(f"n_items={n_items} for data[0] but "
+                                 f"{pr.n_items} for data[{i}]?")
+            if n_different_items != pr.n_different_items:
                 raise ValueError(
-                    f"{used_objective!r} not in {objectives_set!r}.")
-            if used_objective != key[2]:
+                    f"n_different_items={n_different_items} for data[0] "
+                    f"but {pr.n_different_items} for data[{i}]?")
+            if bin_width != pr.bin_width:
                 raise ValueError(
-                    f"used objective={used_objective!r} different "
-                    f"from key[2]={key[2]}!?")
-            if (encoding is not None) and (encoding != key[3]):
+                    f"bin_width={bin_width} for data[0] "
+                    f"but {pr.bin_width} for data[{i}]?")
+            if bin_height != pr.bin_height:
                 raise ValueError(
-                    f"used encoding={encoding!r} different "
-                    f"from key[3]={key[3]}!?")
-            objective_bounds: Mapping[str, int | float] = pr0.objective_bounds
-            bin_bounds: Mapping[str, int] = pr0.bin_bounds
-            for i, pr in enumerate(data):
-                if n_items != pr.n_items:
-                    raise ValueError(f"n_items={n_items} for data[0] but "
-                                     f"{pr.n_items} for data[{i}]?")
-                if n_different_items != pr.n_different_items:
-                    raise ValueError(
-                        f"n_different_items={n_different_items} for data[0] "
-                        f"but {pr.n_different_items} for data[{i}]?")
-                if bin_width != pr.bin_width:
-                    raise ValueError(
-                        f"bin_width={bin_width} for data[0] "
-                        f"but {pr.bin_width} for data[{i}]?")
-                if bin_height != pr.bin_height:
-                    raise ValueError(
-                        f"bin_height={bin_height} for data[0] "
-                        f"but {pr.bin_height} for data[{i}]?")
-                if used_objective != pr.end_result.objective:
-                    raise ValueError(
-                        f"used objective={used_objective!r} for data[0] "
-                        f"but {pr.end_result.objective!r} for data[{i}]?")
-                if objective_bounds != pr.objective_bounds:
-                    raise ValueError(
-                        f"objective_bounds={objective_bounds!r} for data[0] "
-                        f"but {pr.objective_bounds!r} for data[{i}]?")
-                if bin_bounds != pr.bin_bounds:
-                    raise ValueError(
-                        f"bin_bounds={bin_bounds!r} for data[0] "
-                        f"but {pr.bin_bounds!r} for data[{i}]?")
+                    f"bin_height={bin_height} for data[0] "
+                    f"but {pr.bin_height} for data[{i}]?")
+            if used_objective != pr.end_result.objective:
+                raise ValueError(
+                    f"used objective={used_objective!r} for data[0] "
+                    f"but {pr.end_result.objective!r} for data[{i}]?")
+            if objective_bounds != pr.objective_bounds:
+                raise ValueError(
+                    f"objective_bounds={objective_bounds!r} for data[0] "
+                    f"but {pr.objective_bounds!r} for data[{i}]?")
+            if bin_bounds != pr.bin_bounds:
+                raise ValueError(
+                    f"bin_bounds={bin_bounds!r} for data[0] "
+                    f"but {pr.bin_bounds!r} for data[{i}]?")
 
-            EndStatistics.from_end_results((pr.end_result for pr in data),
-                                           end_stats.append)
-            if len(end_stats) != 1:
-                raise ValueError(f"got {end_stats} from {data}?")
+        es_from_end_results((pr.end_result for pr in data), end_stats.append)
+        if len(end_stats) != 1:
+            raise ValueError(f"got {end_stats} from {data}?")
 
-            collector(PackingStatistics(
-                end_statistics=end_stats[0],
-                n_items=n_items,
-                n_different_items=n_different_items,
-                bin_width=bin_width,
-                bin_height=bin_height,
-                objectives={
-                    o: Statistics.create([pr.objectives[o] for pr in data])
-                    for o in objectives
-                },
-                objective_bounds=objective_bounds,
-                bin_bounds=bin_bounds,
-            ))
-            end_stats.clear()
+        consumer(PackingStatistics(
+            end_statistics=end_stats[0],
+            n_items=n_items,
+            n_different_items=n_different_items,
+            bin_width=bin_width,
+            bin_height=bin_height,
+            objectives={
+                o: ss_from_samples(pr.objectives[o] for pr in data)
+                for o in objectives
+            },
+            objective_bounds=objective_bounds,
+            bin_bounds=bin_bounds,
+        ))
+        end_stats.clear()
 
-    @staticmethod
-    def to_csv(results: Iterable["PackingStatistics"], file: str) -> Path:
+
+def to_csv(results: Iterable[PackingStatistics], file: str) -> Path:
+    """
+    Write a sequence of packing statistics to a file in CSV format.
+
+    :param results: the end statistics
+    :param file: the path
+    :return: the path of the file that was written
+    """
+    path: Final[Path] = Path(file)
+    logger(f"Writing packing statistics to CSV file {path!r}.")
+    path.ensure_parent_dir_exists()
+    with path.open_for_write() as wt:
+        csv_write(data=sorted(results),
+                  consumer=line_writer(wt),
+                  setup=CsvWriter().setup,
+                  get_column_titles=CsvWriter.get_column_titles,
+                  get_row=CsvWriter.get_row,
+                  get_header_comments=CsvWriter.get_header_comments,
+                  get_footer_comments=CsvWriter.get_footer_comments)
+    logger(f"Done writing packing statistics to CSV file {path!r}.")
+    return path
+
+
+def from_csv(file: str,
+             consumer: Callable[[PackingStatistics], None]) -> None:
+    """
+    Load the packing statistics from a CSV file.
+
+    :param file: the file to read from
+    :param consumer: the consumer for the statistics
+    """
+    if not callable(consumer):
+        raise type_error(consumer, "consumer", call=True)
+    path: Final[Path] = file_path(file)
+    logger(f"Now reading CSV file {path!r}.")
+    with path.open_for_read() as rd:
+        csv_read(rows=rd,
+                 setup=CsvReader,
+                 parse_row=CsvReader.parse_row,
+                 consumer=consumer)
+    logger(f"Done reading CSV file {path!r}.")
+
+
+class CsvWriter:
+    """A class for CSV writing of :class:`PackingStatistics`."""
+
+    def __init__(self, scope: str | None = None) -> None:
         """
-        Write a sequence of packing statistics to a file in CSV format.
+        Initialize the csv writer.
 
-        :param results: the end statistics
-        :param file: the path
-        :return: the path of the file that was written
+        :param scope: the prefix to be pre-pended to all columns
         """
-        path: Final[Path] = Path(file)
-        logger(f"Writing packing results to CSV file {path!r}.")
-        Path(os.path.dirname(path)).ensure_dir_exists()
+        #: an optional scope
+        self.scope: Final[str | None] = (
+            str.strip(scope)) if scope is not None else None
 
-        # get a nicely sorted view on the statistics
-        use_stats = sorted(results)
+        #: has this writer been set up?
+        self.__setup: bool = False
+        #: the end statistics writer
+        self.__es: Final[EsCsvWriter] = EsCsvWriter(scope)
+        #: the bin bounds
+        self.__bin_bounds: list[str] | None = None
+        #: the objectives
+        self.__objectives: list[SsCsvWriter] | None = None
+        #: the objective names
+        self.__objective_names: tuple[str, ...] | None = None
+        #: the lower bound names
+        self.__objective_lb_names: tuple[str, ...] | None = None
+        #: the upper bound names
+        self.__objective_ub_names: tuple[str, ...] | None = None
 
-        has_algorithm: bool = False  # 1
-        has_instance: bool = False  # 2
-        has_objective: bool = False  # 4
-        has_encoding: bool = False  # 8
-        has_goal_f: int = 0  # 16
-        has_best_f_scaled: bool = False  # 32
-        has_n_success: bool = False  # 64
-        has_success_fes: bool = False  # 128
-        has_success_time_millis: bool = False  # 256
-        has_ert_fes: bool = False  # 512
-        has_ert_time_millis: bool = False  # 1024
-        has_max_fes: int = 0  # 2048
-        has_max_time_millis: int = 0  # 4096
-        checker: int = 8191
+    def setup(self, data: Iterable[PackingStatistics]) -> "CsvWriter":
+        """
+        Set up this csv writer based on existing data.
 
-        for ess in use_stats:
-            es = ess.end_statistics
-            if es.algorithm is not None:
-                has_algorithm = True
-                checker &= ~1
-            if es.instance is not None:
-                has_instance = True
-                checker &= ~2
-            if es.objective is not None:
-                has_objective = True
-                checker &= ~4
-            if es.encoding is not None:
-                has_encoding = True
-                checker &= ~8
-            if es.goal_f is not None:
-                if isinstance(es.goal_f, Statistics) \
-                        and (es.goal_f.maximum > es.goal_f.minimum):
-                    has_goal_f = 2
-                    checker &= ~16
-                elif has_goal_f == 0:
-                    has_goal_f = 1
-            if es.best_f_scaled is not None:
-                has_best_f_scaled = True
-                checker &= ~32
-            if es.n_success is not None:
-                has_n_success = True
-                checker &= ~64
-            if es.success_fes is not None:
-                has_success_fes = True
-                checker &= ~128
-            if es.success_time_millis is not None:
-                has_success_time_millis = True
-                checker &= ~256
-            if es.ert_fes is not None:
-                has_ert_fes = True
-                checker &= ~512
-            if es.ert_time_millis is not None:
-                has_ert_time_millis = True
-                checker &= ~1024
-            if es.max_fes is not None:
-                if isinstance(es.max_fes, Statistics) \
-                        and (es.max_fes.maximum > es.max_fes.minimum):
-                    has_max_fes = 2
-                    checker &= ~2048
-                elif has_max_fes == 0:
-                    has_max_fes = 1
-            if es.max_time_millis is not None:
-                if isinstance(es.max_time_millis, Statistics) \
-                        and (es.max_time_millis.maximum
-                             > es.max_time_millis.minimum):
-                    has_max_time_millis = 2
-                    checker &= ~4096
-                elif has_max_time_millis == 0:
-                    has_max_time_millis = 1
-            if checker == 0:
-                break
+        :param data: the data to setup with
+        :returns: this writer
+        """
+        if self.__setup:
+            raise ValueError("CSV writer has already been set up.")
+        self.__setup = True
 
-        # get the names of the bounds and objectives
-        bin_bounds_set: set[str] = set()
-        objectives_set: set[str] = set()
-        for pr in use_stats:
+        data = reiterable(data)
+        self.__es.setup(pr.end_statistics for pr in data)
+
+        bin_bounds_set: Final[set[str]] = set()
+        objectives_set: Final[set[str]] = set()
+        for pr in data:
             bin_bounds_set.update(pr.bin_bounds.keys())
             objectives_set.update(pr.objectives.keys())
-        bin_bounds: Final[list[str]] = sorted(bin_bounds_set)
-        objectives: Final[list[str]] = sorted(objectives_set)
+        if set.__len__(bin_bounds_set) > 0:
+            self.__bin_bounds = sorted(bin_bounds_set)
+        if set.__len__(objectives_set) > 0:
+            p: Final[str | None] = self.scope
+            self.__objective_names = tuple(sorted(objectives_set))
+            self.__objective_lb_names = tuple(csv_scope(
+                oxx, _OBJECTIVE_LOWER) for oxx in self.__objective_names)
+            self.__objective_ub_names = tuple(csv_scope(
+                oxx, _OBJECTIVE_UPPER) for oxx in self.__objective_names)
+            self.__objectives = [SsCsvWriter(
+                scope=csv_scope(p, k), n_not_needed=True, what_short=k,
+                what_long=f"objective function {k}").setup(
+                    ddd.objectives[k] for ddd in data
+            ) for k in self.__objective_names]
 
-        with path.open_for_write() as out:
-            wrt: Final[Callable] = out.write
-            sep: Final[str] = CSV_SEPARATOR
-            if has_algorithm:
-                wrt(KEY_ALGORITHM)
-                wrt(sep)
-            if has_instance:
-                wrt(KEY_INSTANCE)
-                wrt(sep)
-            if has_objective:
-                wrt(KEY_OBJECTIVE_FUNCTION)
-                wrt(sep)
-            if has_encoding:
-                wrt(KEY_ENCODING)
-                wrt(sep)
-            wrt(KEY_N_ITEMS)
-            wrt(sep)
-            wrt(KEY_N_DIFFERENT_ITEMS)
-            wrt(sep)
-            wrt(KEY_BIN_WIDTH)
-            wrt(sep)
-            wrt(KEY_BIN_HEIGHT)
-            wrt(sep)
-            for bb in bin_bounds:
-                wrt(bb)
-                wrt(sep)
-            for oo in objectives:
-                wrt(oo)
-                wrt(_OBJECTIVE_LOWER)
-                wrt(sep)
-                wrt(oo)
-                wrt(_OBJECTIVE_UPPER)
-                wrt(sep)
+        return self
 
-            def h(p) -> None:
-                wrt(sep.join(Statistics.csv_col_names(p)))
+    def get_column_titles(self, dest: Callable[[str], None]) -> None:
+        """
+        Get the column titles.
 
-            wrt(KEY_N)
-            wrt(sep)
-            h(KEY_BEST_F)
-            wrt(sep)
-            h(KEY_LAST_IMPROVEMENT_FE)
-            wrt(sep)
-            h(KEY_LAST_IMPROVEMENT_TIME_MILLIS)
-            wrt(sep)
-            h(KEY_TOTAL_FES)
-            wrt(sep)
-            h(KEY_TOTAL_TIME_MILLIS)
-            if has_goal_f == 1:
-                wrt(sep)
-                wrt(KEY_GOAL_F)
-            elif has_goal_f == 2:
-                wrt(sep)
-                h(KEY_GOAL_F)
-            if has_best_f_scaled:
-                wrt(sep)
-                h(KEY_BEST_F_SCALED)
-            if has_n_success:
-                wrt(sep)
-                wrt(KEY_N_SUCCESS)
-            if has_success_fes:
-                wrt(sep)
-                h(KEY_SUCCESS_FES)
-            if has_success_time_millis:
-                wrt(sep)
-                h(KEY_SUCCESS_TIME_MILLIS)
-            if has_ert_fes:
-                wrt(sep)
-                wrt(KEY_ERT_FES)
-            if has_ert_time_millis:
-                wrt(sep)
-                wrt(KEY_ERT_TIME_MILLIS)
-            if has_max_fes == 1:
-                wrt(sep)
-                wrt(KEY_MAX_FES)
-            elif has_max_fes == 2:
-                wrt(sep)
-                h(KEY_MAX_FES)
-            if has_max_time_millis == 1:
-                wrt(sep)
-                wrt(KEY_MAX_TIME_MILLIS)
-            elif has_max_time_millis == 2:
-                wrt(sep)
-                h(KEY_MAX_TIME_MILLIS)
-            for oo in objectives:
-                wrt(sep)
-                h(oo)
+        :param dest: the destination string consumer
+        """
+        p: Final[str | None] = self.scope
+        self.__es.get_column_titles(dest)
 
-            out.write("\n")
+        dest(csv_scope(p, KEY_BIN_HEIGHT))
+        dest(csv_scope(p, KEY_BIN_WIDTH))
+        dest(csv_scope(p, KEY_N_ITEMS))
+        dest(csv_scope(p, KEY_N_DIFFERENT_ITEMS))
+        if self.__bin_bounds:
+            for b in self.__bin_bounds:
+                dest(csv_scope(p, b))
+        if self.__objective_names and self.__objectives:
+            for i, o in enumerate(self.__objectives):
+                dest(csv_scope(p, self.__objective_lb_names[i]))
+                o.get_column_titles(dest)
+                dest(csv_scope(p, self.__objective_ub_names[i]))
 
-            csv: Final[Callable] = Statistics.value_to_csv
-            num: Final[Callable] = num_to_str
+    def get_row(self, data: PackingStatistics,
+                dest: Callable[[str], None]) -> None:
+        """
+        Render a single packing result record to a CSV row.
 
-            for rec in use_stats:
-                er = rec.end_statistics
-                if has_algorithm:
-                    if er.algorithm is not None:
-                        wrt(er.algorithm)
-                    wrt(sep)
-                if has_instance:
-                    if er.instance is not None:
-                        wrt(er.instance)
-                    wrt(sep)
-                if has_objective:
-                    if er.objective is not None:
-                        wrt(er.objective)
-                    wrt(sep)
-                if has_encoding:
-                    if er.encoding is not None:
-                        wrt(er.encoding)
-                    wrt(sep)
-                wrt(str(rec.n_items))
-                wrt(sep)
-                wrt(str(rec.n_different_items))
-                wrt(sep)
-                wrt(str(rec.bin_width))
-                wrt(sep)
-                wrt(str(rec.bin_height))
-                wrt(sep)
+        :param data: the end result record
+        :param dest: the string consumer
+        """
+        self.__es.get_row(data.end_statistics, dest)
+        dest(repr(data.bin_height))
+        dest(repr(data.bin_width))
+        dest(repr(data.n_items))
+        dest(repr(data.n_different_items))
+        if self.__bin_bounds:
+            for bb in self.__bin_bounds:
+                dest(repr(data.bin_bounds[bb])
+                     if bb in data.bin_bounds else "")
+        if self.__objective_names and self.__objectives:
+            lb: Final[tuple[str, ...] | None] = self.__objective_lb_names
+            ub: Final[tuple[str, ...] | None] = self.__objective_ub_names
+            for i, ob in enumerate(self.__objective_names):
+                if lb is not None:
+                    ox = lb[i]
+                    dest(num_to_str(data.objective_bounds[ox])
+                         if ox in data.objective_bounds else "")
+                SsCsvWriter.get_optional_row(
+                    self.__objectives[i], data.objectives.get(ob), dest)
+                if ub is not None:
+                    ox = ub[i]
+                    dest(num_to_str(data.objective_bounds[ox])
+                         if ox in data.objective_bounds else "")
 
-                for bb in bin_bounds:
-                    wrt(str(rec.bin_bounds[bb]))
-                    wrt(sep)
-                for oo in objectives:
-                    wrt(num_to_str(rec.objective_bounds[
-                        f"{oo}{_OBJECTIVE_LOWER}"]))
-                    wrt(sep)
-                    wrt(num_to_str(rec.objective_bounds[
-                        f"{oo}{_OBJECTIVE_UPPER}"]))
-                    wrt(sep)
+    def get_header_comments(self, dest: Callable[[str], None]) -> None:
+        """
+        Get any possible header comments.
 
-                wrt(str(er.n))
-                wrt(sep)
-                wrt(er.best_f.to_csv())
-                wrt(sep)
-                wrt(er.last_improvement_fe.to_csv())
-                wrt(sep)
-                wrt(er.last_improvement_time_millis.to_csv())
-                wrt(sep)
-                wrt(er.total_fes.to_csv())
-                wrt(sep)
-                wrt(er.total_time_millis.to_csv())
-                if has_goal_f == 1:
-                    wrt(sep)
-                    if er.goal_f is not None:
-                        wrt(num(er.goal_f.median if isinstance(
-                            er.goal_f, Statistics) else er.goal_f))
-                elif has_goal_f == 2:
-                    wrt(sep)
-                    if isinstance(er.goal_f, Statistics):
-                        wrt(er.goal_f.to_csv())
-                    elif isinstance(er.goal_f, int | float):
-                        wrt(csv(er.goal_f))
-                    else:
-                        wrt(EMPTY_CSV_ROW)
-                if has_best_f_scaled:
-                    wrt(sep)
-                    if er.best_f_scaled is None:
-                        wrt(EMPTY_CSV_ROW)
-                    else:
-                        wrt(er.best_f_scaled.to_csv())
-                if has_n_success:
-                    wrt(sep)
-                    if er.n_success is not None:
-                        wrt(str(er.n_success))
-                if has_success_fes:
-                    wrt(sep)
-                    if er.success_fes is None:
-                        wrt(EMPTY_CSV_ROW)
-                    else:
-                        wrt(er.success_fes.to_csv())
-                if has_success_time_millis:
-                    wrt(sep)
-                    if er.success_time_millis is None:
-                        wrt(EMPTY_CSV_ROW)
-                    else:
-                        wrt(er.success_time_millis.to_csv())
-                if has_ert_fes:
-                    wrt(sep)
-                    if er.ert_fes is not None:
-                        wrt(num(er.ert_fes))
-                if has_ert_time_millis:
-                    wrt(sep)
-                    if er.ert_time_millis is not None:
-                        wrt(num(er.ert_time_millis))
-                if has_max_fes == 1:
-                    wrt(sep)
-                    if er.max_fes is not None:
-                        wrt(str(er.max_fes.median if isinstance(
-                            er.max_fes, Statistics) else er.max_fes))
-                elif has_max_fes == 2:
-                    wrt(sep)
-                    if isinstance(er.max_fes, Statistics):
-                        wrt(er.max_fes.to_csv())
-                    elif isinstance(er.max_fes, int | float):
-                        wrt(csv(er.max_fes))
-                    else:
-                        wrt(EMPTY_CSV_ROW)
-                if has_max_time_millis == 1:
-                    wrt(sep)
-                    if er.max_time_millis is not None:
-                        wrt(str(er.max_time_millis.median if isinstance(
-                            er.max_time_millis, Statistics)
-                            else er.max_time_millis))
-                elif has_max_time_millis == 2:
-                    wrt(sep)
-                    if isinstance(er.max_time_millis, Statistics):
-                        wrt(er.max_time_millis.to_csv())
-                    elif isinstance(er.max_time_millis, int | float):
-                        wrt(csv(er.max_time_millis))
-                    else:
-                        wrt(EMPTY_CSV_ROW)
-                for oo in objectives:
-                    wrt(sep)
-                    wrt(rec.objectives[oo].to_csv())
-                out.write("\n")
+        :param dest: the destination
+        """
+        dest("End Statistics of Bin Packing Experiments")
+        dest("See the description at the bottom of the file.")
 
-        # finally, return the path to the generated file
-        return path
+    def get_footer_comments(self, dest: Callable[[str], None]) -> None:
+        """
+        Get any possible footer comments.
+
+        :param dest: the destination
+        """
+        self.__es.get_footer_comments(dest)
+        dest("")
+        p: Final[str | None] = self.scope
+        if self.__bin_bounds:
+            for bb in self.__bin_bounds:
+                dest(f"{csv_scope(p, bb)} is a lower "
+                     "bound for the number of bins.")
+        if self.__objectives and self.__objective_names:
+            for i, obb in enumerate(self.__objective_names):
+                ob: str = csv_scope(p, obb)
+                ox: str = csv_scope(ob, _OBJECTIVE_LOWER)
+                dest(f"{ox}: a lower bound of the {ob} objective function.")
+                self.__objectives[i].get_footer_comments(dest)
+                ox = csv_scope(ob, _OBJECTIVE_UPPER)
+                dest(f"{ox}: an upper bound of the {ob} objective function.")
+
+
+class CsvReader:
+    """A class for CSV parsing to get :class:`PackingStatistics`."""
+
+    def __init__(self, columns: dict[str, int]) -> None:
+        """
+        Create a CSV parser for :class:`EndResult`.
+
+        :param columns: the columns
+        """
+        super().__init__()
+        #: the end result csv reader
+        self.__es: Final[EsCsvReader] = EsCsvReader(columns)
+        #: the index of the n-items column
+        self.__idx_n_items: Final[int] = csv_column(columns, KEY_N_ITEMS)
+        #: the index of the n different items column
+        self.__idx_n_different: Final[int] = csv_column(
+            columns, KEY_N_DIFFERENT_ITEMS)
+        #: the index of the bin width column
+        self.__idx_bin_width: Final[int] = csv_column(
+            columns, KEY_BIN_WIDTH)
+        #: the index of the bin height column
+        self.__idx_bin_height: Final[int] = csv_column(
+            columns, KEY_BIN_HEIGHT)
+        #: the indices for the objective bounds
+        self.__bin_bounds: Final[tuple[tuple[str, int], ...]] = \
+            csv_select_scope(
+                lambda x: tuple(sorted(((k, v) for k, v in x.items()))),
+                columns, LOWER_BOUNDS_BIN_COUNT)
+        if tuple.__len__(self.__bin_bounds) <= 0:
+            raise ValueError("No bin bounds found?")
+        #: the objective bounds columns
+        self.__objective_bounds: Final[tuple[tuple[str, int], ...]] = \
+            csv_select_scope(
+                lambda x: tuple(sorted(((k, v) for k, v in x.items()))),
+                columns, None,
+                skip_orig_key=lambda s: not str.endswith(
+                    s, (_OBJECTIVE_LOWER, _OBJECTIVE_UPPER)))
+        n_bounds: Final[int] = tuple.__len__(self.__objective_bounds)
+        if n_bounds <= 0:
+            raise ValueError("No objective function bounds found?")
+        if (n_bounds & 1) != 0:
+            raise ValueError(f"Number of bounds {n_bounds} should be even.")
+        n_val: Final[tuple[tuple[str, int]]] = ((KEY_N, self.__es.idx_n), )
+        #: the parsers for the per-objective statistics
+        self.__objectives: Final[tuple[tuple[str, SsCsvReader], ...]] = \
+            tuple((ss, csv_select_scope(SsCsvReader, columns, ss, n_val))
+                  for ss in sorted({s[0] for s in (str.split(
+                      kk[0], SCOPE_SEPARATOR) for kk in
+                      self.__objective_bounds) if (list.__len__(s) > 1)
+                      and (str.__len__(s[0]) > 0)}))
+        n_objectives: Final[int] = tuple.__len__(self.__objectives)
+        if n_objectives <= 0:
+            raise ValueError("No objectives found?")
+        if (2 * n_objectives) != n_bounds:
+            raise ValueError(
+                f"Number {n_objectives} of objectives "
+                f"inconsistent with number {n_bounds} of bounds.")
+
+    def parse_row(self, data: list[str]) -> PackingStatistics:
+        """
+        Parse a row of data.
+
+        :param data: the data row
+        :return: the end result statistics
+        """
+        return PackingStatistics(
+            self.__es.parse_row(data),
+            int(data[self.__idx_n_items]),
+            int(data[self.__idx_n_different]),
+            int(data[self.__idx_bin_width]),
+            int(data[self.__idx_bin_height]),
+            {o: v.parse_row(data) for o, v in self.__objectives},
+            {o: str_to_num(data[v]) for o, v in self.__objective_bounds},
+            {o: int(data[v]) for o, v in self.__bin_bounds},
+        )
 
 
 # Run packing-results to stat file if executed as script
@@ -636,12 +588,12 @@ if __name__ == "__main__":
     packing_results: Final[list[PackingResult]] = []
     if src_path.is_file():
         logger(f"{src_path!r} identifies as file, load as end-results csv")
-        PackingResult.from_csv(src_path, packing_results.append)
+        pr_from_csv(src_path, packing_results.append)
     else:
         logger(f"{src_path!r} identifies as directory, load it as log files")
-        PackingResult.from_logs(src_path, packing_results.append)
+        pr_from_logs(src_path, packing_results.append)
 
     packing_stats: Final[list[PackingStatistics]] = []
-    PackingStatistics.from_packing_results(
-        results=packing_results, collector=packing_stats.append)
-    PackingStatistics.to_csv(packing_stats, args.dest)
+    from_packing_results(
+        results=packing_results, consumer=packing_stats.append)
+    to_csv(packing_stats, args.dest)

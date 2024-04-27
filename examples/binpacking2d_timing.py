@@ -1,12 +1,11 @@
 """Compare the runtime of encodings on several problem instances."""
-import os
 from statistics import mean, median
 from timeit import timeit
 from typing import Any, Callable, cast
 
 import numpy as np
-import psutil
 from moptipy.utils.nputils import rand_generator
+from moptipy.utils.sys_info import is_make_build
 from pycommons.types import type_name
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
@@ -18,21 +17,15 @@ from moptipyapps.binpacking2d.encodings.ibl_encoding_2 import (
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 
-# Check if process is a sub-process of make?
-ns = lambda prc: False if prc is None else (  # noqa: E731
-    "make" in prc.name() or ns(prc.parent()))
-# Is this a make build?
-IS_MAKE_BUILD = ns(psutil.Process(os.getppid()))
-
 # Create the random number generator.
 random = rand_generator(1)
 
 # If it is a make build, use only 1 repetition, otherwise 20.
-REPETITIONS = 1 if IS_MAKE_BUILD else 20
+REPETITIONS = 1 if is_make_build() else 20
 
 # The instances to iterate over: All if not make build, 20 otherwise.
 INSTANCES = random.choice(Instance.list_resources(), 20, False) \
-    if IS_MAKE_BUILD else Instance.list_resources()
+    if is_make_build() else Instance.list_resources()
 
 
 # We test two versions of the Improved Bottom Left Encoding

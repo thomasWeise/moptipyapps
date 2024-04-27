@@ -4,7 +4,7 @@ from typing import Callable, Final, cast
 
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
-from moptipy.evaluation.end_results import EndResult
+from moptipy.evaluation.end_results import EndResult, from_logs
 from numpy.random import Generator, default_rng
 from pycommons.io.temp import temp_dir
 
@@ -84,5 +84,5 @@ def test_experiment_surrogate(random: Generator = default_rng()) -> None:
                        n_runs=n_runs,
                        perform_warmup=False,
                        perform_pre_warmup=False)
-        EndResult.from_logs(use_dir, er.append)
+        from_logs(use_dir, er.append)
     assert len(er) == (len(insts) * n_runs)

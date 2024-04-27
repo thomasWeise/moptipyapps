@@ -28,8 +28,16 @@ from moptipyapps.binpacking2d.objectives.bin_count_and_last_small import (
     BinCountAndLastSmall,
 )
 from moptipyapps.binpacking2d.packing_result import PackingResult
+from moptipyapps.binpacking2d.packing_result import from_csv as pr_from_csv
+from moptipyapps.binpacking2d.packing_result import from_logs as pr_from_logs
+from moptipyapps.binpacking2d.packing_result import to_csv as pr_to_csv
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 from moptipyapps.binpacking2d.packing_statistics import PackingStatistics
+from moptipyapps.binpacking2d.packing_statistics import from_csv as ps_from_csv
+from moptipyapps.binpacking2d.packing_statistics import (
+    from_packing_results as ps_from_packing_results,
+)
+from moptipyapps.binpacking2d.packing_statistics import to_csv as ps_to_csv
 
 #: the maximum permitted FEs
 __MAX_FES: Final[int] = 64
@@ -96,7 +104,7 @@ def test_packing_results_experiment() -> None:
                        n_runs=n_runs)
         results_1: list[PackingResult] = []
         results_2: list[PackingResult] = []
-        PackingResult.from_logs(td, results_1.append)
+        pr_from_logs(td, results_1.append)
         assert len(results_1) == \
                len(algorithms) * n_runs * len(instance_factories)
         results_1.sort()
@@ -110,17 +118,20 @@ def test_packing_results_experiment() -> None:
         assert len(all_algorithms) == len(algorithms)
         assert len(all_objectives) == 2
         with temp_file() as tf:
-            PackingResult.to_csv(results_1, tf)
-            PackingResult.from_csv(tf, results_2.append)
+            pr_to_csv(results_1, tf)
+            pr_from_csv(tf, results_2.append)
             assert len(results_2) == len(results_1)
             results_2.sort()
             assert results_1 == results_2
 
         end_stats_1: Final[list[PackingStatistics]] = []
-        PackingStatistics.from_packing_results(results_1, end_stats_1.append)
+        ps_from_packing_results(results_1, end_stats_1.append)
         assert len(end_stats_1) == len(algorithms) * len(instance_factories)
         end_stats_2: Final[list[PackingStatistics]] = []
-        PackingStatistics.from_packing_results(results_2, end_stats_2.append)
+        ps_from_packing_results(results_2, end_stats_2.append)
         assert len(end_stats_1) == len(end_stats_2)
+        end_stats_3: Final[list[PackingStatistics]] = []
         with temp_file() as tf2:
-            PackingStatistics.to_csv(end_stats_1, tf2)
+            ps_to_csv(end_stats_1, tf2)
+            ps_from_csv(tf2, end_stats_3.append)
+        assert end_stats_3 == end_stats_2

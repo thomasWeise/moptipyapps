@@ -8,7 +8,15 @@ from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
 from moptipy.api.objective import Objective
 from moptipy.evaluation.end_results import EndResult
+from moptipy.evaluation.end_results import from_csv as er_from_csv
+from moptipy.evaluation.end_results import from_logs as er_from_logs
+from moptipy.evaluation.end_results import to_csv as er_to_csv
 from moptipy.evaluation.end_statistics import EndStatistics
+from moptipy.evaluation.end_statistics import from_csv as es_from_csv
+from moptipy.evaluation.end_statistics import (
+    from_end_results as es_from_end_results,
+)
+from moptipy.evaluation.end_statistics import to_csv as es_to_csv
 from moptipy.operators.signed_permutations.op0_shuffle_and_flip import (
     Op0ShuffleAndFlip,
 )
@@ -33,8 +41,16 @@ from moptipyapps.binpacking2d.objectives.bin_count_and_last_small import (
     BinCountAndLastSmall,
 )
 from moptipyapps.binpacking2d.packing_result import PackingResult
+from moptipyapps.binpacking2d.packing_result import from_csv as pr_from_csv
+from moptipyapps.binpacking2d.packing_result import from_logs as pr_from_logs
+from moptipyapps.binpacking2d.packing_result import to_csv as pr_to_csv
 from moptipyapps.binpacking2d.packing_space import PackingSpace
 from moptipyapps.binpacking2d.packing_statistics import PackingStatistics
+from moptipyapps.binpacking2d.packing_statistics import from_csv as ps_from_csv
+from moptipyapps.binpacking2d.packing_statistics import (
+    from_packing_results as ps_from_packing_results,
+)
+from moptipyapps.binpacking2d.packing_statistics import to_csv as ps_to_csv
 
 INSTANCES: Final[list[str]] = [s for s in Instance.list_resources()
                                if s.startswith(("a", "b"))]
@@ -108,7 +124,7 @@ def __evaluate(results: Path, evaluation: Path) -> None:
     :param evaluation: the evaluation directory
     """
     end_results: Final[list[EndResult]] = []
-    EndResult.from_logs(results, end_results.append)
+    er_from_logs(results, end_results.append)
     for err in end_results:
         assert err.max_fes == MAX_FES
         assert err.instance in INSTANCES
@@ -120,9 +136,9 @@ def __evaluate(results: Path, evaluation: Path) -> None:
     seeds_1 = {er.rand_seed for er in end_results}
     assert N_RUNS <= len(seeds_1) <= N_RUNS * len(INSTANCES)
     p = Path.resolve_inside(evaluation, "results.txt")
-    EndResult.to_csv(end_results, p)
+    er_to_csv(end_results, p)
     end_results_2: Final[list[EndResult]] = []
-    EndResult.from_csv(p, end_results_2.append)
+    er_from_csv(p, end_results_2.append)
 
     assert sorted(end_results, key=lambda er: (
         er.algorithm, er.instance, er.rand_seed)) == sorted(
@@ -130,7 +146,7 @@ def __evaluate(results: Path, evaluation: Path) -> None:
             er.algorithm, er.instance, er.rand_seed))
 
     end_statistics: Final[list[EndStatistics]] = []
-    EndStatistics.from_end_results(end_results, end_statistics.append)
+    es_from_end_results(end_results, end_statistics.append)
     assert len(end_statistics) == len(INSTANCES) * 2
     algorithms_2 = {es.algorithm for es in end_statistics}
     assert len(algorithms_2) == 2
@@ -138,9 +154,9 @@ def __evaluate(results: Path, evaluation: Path) -> None:
     instances_2 = {es.instance for es in end_statistics}
     assert set(INSTANCES) == instances_2
     p = Path.resolve_inside(evaluation, "statistics.txt")
-    EndStatistics.to_csv(end_statistics, p)
+    es_to_csv(end_statistics, p)
     end_statistics_2: Final[list[EndStatistics]] = []
-    EndStatistics.from_csv(p, end_statistics_2.append)
+    es_from_csv(p, end_statistics_2.append)
     assert sorted(
         end_statistics, key=lambda er: (
             er.algorithm, er.instance)) == sorted(
@@ -148,7 +164,7 @@ def __evaluate(results: Path, evaluation: Path) -> None:
             er.algorithm, er.instance))
 
     packing_results: Final[list[PackingResult]] = []
-    PackingResult.from_logs(results, packing_results.append)
+    pr_from_logs(results, packing_results.append)
     for exr in packing_results:
         assert exr.end_result.rand_seed in seeds_1
         assert exr.end_result.algorithm in algorithms_1
@@ -162,9 +178,9 @@ def __evaluate(results: Path, evaluation: Path) -> None:
     seeds_2 = {er.end_result.rand_seed for er in packing_results}
     assert seeds_2 == seeds_1
     p = Path.resolve_inside(evaluation, "pack_results.txt")
-    PackingResult.to_csv(packing_results, p)
+    pr_to_csv(packing_results, p)
     packing_results_2: Final[list[PackingResult]] = []
-    PackingResult.from_csv(p, packing_results_2.append)
+    pr_from_csv(p, packing_results_2.append)
     assert sorted(packing_results, key=lambda er: (
         er.end_result.algorithm, er.end_result.instance,
         er.end_result.rand_seed)) == sorted(
@@ -173,7 +189,7 @@ def __evaluate(results: Path, evaluation: Path) -> None:
             er.end_result.rand_seed))
 
     packing_statistics: Final[list[PackingStatistics]] = []
-    PackingStatistics.from_packing_results(
+    ps_from_packing_results(
         packing_results, packing_statistics.append)
     assert len(packing_statistics) == len(INSTANCES) * 2
     assert len({es.end_statistics.algorithm
@@ -183,7 +199,10 @@ def __evaluate(results: Path, evaluation: Path) -> None:
     algorithms_4 = {er.end_statistics.algorithm for er in packing_statistics}
     assert algorithms_4 == algorithms_1
     p = Path.resolve_inside(evaluation, "pack_statistics.txt")
-    PackingStatistics.to_csv(packing_statistics, p)
+    ps_to_csv(packing_statistics, p)
+    ps2: Final[list[PackingStatistics]] = []
+    ps_from_csv(p, ps2.append)
+    assert ps2 == packing_statistics
 
 
 def test_experiment_empty_1() -> None:
