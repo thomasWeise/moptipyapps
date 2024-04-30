@@ -66,7 +66,10 @@ from moptipyapps.binpacking2d.objectives.bin_count_and_small import (
     BinCountAndSmall,
 )
 from moptipyapps.binpacking2d.packing import Packing
-from moptipyapps.shared import moptipyapps_argparser
+from moptipyapps.shared import (
+    moptipyapps_argparser,
+    motipyapps_footer_bottom_comments,
+)
 
 #: the number of items
 KEY_N_ITEMS: Final[str] = "nItems"
@@ -396,13 +399,14 @@ def to_csv(results: Iterable[PackingResult], file: str) -> Path:
     logger(f"Writing packing results to CSV file {path!r}.")
     path.ensure_parent_dir_exists()
     with path.open_for_write() as wt:
-        csv_write(data=sorted(results),
-                  consumer=line_writer(wt),
-                  setup=CsvWriter().setup,
-                  get_column_titles=CsvWriter.get_column_titles,
-                  get_row=CsvWriter.get_row,
-                  get_header_comments=CsvWriter.get_header_comments,
-                  get_footer_comments=CsvWriter.get_footer_comments)
+        csv_write(
+            data=sorted(results), consumer=line_writer(wt),
+            setup=CsvWriter().setup,
+            get_column_titles=CsvWriter.get_column_titles,
+            get_row=CsvWriter.get_row,
+            get_header_comments=CsvWriter.get_header_comments,
+            get_footer_comments=CsvWriter.get_footer_comments,
+            get_footer_bottom_comments=CsvWriter.get_footer_bottom_comments)
     logger(f"Done writing packing results to CSV file {path!r}.")
     return path
 
@@ -557,6 +561,17 @@ class CsvWriter:
                      "two-dimensional bin packing problem.")
                 ox = csv_scope(ob, _OBJECTIVE_UPPER)
                 dest(f"{ox}: an upper bound of the {ob} objective function.")
+
+    def get_footer_bottom_comments(self, dest: Callable[[str], None]) -> None:
+        """
+        Get the bottom footer comments.
+
+        :param dest: the destination
+        """
+        motipyapps_footer_bottom_comments(
+            self, dest, "The packing data is assembled using module "
+                        "moptipyapps.binpacking2d.packing_statistics.")
+        ErCsvWriter.get_footer_bottom_comments(self.__er, dest)
 
 
 class CsvReader:
