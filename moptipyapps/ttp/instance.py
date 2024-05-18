@@ -258,6 +258,58 @@ _INSTANCES: Final[tuple[str, ...]] = (
     "sup6", "sup8", "sup10", "sup12", "sup14")
 
 
+#: The lower and upper bound for the *optimal* total tournament length, taken
+#: from https://robinxval.ugent.be/RobinX/travelRepo.php on 2024-05-10.
+_OPT_DISTANCE_BOUNDS: Final[dict[str, tuple[int, int]]] = {
+    "bra24": (249477, 261687), "circ4": (20, 20), "circ6": (64, 64),
+    "circ8": (132, 132), "circ10": (242, 242), "circ12": (388, 400),
+    "circ14": (588, 616), "circ16": (846, 898), "circ18": (1188, 1268),
+    "circ20": (1600, 1724), "circ22": (2068, 2366), "circ24": (2688, 3146),
+    "circ26": (3380, 3992), "circ28": (4144, 4642), "circ30": (5100, 5842),
+    "circ32": (6144, 7074), "circ34": (7276, 8042), "circ36": (8640, 9726),
+    "circ38": (10108, 11424), "circ40": (11680, 12752), "con4": (17, 17),
+    "con6": (43, 43), "con8": (80, 80), "con10": (124, 124),
+    "con12": (181, 181), "con14": (252, 252), "con16": (327, 327),
+    "con18": (414, 416), "con20": (520, 520), "con22": (626, 626),
+    "con24": (744, 747), "con26": (884, 884), "con28": (1021, 1021),
+    "con30": (1170, 1177), "con32": (1344, 1359), "con34": (1512, 1512),
+    "con36": (1692, 1703), "con38": (1900, 1918), "con40": (2099, 2099),
+    "gal4": (416, 416), "gal6": (1365, 1365), "gal8": (2373, 2373),
+    "gal10": (4535, 4535), "gal12": (7034, 7135), "gal14": (10255, 10840),
+    "gal16": (13619, 14583), "gal18": (19050, 20205), "gal20": (23738, 25401),
+    "gal22": (31461, 33901), "gal24": (41287, 44260), "gal26": (53802, 58968),
+    "gal28": (69992, 75276), "gal30": (88831, 95158),
+    "gal32": (108374, 119665), "gal34": (133976, 143298),
+    "gal36": (158549, 169387), "gal38": (189126, 204980),
+    "gal40": (226820, 241908), "incr4": (48, 48), "incr6": (228, 228),
+    "incr8": (624, 638), "incr10": (1440, 1612), "incr12": (2880, 3398),
+    "incr14": (5180, 6488), "incr16": (8640, 10332), "incr18": (13548, 17278),
+    "incr20": (20368, 25672), "incr22": (29484, 40944),
+    "incr24": (41360, 56602), "incr26": (56500, 81866),
+    "incr28": (75456, 106870), "incr30": (98820, 136810),
+    "incr32": (127224, 177990), "incr34": (161348, 222082),
+    "incr36": (201912, 278060), "incr38": (249686, 336008),
+    "incr40": (305470, 406960), "line4": (24, 24), "line6": (76, 76),
+    "line8": (156, 162), "line10": (288, 370), "line12": (480, 584),
+    "line14": (740, 918), "line16": (1080, 1320), "line18": (1512, 1926),
+    "line20": (2044, 2548), "line22": (2688, 3684), "line24": (3456, 4732),
+    "line26": (4356, 6382), "line28": (5400, 7778), "line30": (6600, 9312),
+    "line32": (7964, 11234), "line34": (9504, 13190),
+    "line36": (11232, 15536), "line38": (13156, 17862),
+    "line40": (15294, 20546), "nfl16": (223800, 231483),
+    "nfl18": (272834, 282258), "nfl20": (316721, 332041),
+    "nfl22": (378813, 400636), "nfl24": (431226, 463657),
+    "nfl26": (495982, 536792), "nfl28": (560697, 598123),
+    "nfl30": (688875, 739697), "nfl32": (836031, 914620),
+    "nl4": (8276, 8276), "nl6": (23916, 23916), "nl8": (39721, 39721),
+    "nl10": (59436, 59436), "nl12": (108629, 110729),
+    "nl14": (183354, 188728), "nl16": (249477, 261687),
+    "sup4": (63405, 63405), "sup6": (130365, 130365),
+    "sup8": (182409, 182409), "sup10": (316329, 316329),
+    "sup12": (453860, 458810), "sup14": (557354, 567891),
+}
+
+
 class Instance(TSPInstance):
     """An instance of Traveling Tournament Problem (TTP)."""
 
@@ -379,6 +431,28 @@ gamePlanDtype: b@END_I'
         logger.key_value("separationMin", self.separation_min)
         logger.key_value("separationMax", self.separation_max)
         logger.key_value("gamePlanDtype", self.game_plan_dtype.char)
+
+    def get_optimal_plan_length_bounds(self) -> tuple[int, int]:
+        """
+        Get lower and upper bounds in which the *optimal* plan length resides.
+
+        These are the bounds for the optimal tour length of *feasible*
+        solutions. If we know the feasible solution with the smallest possible
+        tour length, then the :class:`~moptipyapps.ttp.game_plan` objective
+        function would return a value within these limits for this solution.
+        The limits for the RobinX instance have been taken from
+        https://robinxval.ugent.be/RobinX/travelRepo.php on 2024-05-10.
+
+        :return: a tuple of the lower and upper limit for the optimal
+            plan length
+        """
+        if self.name in _OPT_DISTANCE_BOUNDS:
+            return _OPT_DISTANCE_BOUNDS[self.name]
+        # unknown instance, compute bounds including penalty
+        n: Final[int] = self.n_cities
+        rounds: Final[int] = self.rounds
+        days: Final[int] = (n - 1) * rounds
+        return 0, ((2 * int(self.max())) + 1) * n * days
 
     @staticmethod
     def from_file(path: str, lower_bound_getter: Callable[[

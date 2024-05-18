@@ -2,6 +2,8 @@
 from typing import Final
 
 import numpy as np
+from pycommons.io.path import line_writer
+from pycommons.io.temp import temp_file
 
 from moptipyapps.tsp.instance import Instance
 from moptipyapps.tsp.known_optima import (
@@ -65,6 +67,20 @@ def __check_resource_instance(name: str, root_class) -> None:
         assert 0 <= lb <= instance.tour_length_lower_bound <= ub
         assert ub == instance.tour_length_upper_bound
         assert is_symmetric == instance.is_symmetric
+
+        with temp_file() as tf:
+            with tf.open_for_write() as stream:
+                instance.to_stream(line_writer(stream))
+            inst_read = Instance.from_file(
+                tf, lambda _: instance.tour_length_lower_bound)
+
+        assert instance.n_cities == inst_read.n_cities
+        assert instance.name == inst_read.name
+        assert instance.tour_length_lower_bound \
+            == inst_read.tour_length_lower_bound
+        assert instance.tour_length_upper_bound \
+            == inst_read.tour_length_upper_bound
+        assert list(instance.flatten()) == list(inst_read.flatten())
     except AssertionError as ae:
         raise ValueError(f"error when testing {name!r}") from ae
 

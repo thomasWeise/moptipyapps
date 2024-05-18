@@ -109,22 +109,22 @@ _INSTANCES: Final[tuple[str, ...]] = (
     "bur26a", "bur26b", "bur26c", "bur26d", "bur26e", "bur26f", "bur26g",
     "bur26h", "chr12a", "chr12b", "chr12c", "chr15a", "chr15b", "chr15c",
     "chr18a", "chr18b", "chr20a", "chr20b", "chr20c", "chr22a", "chr22b",
-    "chr25a", "els19", "esc128", "esc16a", "esc16b", "esc16c", "esc16d",
-    "esc16e", "esc16f", "esc16g", "esc16h", "esc16i", "esc16j", "esc32a",
-    "esc32b", "esc32c", "esc32d", "esc32e", "esc32g", "esc32h", "esc64a",
+    "chr25a", "els19", "esc16a", "esc16b", "esc16c", "esc16d", "esc16e",
+    "esc16f", "esc16g", "esc16h", "esc16i", "esc16j", "esc32a", "esc32b",
+    "esc32c", "esc32d", "esc32e", "esc32g", "esc32h", "esc64a", "esc128",
     "had12", "had14", "had16", "had18", "had20", "kra30a", "kra30b", "kra32",
     "lipa20a", "lipa20b", "lipa30a", "lipa30b", "lipa40a", "lipa40b",
     "lipa50a", "lipa50b", "lipa60a", "lipa60b", "lipa70a", "lipa70b",
     "lipa80a", "lipa80b", "lipa90a", "lipa90b", "nug12", "nug14", "nug15",
     "nug16a", "nug16b", "nug17", "nug18", "nug20", "nug21", "nug22", "nug24",
     "nug25", "nug27", "nug28", "nug30", "rou12", "rou15", "rou20", "scr12",
-    "scr15", "scr20", "sko100a", "sko100b", "sko100c", "sko100d", "sko100e",
-    "sko100f", "sko42", "sko49", "sko56", "sko64", "sko72", "sko81", "sko90",
-    "ste36a", "ste36b", "ste36c", "tai100a", "tai100b", "tai12a", "tai12b",
-    "tai150b", "tai15a", "tai15b", "tai17a", "tai20a", "tai20b", "tai256c",
-    "tai25a", "tai25b", "tai30a", "tai30b", "tai35a", "tai35b", "tai40a",
-    "tai40b", "tai50a", "tai50b", "tai60a", "tai60b", "tai64c", "tai80a",
-    "tai80b", "tho150", "tho30", "tho40", "wil100", "wil50")
+    "scr15", "scr20", "sko42", "sko49", "sko56", "sko64", "sko72", "sko81",
+    "sko90", "sko100a", "sko100b", "sko100c", "sko100d", "sko100e", "sko100f",
+    "ste36a", "ste36b", "ste36c", "tai12a", "tai12b", "tai15a", "tai15b",
+    "tai17a", "tai20a", "tai20b", "tai25a", "tai25b", "tai30a", "tai30b",
+    "tai35a", "tai35b", "tai40a", "tai40b", "tai50a", "tai50b", "tai60a",
+    "tai60b", "tai64c", "tai80a", "tai80b", "tai100a", "tai100b", "tai150b",
+    "tai256c", "tho30", "tho40", "tho150", "wil50", "wil100")
 
 #: the lower bounds provided at <https://qaplib.mgi.polymtl.ca/>
 _BOUNDS: Final[dict[str, int]] = {
@@ -163,6 +163,36 @@ _BOUNDS: Final[dict[str, int]] = {
     "lipa60a": 107218, "lipa60b": 2520135, "lipa70a": 169755,
     "lipa70b": 4603200, "lipa80a": 253195, "lipa80b": 7763962,
     "lipa90a": 360630, "lipa90b": 12490441, "nug12": 578}
+
+#: The best-known solutions of the QAPLIB instances that are not yet solved to
+#: optimality, as of 2024-05-09 on https://qaplib.mgi.polymtl.ca/
+_BKS: Final[dict[str, tuple[str, int]]] = {
+    "sko90": ("T1991RTSFTQAP,T1995COISFTQAP", 115534),
+    "sko100a": ("FF1993GHFTQAP", 152002),
+    "sko100b": ("FF1993GHFTQAP", 153890),
+    "sko100c": ("FF1993GHFTQAP", 147862),
+    "sko100d": ("FF1993GHFTQAP", 149576),
+    "sko100e": ("FF1993GHFTQAP", 149150),
+    "sko100f": ("FF1993GHFTQAP", 149036),
+    "tai30a": ("T1991RTSFTQAP,T1995COISFTQAP", 1818146),
+    "tai35a": ("T1991RTSFTQAP,T1995COISFTQAP", 2422002),
+    "tai35b": ("T1991RTSFTQAP,T1995COISFTQAP", 283315445),
+    "tai40a": ("T1991RTSFTQAP,T1995COISFTQAP", 3139370),
+    "tai40b": ("T1991RTSFTQAP,T1995COISFTQAP", 637250948),
+    "tai50a": ("M2008AIOTITSAFTQAP", 4938796),
+    "tai50b": ("T1991RTSFTQAP,T1995COISFTQAP", 458821517),
+    "tai60a": ("M2005ATSAFTQAP", 7205962),
+    "tai60b": ("T1991RTSFTQAP,T1995COISFTQAP", 608215054),
+    "tai80a": ("M2008AIOTITSAFTQAP", 13499184),
+    "tai80b": ("T1991RTSFTQAP,T1995COISFTQAP", 818415043),
+    "tai100a": ("M2008AIOTITSAFTQAP", 21044752),
+    "tai100b": ("T1991RTSFTQAP,T1995COISFTQAP", 1185996137),
+    "tai150b": ("TG1997AMFTQAP", 498896643),
+    "tai256c": ("S1997MMASFQAP", 44759294),
+    "tho40": ("TB1994AISAAFTQAP", 240516),
+    "tho150": ("M2003AMSAAFTQAP", 8133398),
+    "wil100": ("FF1993GHFTQAP", 273038),
+}
 
 
 class Instance(Component):
@@ -242,6 +272,67 @@ class Instance(Component):
         :return: :attr:`~name`
         """
         return self.name
+
+    def bks(self) -> tuple[str, int]:
+        """
+        Get the best-known solution, if known, the optimum, or lower bound.
+
+        A tuple with a string identifying the source of the value and a value
+        corresponding to the best-known solution:
+
+        - `("OPT", xxx)`: the problem instance has been solved to optimality
+          and `xxx` is the objective value of the optimum
+        - `("LB", xxx)`: neither the optimum nor a best-known solution are
+          available for this instance, so we return the lower bound
+
+        The data is based on https://qaplib.mgi.polymtl.ca/, visited on
+        2024-05-09. The following sources are included:
+
+        - "FF1993GHFTQAP": Charles Fleurent and Jacques A. Ferland. Genetic
+          Hybrids for the Quadratic Assignment Problem. In Panos M. Pardalos
+          and Henry Wolkowicz, eds, *Quadratic Assignment and Related
+          Problems, Proceedings of a DIMACS Workshop,* May 20-21, 1993.
+          pages 173-187. Providence, RI, USA: American Mathematical Society.
+        - "M2003AMSAAFTQAP": Alfonsas Misevičius, A Modified Simulated
+          Annealing Algorithm for the Quadratic Assignment Problem.
+          *Informatica* 14(4):497-514. January 2003.
+          https://doi.org/10.15388/Informatica.2003.037.
+        - "M2005ATSAFTQAP": Alfonsas Misevičius. A Tabu Search Algorithm for
+          the Quadratic Assignment Problem.
+          *Computational Optimization and Applications* 30(1):95-111. 2005.
+          https://doi.org/10.1007/s10589-005-4562-x.
+        - "M2008AIOTITSAFTQAP": Alfonsas Misevičius. An Implementation of
+          the Iterated Tabu Search Algorithm for the Quadratic Assignment
+          Problem. Working Paper. 2008. Kaunas, Lithuania: Kaunas University
+          of Technology.
+        - "S1997MMASFQAP": Thomas Stützle. MAX-MIN Ant System for Quadratic
+          Assignment Problems. Research Report AIDA-97-04. 1997. Darmstadt,
+          Germany: Department of Computer Schience, Darmstadt University of
+          Technology.
+        - "T1991RTSFTQAP": Éric Taillard. Robust Taboo Search for the
+          Quadratic Assignment Problem. *Parallel Computing.*
+          17(4-5):443-455. July 1991.
+        - "T1995COISFTQAP": Éric D. Taillard. Comparison of Iterative
+          Searches for the Quadratic Assignment Problem. *Location Science*
+          3(2):87-105. 1995.
+        - "TB1994AISAAFTQAP": Ulrich Wilhelm Thonemann and Andreas Bölte.
+          An Improved Simulated Annealing Algorithm for the Quadratic
+          Assignment Problem. Working Paper 1994. Paderborn, Germany: School
+          of Business, Department of Production and Operations Research,
+          University of Paderborn.
+        - "TG1997AMFTQAP": Éric D. Taillard and Luca-Maria Gambardella.
+          Adaptive Memories for the Quadratic Assignment Problem. 1997.
+          Technical Report IDSIA-87-97. Lugano, Switzerland: IDSIA.
+
+        :return: a `tuple[str, int]` with the objective value of the
+            best-known (if any is available), the optimum, or the lower bound.
+        """
+        name: Final[str] = self.name
+        if name in _BKS:
+            return _BKS[name]
+        if name in _BOUNDS:
+            return "OPT", _BOUNDS[name]
+        return "LB", self.lower_bound
 
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
         """

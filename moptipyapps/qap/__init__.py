@@ -19,4 +19,11 @@ minimized. Each instance therefore presents a matrix with
    Panos M. Pardalos, eds., Handbook of Combinatorial Optimization,
    pages 1713-1809, 1998, Springer New York, NY, USA.
    https://doi.org/10.1007/978-1-4613-0303-9_27.
+
+This is code is part of the research work of Mr. Jiayang Chen (陈嘉阳), a
+Master's student at the Institute of Applied Optimization (应用优化研究所,
+http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data
+(人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China
+(中国安徽省合肥市) under the supervision of
+Prof. Dr. Thomas Weise (汤卫思教授).
 """

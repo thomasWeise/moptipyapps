@@ -136,7 +136,7 @@ supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 """
 
 from math import acos, cos, isfinite, sqrt
-from typing import Any, Callable, Final, TextIO, cast
+from typing import Any, Callable, Final, Iterable, TextIO, cast
 
 import moptipy.utils.nputils as npu
 import numpy as np
@@ -217,19 +217,19 @@ _INSTANCES: Final[tuple[str, ...]] = tuple(sorted(
 _ASYMMETRIC_RESOURCES: Final[set[str]] = set(_ASYMMETRIC_INSTANCES)
 
 #: the problem is a symmetric tsp
-__TYPE_SYMMETRIC_TSP: Final[str] = "TSP"
+_TYPE_SYMMETRIC_TSP: Final[str] = "TSP"
 #: the problem is an asymmetric tsp
-__TYPE_ASYMMETRIC_TSP: Final[str] = "ATSP"
+_TYPE_ASYMMETRIC_TSP: Final[str] = "ATSP"
 #: the permitted types
-__TYPES: Final[set[str]] = {__TYPE_SYMMETRIC_TSP, __TYPE_ASYMMETRIC_TSP}
+_TYPES: Final[set[str]] = {_TYPE_SYMMETRIC_TSP, _TYPE_ASYMMETRIC_TSP}
 #: the name start
-__KEY_NAME: Final[str] = "NAME"
+_KEY_NAME: Final[str] = "NAME"
 #: the type start
-__KEY_TYPE: Final[str] = "TYPE"
+_KEY_TYPE: Final[str] = "TYPE"
 #: the dimension start
-__KEY_DIMENSION: Final[str] = "DIMENSION"
+_KEY_DIMENSION: Final[str] = "DIMENSION"
 #: the comment start
-__KEY_COMMENT: Final[str] = "COMMENT"
+_KEY_COMMENT: Final[str] = "COMMENT"
 #: EUC_2D coordinates
 __EWT_EUC_2D: Final[str] = "EUC_2D"
 #: geographical coordinates
@@ -239,45 +239,45 @@ __EWT_ATT: Final[str] = "ATT"
 #: ceiling 2D coordinates
 __EWT_CEIL2D: Final[str] = "CEIL_2D"
 #: the explicit edge weight type
-__EWT_EXPLICIT: Final[str] = "EXPLICIT"
+_EWT_EXPLICIT: Final[str] = "EXPLICIT"
 #: the edge weight type start
-__KEY_EDGE_WEIGHT_TYPE: Final[str] = "EDGE_WEIGHT_TYPE"
+_KEY_EDGE_WEIGHT_TYPE: Final[str] = "EDGE_WEIGHT_TYPE"
 #: the permitted edge weight types
-__EDGE_WEIGHT_TYPES: Final[set[str]] = {
-    __EWT_EUC_2D, __EWT_GEO, __EWT_ATT, __EWT_CEIL2D, __EWT_EXPLICIT}
+_EDGE_WEIGHT_TYPES: Final[set[str]] = {
+    __EWT_EUC_2D, __EWT_GEO, __EWT_ATT, __EWT_CEIL2D, _EWT_EXPLICIT}
 #: the edge weight format "function"
 __EWF_FUNCTION: Final[str] = "FUNCTION"
 #: the full matrix edge weight format
-__EWF_FULL_MATRIX: Final[str] = "FULL_MATRIX"
+_EWF_FULL_MATRIX: Final[str] = "FULL_MATRIX"
 #: the upper row edge weight format
-__EWF_UPPER_ROW: Final[str] = "UPPER_ROW"
+_EWF_UPPER_ROW: Final[str] = "UPPER_ROW"
 #: the lower diagonal row
 __EWF_LOWER_DIAG_ROW: Final[str] = "LOWER_DIAG_ROW"
 #: the upper diagonal row
 __EWF_UPPER_DIAG_ROW: Final[str] = "UPPER_DIAG_ROW"
 #: the edge weight format start
-__KEY_EDGE_WEIGHT_FORMAT: Final[str] = "EDGE_WEIGHT_FORMAT"
+_KEY_EDGE_WEIGHT_FORMAT: Final[str] = "EDGE_WEIGHT_FORMAT"
 #: the permitted edge weight formats
-__EDGE_WEIGHT_FORMATS: Final[set[str]] = {
-    __EWF_FUNCTION, __EWF_FULL_MATRIX, __EWF_UPPER_ROW,
+_EDGE_WEIGHT_FORMATS: Final[set[str]] = {
+    __EWF_FUNCTION, _EWF_FULL_MATRIX, _EWF_UPPER_ROW,
     __EWF_LOWER_DIAG_ROW, __EWF_UPPER_DIAG_ROW}
 #: the start of the node coord type
-__KEY_NODE_COORD_TYPE: Final[str] = "NODE_COORD_TYPE"
+_KEY_NODE_COORD_TYPE: Final[str] = "NODE_COORD_TYPE"
 #: 2d coordinates
 __NODE_COORD_TYPE_2D: Final[str] = "TWOD_COORDS"
 #: no coordinates
 __NODE_COORD_TYPE_NONE: Final[str] = "NO_COORDS"
 #: the permitted node coordinate types
-__NODE_COORD_TYPES: Final[set[str]] = {
+_NODE_COORD_TYPES: Final[set[str]] = {
     __NODE_COORD_TYPE_2D, __NODE_COORD_TYPE_NONE}
 #: the node coordinate section starts
-__START_NODE_COORD_SECTION: Final[str] = "NODE_COORD_SECTION"
+_START_NODE_COORD_SECTION: Final[str] = "NODE_COORD_SECTION"
 #: start the edge weight section
-__START_EDGE_WEIGHT_SECTION: Final[str] = "EDGE_WEIGHT_SECTION"
+_START_EDGE_WEIGHT_SECTION: Final[str] = "EDGE_WEIGHT_SECTION"
 #: the end of the file
-__EOF: Final[str] = "EOF"
+_EOF: Final[str] = "EOF"
 #: the fixed edges section
-__FIXED_EDGES: Final[str] = "FIXED_EDGES_SECTION"
+_FIXED_EDGES: Final[str] = "FIXED_EDGES_SECTION"
 
 
 def __line_to_nums(line: str,
@@ -343,7 +343,7 @@ def __dist_2deuc(a: list[int | float], b: list[int | float]) -> int:
 
 
 def __matrix_from_points(
-        n_cities: int, coord_dim: int, stream: TextIO,
+        n_cities: int, coord_dim: int, stream: Iterable[str],
         dist_func: Callable[[list[int | float], list[int | float]], int]) \
         -> np.ndarray:
     """
@@ -364,7 +364,7 @@ def __matrix_from_points(
         line = the_line.strip()
         if len(line) <= 0:
             continue
-        if line == __EOF:
+        if line == _EOF:
             break
         __line_to_nums(line, row.append)
         index += 1
@@ -455,7 +455,7 @@ def __dist_2dceil(a: list[int | float], b: list[int | float]) -> int:
 
 def _matrix_from_node_coord_section(
         n_cities: int | None, edge_weight_type: str | None,
-        node_coord_type: str | None, stream: TextIO) -> np.ndarray:
+        node_coord_type: str | None, stream: Iterable[str]) -> np.ndarray:
     """
     Get a data matrix from a node coordinate section.
 
@@ -494,11 +494,11 @@ def _matrix_from_node_coord_section(
     if (coord_dim is not None) and (dist_fun is not None):
         return __matrix_from_points(n_cities, coord_dim, stream, dist_fun)
 
-    raise ValueError(f"invalid combination of {__KEY_EDGE_WEIGHT_TYPE} "
-                     f"and {__KEY_NODE_COORD_TYPE}")
+    raise ValueError(f"invalid combination of {_KEY_EDGE_WEIGHT_TYPE} "
+                     f"and {_KEY_NODE_COORD_TYPE}")
 
 
-def __read_n_ints(n: int, stream: TextIO) -> list[int]:
+def __read_n_ints(n: int, stream: Iterable[str]) -> list[int]:
     """
     Read exactly `n` integers from a stream.
 
@@ -529,7 +529,7 @@ def __read_n_ints(n: int, stream: TextIO) -> list[int]:
 
 def _matrix_from_edge_weights(
         n_cities: int | None, edge_weight_type: str | None,
-        edge_weight_format: str | None, stream: TextIO) -> np.ndarray:
+        edge_weight_format: str | None, stream: Iterable[str]) -> np.ndarray:
     """
     Get a data matrix from a edge weights section.
 
@@ -544,14 +544,14 @@ def _matrix_from_edge_weights(
         raise type_error(edge_weight_type, "node_coord_type", str)
     if not isinstance(edge_weight_type, str):
         raise type_error(edge_weight_type, "edge_weight_type", str)
-    if edge_weight_type == __EWT_EXPLICIT:
-        if edge_weight_format == __EWF_FULL_MATRIX:
+    if edge_weight_type == _EWT_EXPLICIT:
+        if edge_weight_format == _EWF_FULL_MATRIX:
             res = np.array(__read_n_ints(n_cities * n_cities, stream),
                            dtype=npu.DEFAULT_INT).reshape(
                 (n_cities, n_cities))
             np.fill_diagonal(res, 0)
             return res
-        if edge_weight_format == __EWF_UPPER_ROW:
+        if edge_weight_format == _EWF_UPPER_ROW:
             ints = __read_n_ints((n_cities * (n_cities - 1)) // 2, stream)
             res = np.zeros((n_cities, n_cities), dtype=npu.DEFAULT_INT)
             i: int = 1
@@ -592,13 +592,13 @@ def _matrix_from_edge_weights(
                     i = 0
             return res
     raise ValueError(
-        f"unsupported combination of {__KEY_EDGE_WEIGHT_TYPE}="
-        f"{edge_weight_type!r} and {__KEY_EDGE_WEIGHT_FORMAT}="
+        f"unsupported combination of {_KEY_EDGE_WEIGHT_TYPE}="
+        f"{edge_weight_type!r} and {_KEY_EDGE_WEIGHT_FORMAT}="
         f"{edge_weight_format!r}")
 
 
 def _from_stream(
-        stream: TextIO,
+        stream: Iterable[str],
         lower_bound_getter: Callable[[str], int] | None =
         _LOWER_BOUNDS.__getitem__) -> "Instance":
     """
@@ -637,92 +637,92 @@ def _from_stream(
                 raise ValueError(f"{line!r} has empty value "
                                  f"{value!r} for key {key!r}.")
 
-            if key == __KEY_NAME:
+            if key == _KEY_NAME:
                 if the_name is not None:
                     raise ValueError(
                         f"{line!r} cannot come at this position,"
-                        f" already got {__KEY_NAME}={the_name!r}.")
+                        f" already got {_KEY_NAME}={the_name!r}.")
                 if value.endswith(".tsp"):
                     value = value[0:-4]
                 the_name = value
                 continue
 
-            if key == __KEY_TYPE:
+            if key == _KEY_TYPE:
                 if the_type is not None:
                     raise ValueError(
                         f"{line!r} cannot come at this position, already "
-                        f"got {__KEY_TYPE}={the_type!r}.")
-                the_type = __TYPE_SYMMETRIC_TSP \
+                        f"got {_KEY_TYPE}={the_type!r}.")
+                the_type = _TYPE_SYMMETRIC_TSP \
                     if value == "TSP (M.~Hofmeister)" else value
-                if the_type not in __TYPES:
+                if the_type not in _TYPES:
                     raise ValueError(
-                        f"only {__TYPES!r} are permitted as {__KEY_TYPE}, "
+                        f"only {_TYPES!r} are permitted as {_KEY_TYPE}, "
                         f"but got {the_type!r} from {line!r}.")
                 continue
 
-            if key == __KEY_DIMENSION:
+            if key == _KEY_DIMENSION:
                 if the_n_cities is not None:
                     raise ValueError(
                         f"{line!r} cannot come at this position,"
-                        f" already got {__KEY_DIMENSION}={the_n_cities}.")
+                        f" already got {_KEY_DIMENSION}={the_n_cities}.")
                 the_n_cities = check_to_int_range(value, "dimension",
                                                   2, 1_000_000_000)
 
-            if key == __KEY_EDGE_WEIGHT_TYPE:
+            if key == _KEY_EDGE_WEIGHT_TYPE:
                 if the_ewt is not None:
                     raise ValueError(
                         f"{line!r} cannot come at this position, already "
-                        f"got {__KEY_EDGE_WEIGHT_TYPE}={the_ewt!r}.")
+                        f"got {_KEY_EDGE_WEIGHT_TYPE}={the_ewt!r}.")
                 the_ewt = value
-                if the_ewt not in __EDGE_WEIGHT_TYPES:
+                if the_ewt not in _EDGE_WEIGHT_TYPES:
                     raise ValueError(
-                        f"only {__EDGE_WEIGHT_TYPES!r} are permitted as "
-                        f"{__KEY_EDGE_WEIGHT_TYPE}, but got {the_ewt!r} "
+                        f"only {_EDGE_WEIGHT_TYPES!r} are permitted as "
+                        f"{_KEY_EDGE_WEIGHT_TYPE}, but got {the_ewt!r} "
                         f"in {line!r}")
                 continue
 
-            if key == __KEY_EDGE_WEIGHT_FORMAT:
+            if key == _KEY_EDGE_WEIGHT_FORMAT:
                 if the_ewf is not None:
                     raise ValueError(
                         f"{line!r} cannot come at this position, already "
-                        f"got {__KEY_EDGE_WEIGHT_FORMAT}={the_ewf!r}.")
+                        f"got {_KEY_EDGE_WEIGHT_FORMAT}={the_ewf!r}.")
                 the_ewf = value
-                if the_ewf not in __EDGE_WEIGHT_FORMATS:
+                if the_ewf not in _EDGE_WEIGHT_FORMATS:
                     raise ValueError(
-                        f"only {__EDGE_WEIGHT_FORMATS!r} are permitted as "
-                        f"{__KEY_EDGE_WEIGHT_FORMAT}, but got {the_ewf} "
+                        f"only {_EDGE_WEIGHT_FORMATS!r} are permitted as "
+                        f"{_KEY_EDGE_WEIGHT_FORMAT}, but got {the_ewf} "
                         f"in {line!r}")
                 continue
-            if key == __KEY_NODE_COORD_TYPE:
+            if key == _KEY_NODE_COORD_TYPE:
                 if the_nct is not None:
                     raise ValueError(
                         f"{line!r} cannot come at this position, already "
-                        f"got {__KEY_NODE_COORD_TYPE}={the_nct!r}.")
+                        f"got {_KEY_NODE_COORD_TYPE}={the_nct!r}.")
                 the_nct = value
-                if the_nct not in __NODE_COORD_TYPES:
+                if the_nct not in _NODE_COORD_TYPES:
                     raise ValueError(
-                        f"only {__NODE_COORD_TYPES!r} are permitted as node "
-                        f"{__KEY_NODE_COORD_TYPE}, but got {the_nct!r} "
+                        f"only {_NODE_COORD_TYPES!r} are permitted as node "
+                        f"{_KEY_NODE_COORD_TYPE}, but got {the_nct!r} "
                         f"in {line!r}")
                 continue
-        elif line == __START_NODE_COORD_SECTION:
+        elif line == _START_NODE_COORD_SECTION:
             if the_matrix is not None:
                 raise ValueError(
                     f"already got matrix, cannot have {line!r} here!")
             the_matrix = _matrix_from_node_coord_section(
                 the_n_cities, the_ewt, the_nct, stream)
             continue
-        elif line == __START_EDGE_WEIGHT_SECTION:
+        elif line == _START_EDGE_WEIGHT_SECTION:
             if the_matrix is not None:
                 raise ValueError(
                     f"already got matrix, cannot have {line!r} here!")
             the_matrix = _matrix_from_edge_weights(
                 the_n_cities, the_ewt, the_ewf, stream)
             continue
-        elif line == __EOF:
+        elif line == _EOF:
             break
-        elif line == __FIXED_EDGES:
-            raise ValueError(f"{__FIXED_EDGES!r} not supported")
+        elif line == _FIXED_EDGES:
+            raise ValueError(f"{_FIXED_EDGES!r} not supported")
 
     if the_name is None:
         raise ValueError("did not find any name.")
@@ -732,7 +732,7 @@ def _from_stream(
     inst: Final[Instance] = Instance(
         the_name, 0 if (lower_bound_getter is None) else
         lower_bound_getter(the_name), the_matrix)
-    if (the_type == __TYPE_SYMMETRIC_TSP) and (not inst.is_symmetric):
+    if (the_type == _TYPE_SYMMETRIC_TSP) and (not inst.is_symmetric):
         raise ValueError("found asymmetric TSP instance but expected "
                          f"{the_name!r} to be a symmetric one?")
 
@@ -987,3 +987,83 @@ symmetric: T@dtype: i@END_I'
         return _INSTANCES if (symmetric and asymmetric) else (
             _SYMMETRIC_INSTANCES if symmetric else (
                 _ASYMMETRIC_INSTANCES if asymmetric else ()))
+
+    def to_stream(self, collector: Callable[[str], Any],
+                  comments: Iterable[str] = ()) -> None:
+        """
+        Convert this instance to a stream.
+
+        :param collector: the string collector
+        :param comments: a stream of comments
+
+        >>> orig = Instance.from_resource("br17")
+        >>> text = []
+        >>> orig.to_stream(text.append)
+        >>> reload = _from_stream(iter(text),
+        ...     lambda _: orig.tour_length_lower_bound)
+        >>> orig.n_cities == reload.n_cities
+        True
+        >>> orig.name == reload.name
+        True
+        >>> list(orig.flatten()) == list(reload.flatten())
+        True
+
+        >>> orig = Instance.from_resource("att48")
+        >>> text = []
+        >>> orig.to_stream(text.append)
+        >>> reload = _from_stream(iter(text),
+        ...     lambda _: orig.tour_length_lower_bound)
+        >>> orig.n_cities == reload.n_cities
+        True
+        >>> orig.name == reload.name
+        True
+        >>> list(orig.flatten()) == list(reload.flatten())
+        True
+
+        >>> orig = Instance.from_resource("berlin52")
+        >>> text = []
+        >>> orig.to_stream(text.append)
+        >>> reload = _from_stream(iter(text),
+        ...     lambda _: orig.tour_length_lower_bound)
+        >>> orig.n_cities == reload.n_cities
+        True
+        >>> orig.name == reload.name
+        True
+        >>> list(orig.flatten()) == list(reload.flatten())
+        True
+
+        >>> orig = Instance.from_resource("ft53")
+        >>> text = []
+        >>> orig.to_stream(text.append)
+        >>> reload = _from_stream(iter(text),
+        ...     lambda _: orig.tour_length_lower_bound)
+        >>> orig.n_cities == reload.n_cities
+        True
+        >>> orig.name == reload.name
+        True
+        >>> list(orig.flatten()) == list(reload.flatten())
+        True
+        """
+        if not callable(collector):
+            raise type_error(collector, "collector", call=True)
+        if not isinstance(comments, Iterable):
+            raise type_error(comments, "comments", Iterable)
+        collector(f"{_KEY_NAME}: {self.name}")
+        t: str = _TYPE_SYMMETRIC_TSP if self.is_symmetric \
+            else _TYPE_ASYMMETRIC_TSP
+        collector(f"{_KEY_TYPE}: {t}")
+        for comment in comments:
+            collector(f"{_KEY_COMMENT}: {str.strip(comment)}")
+        collector(f"{_KEY_DIMENSION}: {self.n_cities}")
+        collector(f"{_KEY_EDGE_WEIGHT_TYPE}: {_EWT_EXPLICIT}")
+        t = _EWF_UPPER_ROW if self.is_symmetric else _EWF_FULL_MATRIX
+        collector(f"{_KEY_EDGE_WEIGHT_FORMAT}: {t}")
+        collector(_START_EDGE_WEIGHT_SECTION)
+
+        if self.is_symmetric:
+            for i in range(self.n_cities):
+                collector(" ".join(map(str, list(self[i][i + 1:]))))
+        else:
+            for i in range(self.n_cities):
+                collector(" ".join(map(str, self[i])))
+        collector(_EOF)
