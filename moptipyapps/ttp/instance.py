@@ -261,7 +261,7 @@ _INSTANCES: Final[tuple[str, ...]] = (
 #: The lower and upper bound for the *optimal* total tournament length, taken
 #: from https://robinxval.ugent.be/RobinX/travelRepo.php on 2024-05-10.
 _OPT_DISTANCE_BOUNDS: Final[dict[str, tuple[int, int]]] = {
-    "bra24": (249477, 261687), "circ4": (20, 20), "circ6": (64, 64),
+    "bra24": (451406, 538866), "circ4": (20, 20), "circ6": (64, 64),
     "circ8": (132, 132), "circ10": (242, 242), "circ12": (388, 400),
     "circ14": (588, 616), "circ16": (846, 898), "circ18": (1188, 1268),
     "circ20": (1600, 1724), "circ22": (2068, 2366), "circ24": (2688, 3146),
