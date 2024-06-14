@@ -23,8 +23,8 @@ from webbrowser import open_new_tab
 import numpy as np
 from moptipy.utils.nputils import rand_generator
 from moptipy.utils.plot_utils import save_figure
-from moptipy.utils.sys_info import is_make_build
 from pycommons.io.temp import temp_dir
+from pycommons.processes.caller import is_build
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
     ImprovedBottomLeftEncoding1,
@@ -102,7 +102,7 @@ with temp_dir() as td:  # create temporary directory `td`
 
 # OK, we have now generated and saved the plot in a file.
 # We will open it in the web browser if we are not in a make build.
-    if not is_make_build():
+    if not is_build():
         for file in files:  # for each file we generated
             open_new_tab(f"file://{file}")  # open a browser tab
         sleep(10)  # sleep 10 seconds (enough time for the browser to load)

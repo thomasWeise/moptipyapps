@@ -5,7 +5,7 @@ from typing import Any, Callable, cast
 
 import numpy as np
 from moptipy.utils.nputils import rand_generator
-from moptipy.utils.sys_info import is_make_build
+from pycommons.processes.caller import is_build
 from pycommons.types import type_name
 
 from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
@@ -21,11 +21,11 @@ from moptipyapps.binpacking2d.packing_space import PackingSpace
 random = rand_generator(1)
 
 # If it is a make build, use only 1 repetition, otherwise 20.
-REPETITIONS = 1 if is_make_build() else 20
+REPETITIONS = 1 if is_build() else 20
 
 # The instances to iterate over: All if not make build, 20 otherwise.
 INSTANCES = random.choice(Instance.list_resources(), 20, False) \
-    if is_make_build() else Instance.list_resources()
+    if is_build() else Instance.list_resources()
 
 
 # We test two versions of the Improved Bottom Left Encoding

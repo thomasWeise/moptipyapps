@@ -22,16 +22,16 @@
 
 # `moptipy` provides the basic optimization infrastructure and the spaces and
 # tools that we use for optimization.
-moptipy == 0.9.109
+moptipy == 0.9.111
 
 # the common tools package
-pycommons == 0.8.34
+pycommons == 0.8.38
 
 # `numpy` is needed for its efficient data structures.
 numpy == 1.26.1
 
 # numba provides JIT compilers useful making vector/numpy operations efficient
-numba == 0.58.1
+numba == 0.59.1
 
 # matplotlib is used to create plots in the evaluation procedures.
 matplotlib == 3.8.0

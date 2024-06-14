@@ -1,0 +1,104 @@
+name: make build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  build_python_3_10:
+    runs-on: ubuntu-latest
+    steps:
+# check out the github repository
+    - uses: actions/checkout@v4.1.6
+# set up python
+    - name: set up python "3.10"
+      uses: actions/setup-python@v5.1.0
+      with:
+        python-version: "3.10"
+# execute the actual make build process
+    - name: execute the make build
+      run: make
+# remove moptipyapps
+    - name: purge local moptipyapps installation
+      run: |
+        pip uninstall -y moptipyapps
+# attempt to install it again from github
+    - name: install moptipyapps from github
+      run: |
+        pip install git+https://github.com/thomasWeise/moptipyapps.git
+        python -c "import moptipyapps"
+
+  build_python_3_11:
+    needs: build_python_3_10
+    runs-on: ubuntu-latest
+    steps:
+# check out the github repository
+    - uses: actions/checkout@v4.1.6
+# set up python
+    - name: set up python "3.11"
+      uses: actions/setup-python@v5.1.0
+      with:
+        python-version: "3.11"
+# clean-up
+    - name: clean up
+      run: |
+        rm -rf /home/runner/work/moptipyapps/moptipyapps/docs/build/
+        rm -rf /home/runner/work/moptipyapps/moptipyapps/dist
+        rm -rf /home/runner/work/moptipyapps/moptipyapps/build
+# execute the actual make build process
+    - name: execute the make build
+      run: make
+# remove moptipyapps
+    - name: purge local moptipyapps installation
+      run: |
+        pip uninstall -y moptipyapps
+# attempt to install it again from github
+    - name: install moptipyapps from github
+      run: |
+        pip install git+https://github.com/thomasWeise/moptipyapps.git
+        python -c "import moptipyapps"
+
+  build_python_3_12:
+    needs: build_python_3_11
+    runs-on: ubuntu-latest
+    steps:
+# check out the github repository
+    - uses: actions/checkout@v4.1.6
+# set up python
+    - name: set up python "3.12"
+      uses: actions/setup-python@v5.1.0
+      with:
+        python-version: "3.12"
+# clean-up
+    - name: clean up
+      run: |
+        rm -rf /home/runner/work/moptipyapps/moptipyapps/docs/build/
+        rm -rf /home/runner/work/moptipyapps/moptipyapps/dist
+        rm -rf /home/runner/work/moptipyapps/moptipyapps/build
+# execute the actual make build process
+    - name: execute the make build
+      run: make
+# remove moptipyapps
+    - name: purge local moptipyapps installation
+      run: |
+        pip uninstall -y moptipyapps
+# attempt to install it again from github
+    - name: install moptipyapps from github
+      run: |
+        pip install git+https://github.com/thomasWeise/moptipyapps.git
+        python -c "import moptipyapps"
+# fix urls in documentation
+    - name: fix documentation urls
+      run: |
+        find /home/runner/work/moptipyapps/moptipyapps/docs/build/ \( -type d -name .git -prune \) -o -type f -name "*.html" -print0 | xargs -0 sed -i 's/ href=\"_static\// href=\"\/moptipyapps\/_static\//g'
+        find /home/runner/work/moptipyapps/moptipyapps/docs/build/ \( -type d -name .git -prune \) -o -type f -name "*.html" -print0 | xargs -0 sed -i 's/ src=\"_static\// src=\"\/moptipyapps\/_static\//g'
+        touch /home/runner/work/moptipyapps/moptipyapps/docs/build/.nojekyll
+# deploy to github pages
+    - name: deploy documentation
+      uses: JamesIves/github-pages-deploy-action@65b5dfd4f5bcd3a7403bbc2959c144256167464e
+      with:
+        branch: gh-pages
+        folder: /home/runner/work/moptipyapps/moptipyapps/docs/build/
+        single-commit: true

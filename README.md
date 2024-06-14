@@ -1,4 +1,4 @@
-[![make build](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yaml/badge.svg)](https://github.com/thomasWeise/moptipy/actions/workflows/build.yaml)
+[![make build](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yml/badge.svg)](https://github.com/thomasWeise/moptipy/actions/workflows/build.yml)
 [![pypi version](https://img.shields.io/pypi/v/moptipyapps)](https://pypi.org/project/moptipyapps)
 [![pypi downloads](https://img.shields.io/pypi/dw/moptipyapps.svg)](https://pypistats.org/packages/moptipyapps)
 [![coverage report](https://thomasweise.github.io/moptipyapps/tc/badge.svg)](https://thomasweise.github.io/moptipyapps/tc/index.html)
