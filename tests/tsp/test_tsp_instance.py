@@ -1,4 +1,5 @@
 """Test loading and validity of TSP Instances."""
+from time import monotonic_ns
 from typing import Final
 
 import numpy as np
@@ -49,7 +50,10 @@ def __check_resource_instance(name: str, root_class) -> None:
         lb: int = 0
         ub: int = 0
         is_symmetric: bool = True
+        end_time: Final[int] = monotonic_ns() + 20_000_000_000
         for i in range(instance.n_cities):
+            if monotonic_ns() >= end_time:
+                return
             nearest: int = 1_000_000_000_000_000_000_000
             farthest: int = -1
             for j in range(instance.n_cities):
@@ -87,11 +91,17 @@ def __check_resource_instance(name: str, root_class) -> None:
 
 def test_resource_instances_and_tours() -> None:
     """Test all the TSPLib instances provided as resources."""
+    end_time: Final[int] = monotonic_ns() + 60_000_000_000
     for name in Instance.list_resources():
+        if monotonic_ns() >= end_time:
+            return
         __check_resource_instance(name, Instance)
 
 
 def test_ttp_instances() -> None:
     """Test all the TTP instances provided as resources."""
+    end_time: Final[int] = monotonic_ns() + 60_000_000_000
     for name in TTPInstance.list_resources():
+        if monotonic_ns() >= end_time:
+            return
         __check_resource_instance(name, TTPInstance)

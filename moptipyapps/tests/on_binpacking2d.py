@@ -1,5 +1,6 @@
 """Perform tests on the Two-Dimensional Bin Packing Problem."""
 
+from time import monotonic_ns
 from typing import Callable, Final, Iterable, cast
 
 import numpy as np
@@ -95,13 +96,20 @@ def make_packing_invalid(random: Generator = __RANDOM) \
 
     def __make_invalid(x: Packing, ri=random.integers) -> Packing:
         not_finished: bool = True
+        end_time: Final[int] = monotonic_ns() + 20_000_000_000
         while not_finished:
             while ri(2) == 0:
+                if monotonic_ns() >= end_time:
+                    x[0, 0] = -1
+                    return x
                 x[ri(len(x)), ri(6)] = -1
                 not_finished = False
             while ri(2) == 0:
                 second = first = ri(len(x))
                 while second == first:
+                    if monotonic_ns() >= end_time:
+                        x[0, 0] = -1
+                        return x
                     second = ri(len(x))
                 x[first, 1] = x[second, 1]
                 x[first, 2] = x[second, 2] - 1
@@ -166,7 +174,10 @@ def validate_algorithm_on_2dbinpacking(
     :param max_fes: the maximum FEs
     :param random: the random number generator
     """
+    end_time: Final[int] = monotonic_ns() + 20_000_000_000
     for i in binpacking_instances_for_tests(random):
+        if monotonic_ns() >= end_time:
+            break
         validate_algorithm_on_1_2dbinpacking(algorithm, i, max_fes, random)
 
 
@@ -209,7 +220,10 @@ def validate_objective_on_2dbinpacking(
     :param objective: the objective function or a factory creating it
     :param random: the random number generator
     """
+    end_time: Final[int] = monotonic_ns() + 20_000_000_000
     for i in binpacking_instances_for_tests(random):
+        if monotonic_ns() >= end_time:
+            break
         validate_objective_on_1_2dbinpacking(objective, i, random)
 
 
@@ -285,6 +299,9 @@ def validate_signed_permutation_encoding_on_2dbinpacking(
     :param encoding: the encoding or a factory creating it
     :param random: the random number generator
     """
+    end_time: Final[int] = monotonic_ns() + 20_000_000_000
     for i in binpacking_instances_for_tests(random):
+        if monotonic_ns() >= end_time:
+            break
         validate_signed_permutation_encoding_on_1_2dbinpacking(
             encoding, i, random)

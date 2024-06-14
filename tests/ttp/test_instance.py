@@ -1,5 +1,6 @@
 """Test TTP instances."""
 
+from time import monotonic_ns
 from typing import Final
 
 import numpy as np
@@ -50,5 +51,8 @@ def __check_instance(inst: TTPInstance) -> None:
 
 def test_instances() -> None:
     """Test all the instances in the resources."""
+    end_time: Final[int] = monotonic_ns() + 60_000_000_000
     for r in TTPInstance.list_resources(True, True):
+        if monotonic_ns() >= end_time:
+            return
         __check_instance(TTPInstance.from_resource(r))

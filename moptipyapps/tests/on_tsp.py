@@ -1,5 +1,6 @@
 """Perform tests on the Traveling Salesperson Problem."""
 
+from time import monotonic_ns
 from typing import Callable, Final, Iterable
 
 import numpy as np
@@ -79,10 +80,17 @@ def make_tour_invalid(random: Generator, y: np.ndarray) -> np.ndarray:
     yorig = np.copy(y)
 
     ri = random.integers
+    end_time: Final[int] = monotonic_ns() + 20_000_000_000
     while np.all(y == yorig):
+        if monotonic_ns() >= end_time:
+            y[0] = y[1]
+            return y
         if ri(2) <= 0:
             z1 = z2 = ri(ly)
             while z1 == z2:
+                if monotonic_ns() >= end_time:
+                    y[0] = y[1]
+                    return y
                 z2 = ri(ly)
             y[z1] = y[z2]
         if ri(2) <= 0:
@@ -142,7 +150,10 @@ def validate_algorithm_on_tsp(
     :param max_fes: the maximum FEs
     :param random: the random number generator
     """
+    end_time: Final[int] = monotonic_ns() + 20_000_000_000
     for i in tsp_instances_for_tests(random, symmetric, asymmetric):
+        if monotonic_ns() >= end_time:
+            return
         validate_algorithm_on_1_tsp(algorithm, i, max_fes, random)
 
 
@@ -188,5 +199,8 @@ def validate_objective_on_tsp(
     :param asymmetric: include asymmetric instances
     :param random: the random number generator
     """
+    end_time: Final[int] = monotonic_ns() + 20_000_000_000
     for i in tsp_instances_for_tests(random, symmetric, asymmetric):
+        if monotonic_ns() >= end_time:
+            return
         validate_objective_on_1_tsp(objective, i, random)

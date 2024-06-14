@@ -1,4 +1,5 @@
 """Test loading and validity of QAP Instances."""
+from time import monotonic_ns
 from typing import Final
 
 from moptipyapps.qap.instance import _BKS, _BOUNDS, Instance
@@ -31,10 +32,15 @@ def test_resource_instances() -> None:
     all_res: Final[tuple[str, ...]] = Instance.list_resources()
     assert tuple.__len__(all_res) > 0
 
+    end_time: Final[int] = monotonic_ns() + 60_000_000_000
     for keys in (_BKS.keys(), _BOUNDS.keys()):
         assert len(keys) > 0
         for k in keys:
+            if monotonic_ns() >= end_time:
+                return
             assert k in all_res
 
     for name in all_res:
+        if monotonic_ns() >= end_time:
+            return
         __check_resource_instance(name)

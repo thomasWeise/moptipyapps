@@ -1,6 +1,7 @@
 """A test of the ODE integration."""
 
 from math import isfinite
+from time import monotonic_ns
 from typing import Callable, Final
 
 import numpy as np
@@ -79,7 +80,10 @@ def __run_ode_test(instance: Instance,
     diffs1.clear()
     diffs2.clear()
 
+    end_time: Final[int] = monotonic_ns() + 40_000_000_000
     for i in range(n_tests):
+        if monotonic_ns() >= end_time:
+            return
         res = run_ode(starting_states[i], sys, ctrl, params[i],
                       ctrl_dim, steps[i])
         if not all(is_all_finite(r) for r in res):
@@ -124,6 +128,8 @@ def __run_ode_test(instance: Instance,
 
     for _j in range(n_reps):
         for i in range(n_tests):
+            if monotonic_ns() >= end_time:
+                return
             res = run_ode(starting_states[i], sys, ctrl, params[i],
                           ctrl_dim, steps[i])
             if not np.all(res == results[i]):

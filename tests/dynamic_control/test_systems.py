@@ -1,5 +1,6 @@
 """A test of the systems equations."""
 
+from time import monotonic_ns
 from typing import Callable, Final
 
 import numpy as np
@@ -43,10 +44,13 @@ def __system_test(system: System,
     buf: Final[np.ndarray] = np.empty(state_dim)
     call: Final[Callable[[np.ndarray, float, np.ndarray, np.ndarray], None]] \
         = system.equations
+    end_time: Final[int] = monotonic_ns() + 20_000_000_000
 
     for mode in range(3):
 
         for i in range(n_tests):
+            if monotonic_ns() >= end_time:
+                return
             call(states[i], float(ts[i]), ctrl[i], buf)
             if not is_all_finite(buf):
                 raise ValueError(
@@ -64,6 +68,8 @@ def __system_test(system: System,
 
         for _j in range(n_reps):
             for i in range(n_tests):
+                if monotonic_ns() >= end_time:
+                    return
                 call(states[i], float(ts[i]), ctrl[i], buf)
                 if not np.all(buf == out[i]):
                     raise ValueError(

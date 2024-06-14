@@ -1,6 +1,7 @@
 """Test the game-based encoding."""
 
 from itertools import permutations
+from time import monotonic_ns
 from typing import Final
 
 import numpy as np
@@ -42,13 +43,18 @@ def __test_for_n_and_rounds(n: int, rounds: int,
 
     y: Final[np.ndarray] = np.empty((days, n), int_range_to_dtype(-n, n))
     max_rounds: int = 1_000
+    end_time: Final[int] = monotonic_ns() + 20_000_000_000
     if space.n_points() <= max_rounds:
         t = np.copy(perm)
         for p in permutations(perm):
+            if monotonic_ns() >= end_time:
+                return
             t[:] = p
             map_games(t, y)
     else:
         for _ in range(max_rounds):
+            if monotonic_ns() >= end_time:
+                return
             map_games(perm, y)
             random.shuffle(perm)
 

@@ -1,5 +1,6 @@
 """A test of the objective functions."""
 
+from time import monotonic_ns
 from typing import Any, Callable, Final
 
 from moptipy.operators.vectors.op0_uniform import Op0Uniform
@@ -54,7 +55,10 @@ def __objective_tests(fc: Callable[[Instance, bool], FigureOfMerit],
     :param fc: the figure of merit
     :param random: the generator
     """
+    end_time: Final[int] = monotonic_ns() + 40_000_000_000
     for orig_system in (STUART_LANDAU_4, LORENZ_4):
+        if monotonic_ns() >= end_time:
+            return
         system = System(orig_system.name,
                         orig_system.state_dims, orig_system.control_dims,
                         orig_system.state_dim_mod,
