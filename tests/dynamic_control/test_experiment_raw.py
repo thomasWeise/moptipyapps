@@ -48,7 +48,7 @@ def __cmaes(instance: Instance) -> Execution:
     """
     random: Generator = default_rng(rand_seeds_from_str(str(instance), 1)[0])
     res = cmaes(instance)
-    res.set_max_fes(int(random.integers(32, 64)))
+    res.set_max_fes(int(random.integers(32, 64))).set_max_time_millis(60_000)
     return res
 
 

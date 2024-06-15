@@ -91,7 +91,7 @@ def test_surrogate_cmaes() -> None:
             fes_for_warmup=n_warmup_fes,
             fes_for_training=n_fes_for_model_training,
             fes_per_model_run=n_fes_for_controller_synthesis_on_model,
-            fancy_logs=False)).execute():
+            fancy_logs=False)).set_max_time_millis(60_000).execute():
         pass
 
     n_real_ode_steps: Final[int] = (
