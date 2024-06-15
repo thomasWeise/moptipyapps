@@ -1,0 +1,120 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.results_log — moptipyapps 0.8.50 documentation</title><link href="../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../_static/bizstyle.css?v=658d757c"rel=stylesheet><script src="../../../_static/documentation_options.js?v=764345ab"></script><script src="../../../_static/doctools.js?v=9a2dae69"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/results_log.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.50 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.results_log</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.results_log</h1><div class=highlight><pre>
+<span></span><span class=sd>"""A logger for results gathered from ODE integration to a text file."""</span>
+
+<span class=kn>from</span> <span class=nn>contextlib</span> <span class=kn>import</span> <span class=n>AbstractContextManager</span>
+<span class=kn>from</span> <span class=nn>io</span> <span class=kn>import</span> <span class=n>TextIOBase</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.logger</span> <span class=kn>import</span> <span class=n>CSV_SEPARATOR</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.strings</span> <span class=kn>import</span> <span class=n>float_to_str</span>
+<span class=kn>from</span> <span class=nn>pycommons.io.console</span> <span class=kn>import</span> <span class=n>logger</span>
+<span class=kn>from</span> <span class=nn>pycommons.io.path</span> <span class=kn>import</span> <span class=n>Path</span>
+
+
+<div class=viewcode-block id=ResultsLog>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.results_log.ResultsLog>[docs]</a>
+<span class=k>class</span> <span class=nc>ResultsLog</span><span class=p>(</span><span class=n>AbstractContextManager</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    A class for logging results via `multi_run_ode`.</span>
+
+<span class=sd>    Function :func:`moptipyapps.dynamic_control.ode.multi_run_ode` can pass</span>
+<span class=sd>    its results to various output generating procedures. This class here</span>
+<span class=sd>    offers a procedure for writing them to a log file.</span>
+
+<span class=sd>    >>> def projectile(position, ttime, ctrl, out):</span>
+<span class=sd>    ...     out[0] = 70.71067811865474</span>
+<span class=sd>    ...     out[1] = 70.71067811865474 - ttime * 9.80665</span>
+<span class=sd>    >>> param: np.ndarray = np.array([1])   # ignore</span>
+<span class=sd>    >>> def contrl(position, ttime, params, dest):</span>
+<span class=sd>    ...     dest[0] = params[0]  #  controller that returns param</span>
+<span class=sd>    >>> from io import StringIO</span>
+<span class=sd>    >>> from moptipyapps.dynamic_control.ode import multi_run_ode</span>
+<span class=sd>    >>> with StringIO() as sio:</span>
+<span class=sd>    ...     with ResultsLog(2, sio) as log:</span>
+<span class=sd>    ...         multi_run_ode([np.array([0.0, 1.0])],</span>
+<span class=sd>    ...                       [np.array([1.0, 1.0])],</span>
+<span class=sd>    ...                       log.collector, projectile, contrl, param,</span>
+<span class=sd>    ...                       1, 10000, 14.890, 10000, 14.961)</span>
+<span class=sd>    ...         x=sio.getvalue()</span>
+<span class=sd>    >>> tt = x.split()</span>
+<span class=sd>    >>> print(tt[0])</span>
+<span class=sd>    figureOfMerit;totalTime;nSteps;start0;start1;end0;end1</span>
+<span class=sd>    >>> for y in tt[1:]:</span>
+<span class=sd>    ...     print(";".join(f"{float(v):.3f}" for v in y.split(";")))</span>
+<span class=sd>    403374.924;14.890;10000.000;0.000;1.000;1052.882;-33.244</span>
+<span class=sd>    407810.750;14.961;10000.000;1.000;1.000;1058.902;-38.616</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>TextIOBase</span> <span class=o>|</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the test results logger.</span>
+
+<span class=sd>        :param state_dim: the state dimension</span>
+<span class=sd>        :param out: the output destination</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>out</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=n>pp</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>out</span><span class=p>)</span>
+            <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"logging data to file </span><span class=si>{</span><span class=n>pp</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>out</span> <span class=o>=</span> <span class=n>pp</span><span class=o>.</span><span class=n>open_for_write</span><span class=p>()</span>
+        <span class=c1>#: the internal output destination</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__out</span><span class=p>:</span> <span class=n>TextIOBase</span> <span class=o>=</span> <span class=n>out</span>
+        <span class=c1>#: the state dimension</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__state_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>state_dim</span>
+
+<div class=viewcode-block id=ResultsLog.collector>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.results_log.ResultsLog.collector>[docs]</a>
+    <span class=k>def</span> <span class=nf>collector</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>index</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>ode</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                  <span class=n>j</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the result of a multi-ode run.</span>
+
+<span class=sd>        :param index: the index of the result</span>
+<span class=sd>        :param ode: the ode result matrix</span>
+<span class=sd>        :param j: the figure of merit</span>
+<span class=sd>        :param time: the time value</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__out</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Already closed output destination!"</span><span class=p>)</span>
+        <span class=n>out_str</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__out</span><span class=o>.</span><span class=n>write</span>
+
+        <span class=n>state_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__state_dim</span>
+        <span class=k>if</span> <span class=n>index</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>out_str</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"figureOfMerit</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>totalTime</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>nSteps"</span><span class=p>)</span>
+            <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>state_dim</span><span class=p>):</span>
+                <span class=n>out_str</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>start</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+            <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>state_dim</span><span class=p>):</span>
+                <span class=n>out_str</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>end</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+            <span class=n>out_str</span><span class=p>(</span><span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=n>out_str</span><span class=p>(</span><span class=n>float_to_str</span><span class=p>(</span><span class=nb>float</span><span class=p>(</span><span class=n>j</span><span class=p>)))</span>
+        <span class=n>out_str</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>)</span>
+        <span class=n>out_str</span><span class=p>(</span><span class=n>float_to_str</span><span class=p>(</span><span class=nb>float</span><span class=p>(</span><span class=n>time</span><span class=p>)))</span>
+        <span class=n>out_str</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>)</span>
+        <span class=n>out_str</span><span class=p>(</span><span class=nb>str</span><span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>ode</span><span class=p>)))</span>
+        <span class=n>start</span> <span class=o>=</span> <span class=n>ode</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>state_dim</span><span class=p>):</span>
+            <span class=n>out_str</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=si>}{</span><span class=n>float_to_str</span><span class=p>(</span><span class=nb>float</span><span class=p>(</span><span class=n>start</span><span class=p>[</span><span class=n>i</span><span class=p>]))</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>end</span> <span class=o>=</span> <span class=n>ode</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>state_dim</span><span class=p>):</span>
+            <span class=n>out_str</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=si>}{</span><span class=n>float_to_str</span><span class=p>(</span><span class=nb>float</span><span class=p>(</span><span class=n>end</span><span class=p>[</span><span class=n>i</span><span class=p>]))</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>out_str</span><span class=p>(</span><span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span> <span class=fm>__exit__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>_</span><span class=p>,</span> <span class=n>__</span><span class=p>,</span> <span class=n>___</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Close this context manager.</span>
+
+<span class=sd>        :param _: the exception type; ignored</span>
+<span class=sd>        :param __: the exception value; ignored</span>
+<span class=sd>        :param ___: the exception whatever; ignored</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__out</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>try</span><span class=p>:</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>__out</span><span class=o>.</span><span class=n>close</span><span class=p>()</span>
+            <span class=k>finally</span><span class=p>:</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>__out</span> <span class=o>=</span> <span class=kc>None</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label="main navigation"class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.50 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.results_log</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>

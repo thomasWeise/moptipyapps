@@ -1,0 +1,730 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.controllers.min_ann — moptipyapps 0.8.50 documentation</title><link href="../../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=658d757c"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=764345ab"></script><script src="../../../../_static/doctools.js?v=9a2dae69"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/controllers/min_ann.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.50 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.controllers.min_ann</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.controllers.min_ann</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Poor man's Artificial Neural Networks with minimized input.</span>
+
+<span class=sd>ANNs that include the state as input variable together with an additional</span>
+<span class=sd>variable, say `z`. The controller output is then the value `z*` for which</span>
+<span class=sd>the ANN takes on the smallest value (under the current state). In other</span>
+<span class=sd>words, the ANN is supposed to model the system's objective function. The</span>
+<span class=sd>idea is similar to :mod:`~moptipyapps.dynamic_control.controllers.ann`, but</span>
+<span class=sd>instead of using the output of the ANNs as controller values, we use the value</span>
+<span class=sd>`z*` for which the output of the ANN becomes minimal as controller value.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>import</span> <span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>numpy</span> <span class=kn>import</span> <span class=n>inf</span>
+
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.controller</span> <span class=kn>import</span> <span class=n>Controller</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.system</span> <span class=kn>import</span> <span class=n>System</span>
+
+<span class=c1>#: the golden ratio</span>
+<span class=n>PHI</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=mf>0.5</span> <span class=o>*</span> <span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=mf>5.0</span><span class=p>)</span> <span class=o>+</span> <span class=mf>1.0</span><span class=p>)</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__min_ann_3d_1o_1</span><span class=p>(</span><span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>_</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                      <span class=n>params</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Minimize a poor man's ANN for 3d-spaces with one layer containing 1 node.</span>
+
+<span class=sd>    We use :func:`numpy.arctan` as activation function. The output layer</span>
+<span class=sd>    is just a weighted sum of the hidden layer and no other transformation</span>
+<span class=sd>    is performed. The ANN has one additional parameter besides the `state`.</span>
+<span class=sd>    We then find the value of this parameter for which the ANN takes on the</span>
+<span class=sd>    smallest value via an iterated bracket - golden ratio search.</span>
+
+<span class=sd>    :param state: the current state of the system</span>
+<span class=sd>    :param params: the weight vector for the neurons.</span>
+<span class=sd>    :param out: the control vector, receiving one single element</span>
+<span class=sd>    """</span>
+    <span class=n>hl_1_1_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=mi>3</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span>
+
+<span class=c1># first estimate of the best value</span>
+    <span class=n>x_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>f_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_best</span><span class=p>)</span>
+
+<span class=c1># now do bracketing</span>
+    <span class=n>x_low</span> <span class=o>=</span> <span class=n>x_a</span> <span class=o>=</span> <span class=o>-</span><span class=mf>1000.0</span>
+    <span class=n>f_a</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_a</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>f_a</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_a</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_a</span>
+
+    <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>=</span> <span class=o>-</span><span class=mf>990.0</span>
+    <span class=n>f_c</span> <span class=o>=</span> <span class=n>f_b</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_b</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>f_b</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_b</span>
+
+<span class=c1># we try optimization in every single bracket we find</span>
+    <span class=n>found_bracket</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+    <span class=n>ever_found_backet</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=k>while</span> <span class=n>found_bracket</span><span class=p>:</span>
+
+        <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>while</span> <span class=n>x_b</span> <span class=o><</span> <span class=mf>1000.0</span><span class=p>:</span>
+            <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>+</span> <span class=mf>10.0</span>
+            <span class=n>f_c</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_c</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>f_c</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_c</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_c</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>f_c</span> <span class=o>></span> <span class=n>f_b</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>f_b</span> <span class=o><</span> <span class=n>f_a</span><span class=p>):</span>
+                <span class=n>ever_found_backet</span> <span class=o>=</span> <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>True</span>
+                <span class=k>break</span>
+            <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+            <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+            <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+            <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=c1># use huge range -1e3 ... 1e3</span>
+        <span class=k>if</span> <span class=n>found_bracket</span><span class=p>:</span>
+            <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_a</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_c</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>ever_found_backet</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>x_c</span>
+
+    <span class=c1># golden ratio algorithm</span>
+        <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+        <span class=k>while</span> <span class=n>delta</span> <span class=o>></span> <span class=mf>1e-12</span><span class=p>:</span>
+            <span class=n>delta</span> <span class=o>/=</span> <span class=n>PHI</span>
+            <span class=n>x_cc</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>delta</span>
+
+            <span class=n>f_cc</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_cc</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_cc</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_cc</span>
+
+            <span class=n>x_dd</span> <span class=o>=</span> <span class=n>x_low</span> <span class=o>+</span> <span class=n>delta</span>
+            <span class=n>f_dd</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_dd</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>f_dd</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_dd</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_dd</span>
+
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_dd</span><span class=p>:</span>
+                <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_dd</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_cc</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+
+        <span class=c1># move forward to next bracket</span>
+        <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+        <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+        <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>x_best</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__min_ann_2d_1o_1</span><span class=p>(</span><span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>_</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                      <span class=n>params</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Minimize a poor man's ANN for 2d-spaces with one layer containing 1 node.</span>
+
+<span class=sd>    We use :func:`numpy.arctan` as activation function. The output layer</span>
+<span class=sd>    is just a weighted sum of the hidden layer and no other transformation</span>
+<span class=sd>    is performed. The ANN has one additional parameter besides the `state`.</span>
+<span class=sd>    We then find the value of this parameter for which the ANN takes on the</span>
+<span class=sd>    smallest value via an iterated bracket - golden ratio search.</span>
+
+<span class=sd>    :param state: the current state of the system</span>
+<span class=sd>    :param params: the weight vector for the neurons.</span>
+<span class=sd>    :param out: the control vector, receiving one single element</span>
+<span class=sd>    """</span>
+    <span class=n>hl_1_1_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=mi>2</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span>
+
+<span class=c1># first estimate of the best value</span>
+    <span class=n>x_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>f_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_best</span><span class=p>)</span>
+
+<span class=c1># now do bracketing</span>
+    <span class=n>x_low</span> <span class=o>=</span> <span class=n>x_a</span> <span class=o>=</span> <span class=o>-</span><span class=mf>1000.0</span>
+    <span class=n>f_a</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_a</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>f_a</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_a</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_a</span>
+
+    <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>=</span> <span class=o>-</span><span class=mf>990.0</span>
+    <span class=n>f_c</span> <span class=o>=</span> <span class=n>f_b</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_b</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>f_b</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_b</span>
+
+<span class=c1># we try optimization in every single bracket we find</span>
+    <span class=n>found_bracket</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+    <span class=n>ever_found_backet</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=k>while</span> <span class=n>found_bracket</span><span class=p>:</span>
+
+        <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>while</span> <span class=n>x_b</span> <span class=o><</span> <span class=mf>1000.0</span><span class=p>:</span>
+            <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>+</span> <span class=mf>10.0</span>
+            <span class=n>f_c</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_c</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>f_c</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_c</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_c</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>f_c</span> <span class=o>></span> <span class=n>f_b</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>f_b</span> <span class=o><</span> <span class=n>f_a</span><span class=p>):</span>
+                <span class=n>ever_found_backet</span> <span class=o>=</span> <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>True</span>
+                <span class=k>break</span>
+            <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+            <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+            <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+            <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=c1># use huge range -1e3 ... 1e3</span>
+        <span class=k>if</span> <span class=n>found_bracket</span><span class=p>:</span>
+            <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_a</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_c</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>ever_found_backet</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>x_c</span>
+
+    <span class=c1># golden ratio algorithm</span>
+        <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+        <span class=k>while</span> <span class=n>delta</span> <span class=o>></span> <span class=mf>1e-12</span><span class=p>:</span>
+            <span class=n>delta</span> <span class=o>/=</span> <span class=n>PHI</span>
+            <span class=n>x_cc</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>delta</span>
+
+            <span class=n>f_cc</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_cc</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_cc</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_cc</span>
+
+            <span class=n>x_dd</span> <span class=o>=</span> <span class=n>x_low</span> <span class=o>+</span> <span class=n>delta</span>
+            <span class=n>f_dd</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_dd</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>f_dd</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_dd</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_dd</span>
+
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_dd</span><span class=p>:</span>
+                <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_dd</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_cc</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+
+        <span class=c1># move forward to next bracket</span>
+        <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+        <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+        <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>x_best</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__min_ann_3d_1o_2</span><span class=p>(</span><span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>_</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                      <span class=n>params</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Minimize a poor man's ANN for 3d-spaces with one layer containing 2 nodes.</span>
+
+<span class=sd>    We use :func:`numpy.arctan` as activation function. The output layer</span>
+<span class=sd>    is just a weighted sum of the hidden layer and no other transformation</span>
+<span class=sd>    is performed. The ANN has one additional parameter besides the `state`.</span>
+<span class=sd>    We then find the value of this parameter for which the ANN takes on the</span>
+<span class=sd>    smallest value via an iterated bracket - golden ratio search.</span>
+
+<span class=sd>    :param state: the current state of the system</span>
+<span class=sd>    :param params: the weight vector for the neurons.</span>
+<span class=sd>    :param out: the control vector, receiving one single element</span>
+<span class=sd>    """</span>
+    <span class=n>hl_1_1_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=mi>3</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span>
+    <span class=n>x_4</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>4</span><span class=p>]</span>
+    <span class=n>hl_1_2_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>5</span><span class=p>:</span><span class=mi>8</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_8</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>8</span><span class=p>]</span>
+    <span class=n>x_9</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>9</span><span class=p>]</span>
+    <span class=n>x_10</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>10</span><span class=p>]</span>
+    <span class=n>x_11</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>11</span><span class=p>]</span>
+
+<span class=c1># first estimate of the best value</span>
+    <span class=n>x_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>hl_1_1</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+    <span class=n>hl_1_2</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+    <span class=n>f_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_10</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_11</span>
+
+<span class=c1># now do bracketing</span>
+    <span class=n>x_low</span> <span class=o>=</span> <span class=n>x_a</span> <span class=o>=</span> <span class=o>-</span><span class=mf>1000.0</span>
+    <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+    <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+    <span class=n>f_a</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_10</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_11</span>
+    <span class=k>if</span> <span class=n>f_a</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_a</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_a</span>
+
+    <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>=</span> <span class=o>-</span><span class=mf>990.0</span>
+    <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+    <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+    <span class=n>f_c</span> <span class=o>=</span> <span class=n>f_b</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_10</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_11</span>
+    <span class=k>if</span> <span class=n>f_b</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_b</span>
+
+<span class=c1># we try optimization in every single bracket we find</span>
+    <span class=n>found_bracket</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+    <span class=n>ever_found_backet</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=k>while</span> <span class=n>found_bracket</span><span class=p>:</span>
+
+        <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>while</span> <span class=n>x_b</span> <span class=o><</span> <span class=mf>1000.0</span><span class=p>:</span>
+            <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>+</span> <span class=mf>10.0</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+            <span class=n>f_c</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_10</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_11</span>
+            <span class=k>if</span> <span class=n>f_c</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_c</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_c</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>f_c</span> <span class=o>></span> <span class=n>f_b</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>f_b</span> <span class=o><</span> <span class=n>f_a</span><span class=p>):</span>
+                <span class=n>ever_found_backet</span> <span class=o>=</span> <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>True</span>
+                <span class=k>break</span>
+            <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+            <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+            <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+            <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=c1># use huge range -1e3 ... 1e3</span>
+        <span class=k>if</span> <span class=n>found_bracket</span><span class=p>:</span>
+            <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_a</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_c</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>ever_found_backet</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>x_c</span>
+
+    <span class=c1># golden ratio algorithm</span>
+        <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+        <span class=k>while</span> <span class=n>delta</span> <span class=o>></span> <span class=mf>1e-12</span><span class=p>:</span>
+            <span class=n>delta</span> <span class=o>/=</span> <span class=n>PHI</span>
+            <span class=n>x_cc</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>delta</span>
+
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+            <span class=n>f_cc</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_10</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_11</span>
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_cc</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_cc</span>
+
+            <span class=n>x_dd</span> <span class=o>=</span> <span class=n>x_low</span> <span class=o>+</span> <span class=n>delta</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+            <span class=n>f_dd</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_10</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_11</span>
+            <span class=k>if</span> <span class=n>f_dd</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_dd</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_dd</span>
+
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_dd</span><span class=p>:</span>
+                <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_dd</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_cc</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+
+        <span class=c1># move forward to next bracket</span>
+        <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+        <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+        <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>x_best</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__min_ann_2d_1o_2</span><span class=p>(</span><span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>_</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                      <span class=n>params</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Minimize a poor man's ANN for 2d-spaces with one layer containing 2 nodes.</span>
+
+<span class=sd>    We use :func:`numpy.arctan` as activation function. The output layer</span>
+<span class=sd>    is just a weighted sum of the hidden layer and no other transformation</span>
+<span class=sd>    is performed. The ANN has one additional parameter besides the `state`.</span>
+<span class=sd>    We then find the value of this parameter for which the ANN takes on the</span>
+<span class=sd>    smallest value via an iterated bracket - golden ratio search.</span>
+
+<span class=sd>    :param state: the current state of the system</span>
+<span class=sd>    :param params: the weight vector for the neurons.</span>
+<span class=sd>    :param out: the control vector, receiving one single element</span>
+<span class=sd>    """</span>
+    <span class=n>hl_1_1_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=mi>2</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span>
+    <span class=n>x_3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span>
+    <span class=n>hl_1_2_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>4</span><span class=p>:</span><span class=mi>6</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_6</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>6</span><span class=p>]</span>
+    <span class=n>x_7</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>7</span><span class=p>]</span>
+    <span class=n>x_8</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>8</span><span class=p>]</span>
+    <span class=n>x_9</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>9</span><span class=p>]</span>
+
+<span class=c1># first estimate of the best value</span>
+    <span class=n>x_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>hl_1_1</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+    <span class=n>hl_1_2</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+    <span class=n>f_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_8</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_9</span>
+
+<span class=c1># now do bracketing</span>
+    <span class=n>x_low</span> <span class=o>=</span> <span class=n>x_a</span> <span class=o>=</span> <span class=o>-</span><span class=mf>1000.0</span>
+    <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+    <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+    <span class=n>f_a</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_8</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_9</span>
+    <span class=k>if</span> <span class=n>f_a</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_a</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_a</span>
+
+    <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>=</span> <span class=o>-</span><span class=mf>990.0</span>
+    <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+    <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+    <span class=n>f_c</span> <span class=o>=</span> <span class=n>f_b</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_8</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_9</span>
+    <span class=k>if</span> <span class=n>f_b</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_b</span>
+
+<span class=c1># we try optimization in every single bracket we find</span>
+    <span class=n>found_bracket</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+    <span class=n>ever_found_backet</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=k>while</span> <span class=n>found_bracket</span><span class=p>:</span>
+
+        <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>while</span> <span class=n>x_b</span> <span class=o><</span> <span class=mf>1000.0</span><span class=p>:</span>
+            <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>+</span> <span class=mf>10.0</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+            <span class=n>f_c</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_8</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_9</span>
+            <span class=k>if</span> <span class=n>f_c</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_c</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_c</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>f_c</span> <span class=o>></span> <span class=n>f_b</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>f_b</span> <span class=o><</span> <span class=n>f_a</span><span class=p>):</span>
+                <span class=n>ever_found_backet</span> <span class=o>=</span> <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>True</span>
+                <span class=k>break</span>
+            <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+            <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+            <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+            <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=c1># use huge range -1e3 ... 1e3</span>
+        <span class=k>if</span> <span class=n>found_bracket</span><span class=p>:</span>
+            <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_a</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_c</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>ever_found_backet</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>x_c</span>
+
+    <span class=c1># golden ratio algorithm</span>
+        <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+        <span class=k>while</span> <span class=n>delta</span> <span class=o>></span> <span class=mf>1e-12</span><span class=p>:</span>
+            <span class=n>delta</span> <span class=o>/=</span> <span class=n>PHI</span>
+            <span class=n>x_cc</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>delta</span>
+
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+            <span class=n>f_cc</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_8</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_9</span>
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_cc</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_cc</span>
+
+            <span class=n>x_dd</span> <span class=o>=</span> <span class=n>x_low</span> <span class=o>+</span> <span class=n>delta</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+            <span class=n>f_dd</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_8</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_9</span>
+            <span class=k>if</span> <span class=n>f_dd</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_dd</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_dd</span>
+
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_dd</span><span class=p>:</span>
+                <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_dd</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_cc</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+
+        <span class=c1># move forward to next bracket</span>
+        <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+        <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+        <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>x_best</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__min_ann_3d_1o_3</span><span class=p>(</span><span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>_</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                      <span class=n>params</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Minimize a poor man's ANN for 3d-spaces with one layer containing 3 nodes.</span>
+
+<span class=sd>    We use :func:`numpy.arctan` as activation function. The output layer</span>
+<span class=sd>    is just a weighted sum of the hidden layer and no other transformation</span>
+<span class=sd>    is performed. The ANN has one additional parameter besides the `state`.</span>
+<span class=sd>    We then find the value of this parameter for which the ANN takes on the</span>
+<span class=sd>    smallest value via an iterated bracket - golden ratio search.</span>
+
+<span class=sd>    :param state: the current state of the system</span>
+<span class=sd>    :param params: the weight vector for the neurons.</span>
+<span class=sd>    :param out: the control vector, receiving one single element</span>
+<span class=sd>    """</span>
+    <span class=n>hl_1_1_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=mi>3</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span>
+    <span class=n>x_4</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>4</span><span class=p>]</span>
+    <span class=n>hl_1_2_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>5</span><span class=p>:</span><span class=mi>8</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_8</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>8</span><span class=p>]</span>
+    <span class=n>x_9</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>9</span><span class=p>]</span>
+    <span class=n>hl_1_3_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>10</span><span class=p>:</span><span class=mi>13</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_13</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>13</span><span class=p>]</span>
+    <span class=n>x_14</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>14</span><span class=p>]</span>
+    <span class=n>x_15</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>15</span><span class=p>]</span>
+    <span class=n>x_16</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>16</span><span class=p>]</span>
+    <span class=n>x_17</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>17</span><span class=p>]</span>
+
+<span class=c1># first estimate of the best value</span>
+    <span class=n>x_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>hl_1_1</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+    <span class=n>hl_1_2</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+    <span class=n>hl_1_3</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_13</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_14</span><span class=p>)</span>
+    <span class=n>f_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_15</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_16</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_17</span>
+
+<span class=c1># now do bracketing</span>
+    <span class=n>x_low</span> <span class=o>=</span> <span class=n>x_a</span> <span class=o>=</span> <span class=o>-</span><span class=mf>1000.0</span>
+    <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+    <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+    <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_13</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_14</span><span class=p>)</span>
+    <span class=n>f_a</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_15</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_16</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_17</span>
+    <span class=k>if</span> <span class=n>f_a</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_a</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_a</span>
+
+    <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>=</span> <span class=o>-</span><span class=mf>990.0</span>
+    <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+    <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+    <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_13</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_14</span><span class=p>)</span>
+    <span class=n>f_c</span> <span class=o>=</span> <span class=n>f_b</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_15</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_16</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_17</span>
+    <span class=k>if</span> <span class=n>f_b</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_b</span>
+
+<span class=c1># we try optimization in every single bracket we find</span>
+    <span class=n>found_bracket</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+    <span class=n>ever_found_backet</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=k>while</span> <span class=n>found_bracket</span><span class=p>:</span>
+
+        <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>while</span> <span class=n>x_b</span> <span class=o><</span> <span class=mf>1000.0</span><span class=p>:</span>
+            <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>+</span> <span class=mf>10.0</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+            <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_13</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_14</span><span class=p>)</span>
+            <span class=n>f_c</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_15</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_16</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_17</span>
+            <span class=k>if</span> <span class=n>f_c</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_c</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_c</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>f_c</span> <span class=o>></span> <span class=n>f_b</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>f_b</span> <span class=o><</span> <span class=n>f_a</span><span class=p>):</span>
+                <span class=n>ever_found_backet</span> <span class=o>=</span> <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>True</span>
+                <span class=k>break</span>
+            <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+            <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+            <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+            <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=c1># use huge range -1e3 ... 1e3</span>
+        <span class=k>if</span> <span class=n>found_bracket</span><span class=p>:</span>
+            <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_a</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_c</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>ever_found_backet</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>x_c</span>
+
+    <span class=c1># golden ratio algorithm</span>
+        <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+        <span class=k>while</span> <span class=n>delta</span> <span class=o>></span> <span class=mf>1e-12</span><span class=p>:</span>
+            <span class=n>delta</span> <span class=o>/=</span> <span class=n>PHI</span>
+            <span class=n>x_cc</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>delta</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+            <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_13</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_14</span><span class=p>)</span>
+            <span class=n>f_cc</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_15</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_16</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_17</span>
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_cc</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_cc</span>
+
+            <span class=n>x_dd</span> <span class=o>=</span> <span class=n>x_low</span> <span class=o>+</span> <span class=n>delta</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_3</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_4</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_8</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_9</span><span class=p>)</span>
+            <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_13</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_14</span><span class=p>)</span>
+            <span class=n>f_dd</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_15</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_16</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_17</span>
+            <span class=k>if</span> <span class=n>f_dd</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_dd</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_dd</span>
+
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_dd</span><span class=p>:</span>
+                <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_dd</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_cc</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+
+        <span class=c1># move forward to next bracket</span>
+        <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+        <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+        <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>x_best</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__min_ann_2d_1o_3</span><span class=p>(</span><span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>_</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                      <span class=n>params</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Minimize a poor man's ANN for 2d-spaces with one layer containing 3 nodes.</span>
+
+<span class=sd>    We use :func:`numpy.arctan` as activation function. The output layer</span>
+<span class=sd>    is just a weighted sum of the hidden layer and no other transformation</span>
+<span class=sd>    is performed. The ANN has one additional parameter besides the `state`.</span>
+<span class=sd>    We then find the value of this parameter for which the ANN takes on the</span>
+<span class=sd>    smallest value via an iterated bracket - golden ratio search.</span>
+
+<span class=sd>    :param state: the current state of the system</span>
+<span class=sd>    :param params: the weight vector for the neurons.</span>
+<span class=sd>    :param out: the control vector, receiving one single element</span>
+<span class=sd>    """</span>
+    <span class=n>hl_1_1_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=mi>2</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span>
+    <span class=n>x_3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span>
+    <span class=n>hl_1_2_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>4</span><span class=p>:</span><span class=mi>6</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_6</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>6</span><span class=p>]</span>
+    <span class=n>x_7</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>7</span><span class=p>]</span>
+    <span class=n>hl_1_3_in</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>state</span> <span class=o>*</span> <span class=n>params</span><span class=p>[</span><span class=mi>8</span><span class=p>:</span><span class=mi>10</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=n>x_10</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>10</span><span class=p>]</span>
+    <span class=n>x_11</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>11</span><span class=p>]</span>
+    <span class=n>x_12</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>12</span><span class=p>]</span>
+    <span class=n>x_13</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>13</span><span class=p>]</span>
+    <span class=n>x_14</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>params</span><span class=p>[</span><span class=mi>14</span><span class=p>]</span>
+
+<span class=c1># first estimate of the best value</span>
+    <span class=n>x_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>hl_1_1</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+    <span class=n>hl_1_2</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+    <span class=n>hl_1_3</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_10</span> <span class=o>*</span> <span class=n>x_best</span> <span class=o>+</span> <span class=n>x_11</span><span class=p>)</span>
+    <span class=n>f_best</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_12</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_13</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_14</span>
+
+<span class=c1># now do bracketing</span>
+    <span class=n>x_low</span> <span class=o>=</span> <span class=n>x_a</span> <span class=o>=</span> <span class=o>-</span><span class=mf>1000.0</span>
+    <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+    <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+    <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_10</span> <span class=o>*</span> <span class=n>x_a</span> <span class=o>+</span> <span class=n>x_11</span><span class=p>)</span>
+    <span class=n>f_a</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_12</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_13</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_14</span>
+    <span class=k>if</span> <span class=n>f_a</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_a</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_a</span>
+
+    <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>=</span> <span class=o>-</span><span class=mf>990.0</span>
+
+    <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+    <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+    <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_10</span> <span class=o>*</span> <span class=n>x_b</span> <span class=o>+</span> <span class=n>x_11</span><span class=p>)</span>
+    <span class=n>f_c</span> <span class=o>=</span> <span class=n>f_b</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_12</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_13</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_14</span>
+    <span class=k>if</span> <span class=n>f_b</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+        <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_b</span>
+
+<span class=c1># we try optimization in every single bracket we find</span>
+    <span class=n>found_bracket</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+    <span class=n>ever_found_backet</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=k>while</span> <span class=n>found_bracket</span><span class=p>:</span>
+
+        <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>while</span> <span class=n>x_b</span> <span class=o><</span> <span class=mf>1000.0</span><span class=p>:</span>
+            <span class=n>x_c</span> <span class=o>=</span> <span class=n>x_b</span> <span class=o>+</span> <span class=mf>10.0</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+            <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_10</span> <span class=o>*</span> <span class=n>x_c</span> <span class=o>+</span> <span class=n>x_11</span><span class=p>)</span>
+            <span class=n>f_c</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_12</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_13</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_14</span>
+            <span class=k>if</span> <span class=n>f_c</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_c</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_c</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>f_c</span> <span class=o>></span> <span class=n>f_b</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>f_b</span> <span class=o><</span> <span class=n>f_a</span><span class=p>):</span>
+                <span class=n>ever_found_backet</span> <span class=o>=</span> <span class=n>found_bracket</span> <span class=o>=</span> <span class=kc>True</span>
+                <span class=k>break</span>
+            <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+            <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+            <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+            <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=c1># use huge range -1e3 ... 1e3</span>
+        <span class=k>if</span> <span class=n>found_bracket</span><span class=p>:</span>
+            <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_a</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_c</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>ever_found_backet</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>x_high</span> <span class=o>=</span> <span class=n>x_c</span>
+
+    <span class=c1># golden ratio algorithm</span>
+        <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+        <span class=k>while</span> <span class=n>delta</span> <span class=o>></span> <span class=mf>1e-12</span><span class=p>:</span>
+            <span class=n>delta</span> <span class=o>/=</span> <span class=n>PHI</span>
+            <span class=n>x_cc</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>delta</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+            <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_10</span> <span class=o>*</span> <span class=n>x_cc</span> <span class=o>+</span> <span class=n>x_11</span><span class=p>)</span>
+            <span class=n>f_cc</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_12</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_13</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_14</span>
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_cc</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_cc</span>
+
+            <span class=n>x_dd</span> <span class=o>=</span> <span class=n>x_low</span> <span class=o>+</span> <span class=n>delta</span>
+            <span class=n>hl_1_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_1_in</span> <span class=o>+</span> <span class=n>x_2</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_3</span><span class=p>)</span>
+            <span class=n>hl_1_2</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_2_in</span> <span class=o>+</span> <span class=n>x_6</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_7</span><span class=p>)</span>
+            <span class=n>hl_1_3</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>arctan</span><span class=p>(</span><span class=n>hl_1_3_in</span> <span class=o>+</span> <span class=n>x_10</span> <span class=o>*</span> <span class=n>x_dd</span> <span class=o>+</span> <span class=n>x_11</span><span class=p>)</span>
+            <span class=n>f_dd</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>hl_1_1</span> <span class=o>*</span> <span class=n>x_12</span> <span class=o>+</span> <span class=n>hl_1_2</span> <span class=o>*</span> <span class=n>x_13</span> <span class=o>+</span> <span class=n>hl_1_3</span> <span class=o>*</span> <span class=n>x_14</span>
+            <span class=k>if</span> <span class=n>f_dd</span> <span class=o><</span> <span class=n>f_best</span><span class=p>:</span>
+                <span class=n>x_best</span> <span class=o>=</span> <span class=n>x_dd</span>
+                <span class=n>f_best</span> <span class=o>=</span> <span class=n>f_dd</span>
+
+            <span class=k>if</span> <span class=n>f_cc</span> <span class=o><</span> <span class=n>f_dd</span><span class=p>:</span>
+                <span class=n>x_high</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_dd</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>x_low</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>x_cc</span><span class=p>,</span> <span class=n>inf</span><span class=p>)</span>
+            <span class=n>delta</span> <span class=o>=</span> <span class=n>x_high</span> <span class=o>-</span> <span class=n>x_low</span>
+
+        <span class=c1># move forward to next bracket</span>
+        <span class=n>x_a</span> <span class=o>=</span> <span class=n>x_b</span>
+        <span class=n>f_a</span> <span class=o>=</span> <span class=n>f_b</span>
+        <span class=n>x_b</span> <span class=o>=</span> <span class=n>x_c</span>
+        <span class=n>f_b</span> <span class=o>=</span> <span class=n>f_c</span>
+
+    <span class=n>out</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>x_best</span>
+
+
+<div class=viewcode-block id=min_anns>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.controllers.html#moptipyapps.dynamic_control.controllers.min_ann.min_anns>[docs]</a>
+<span class=k>def</span> <span class=nf>min_anns</span><span class=p>(</span><span class=n>system</span><span class=p>:</span> <span class=n>System</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Controller</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create poor man's ANNs for modeling the objective function.</span>
+
+<span class=sd>    Based on the dimensionality of the state space, we generate a set of ANNs</span>
+<span class=sd>    with different numbers of layers and neurons. The weights of the neurons</span>
+<span class=sd>    can then directly be optimized by a numerical optimization algorithm.</span>
+<span class=sd>    This is, of course, probably much less efficient that doing some proper</span>
+<span class=sd>    learning like back-propagation. However, it allows us to easily plug the</span>
+<span class=sd>    ANNs into the same optimization routines as other controllers.</span>
+
+<span class=sd>    :param system: the equations object</span>
+<span class=sd>    :return: the ANNs</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=n>system</span><span class=o>.</span><span class=n>control_dims</span> <span class=o>!=</span> <span class=mi>1</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"invalid controller dimensions "</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>system</span><span class=o>.</span><span class=n>control_dims</span><span class=si>}</span><span class=s2> for </span><span class=si>{</span><span class=n>system</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>system</span><span class=o>.</span><span class=n>state_dims</span> <span class=o>==</span> <span class=mi>2</span><span class=p>:</span>
+        <span class=k>return</span> <span class=p>(</span><span class=n>Controller</span><span class=p>(</span><span class=s2>"min_ann_1"</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=n>__min_ann_2d_1o_1</span><span class=p>),</span>
+                <span class=n>Controller</span><span class=p>(</span><span class=s2>"min_ann_2"</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=n>__min_ann_2d_1o_2</span><span class=p>),</span>
+                <span class=n>Controller</span><span class=p>(</span><span class=s2>"min_ann_3"</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>15</span><span class=p>,</span> <span class=n>__min_ann_2d_1o_3</span><span class=p>))</span>
+    <span class=k>if</span> <span class=n>system</span><span class=o>.</span><span class=n>state_dims</span> <span class=o>==</span> <span class=mi>3</span><span class=p>:</span>
+        <span class=k>return</span> <span class=p>(</span><span class=n>Controller</span><span class=p>(</span><span class=s2>"min_ann_1"</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=n>__min_ann_3d_1o_1</span><span class=p>),</span>
+                <span class=n>Controller</span><span class=p>(</span><span class=s2>"min_ann_2"</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>12</span><span class=p>,</span> <span class=n>__min_ann_3d_1o_2</span><span class=p>),</span>
+                <span class=n>Controller</span><span class=p>(</span><span class=s2>"min_ann_3"</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>18</span><span class=p>,</span> <span class=n>__min_ann_3d_1o_3</span><span class=p>))</span>
+    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"invalid state dimensions "</span>
+                     <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>system</span><span class=o>.</span><span class=n>state_dims</span><span class=si>}</span><span class=s2> for </span><span class=si>{</span><span class=n>system</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label="main navigation"class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label="related navigation"class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.50 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.controllers.min_ann</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>
