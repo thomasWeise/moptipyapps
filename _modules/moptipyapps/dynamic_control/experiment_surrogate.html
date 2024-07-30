@@ -1,0 +1,253 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.experiment_surrogate — moptipyapps 0.8.51 documentation</title><link href="../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../_static/bizstyle.css?v=658d757c"rel=stylesheet><script src="../../../_static/documentation_options.js?v=d23bc1b2"></script><script src="../../../_static/doctools.js?v=9a2dae69"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/experiment_surrogate.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.51 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.experiment_surrogate</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.experiment_surrogate</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An example experiment for dynamic control using surrogate system models.</span>
+
+<span class=sd>In this experiment, we again try to synthesize (i.e., parameterize)</span>
+<span class=sd>controllers (:mod:`~moptipyapps.dynamic_control.controller`) that steer a</span>
+<span class=sd>dynamic system (:mod:`~moptipyapps.dynamic_control.system`) into a state by</span>
+<span class=sd>using a figure of merit (:mod:`~moptipyapps.dynamic_control.objective`) which</span>
+<span class=sd>minimizes both the squared system state and controller effort.</span>
+
+<span class=sd>The difference compared to :mod:`~moptipyapps.dynamic_control.experiment_raw`</span>
+<span class=sd>is that we also try to synthesize a system model at the same time. We employ</span>
+<span class=sd>the procedure detailed in</span>
+<span class=sd>:mod:`~moptipyapps.dynamic_control.surrogate_optimizer` for this purpose.</span>
+
+<span class=sd>Word of advice: This experiment takes **extremely long** and needs</span>
+<span class=sd>**a lot of memory**!</span>
+
+<span class=sd>The starting points of the work here were conversations with Prof. Dr. Bernd</span>
+<span class=sd>NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute of Technology in</span>
+<span class=sd>Shenzhen, China (哈尔滨工业大学(深圳)).</span>
+<span class=sd>"""</span>
+
+<span class=kn>import</span> <span class=nn>argparse</span>
+<span class=kn>from</span> <span class=nn>os.path</span> <span class=kn>import</span> <span class=n>basename</span><span class=p>,</span> <span class=n>dirname</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.execution</span> <span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.experiment</span> <span class=kn>import</span> <span class=n>Parallelism</span><span class=p>,</span> <span class=n>run_experiment</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.process</span> <span class=kn>import</span> <span class=n>Process</span>
+<span class=kn>from</span> <span class=nn>moptipy.spaces.vectorspace</span> <span class=kn>import</span> <span class=n>VectorSpace</span>
+<span class=kn>from</span> <span class=nn>pycommons.io.path</span> <span class=kn>import</span> <span class=n>Path</span><span class=p>,</span> <span class=n>directory_path</span>
+
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.controllers.ann</span> <span class=kn>import</span> <span class=n>make_ann</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.instance</span> <span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.objective</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>FigureOfMerit</span><span class=p>,</span>
+    <span class=n>FigureOfMeritLE</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.surrogate_optimizer</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>SurrogateOptimizer</span><span class=p>,</span>
+    <span class=n>_bpcmaes</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.system_model</span> <span class=kn>import</span> <span class=n>SystemModel</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.systems.lorenz</span> <span class=kn>import</span> <span class=n>LORENZ_4</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.systems.stuart_landau</span> <span class=kn>import</span> <span class=n>STUART_LANDAU_4</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.systems.three_coupled_oscillators</span> <span class=kn>import</span> <span class=p>(</span>
+    <span class=n>THREE_COUPLED_OSCILLATORS</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.shared</span> <span class=kn>import</span> <span class=n>moptipyapps_argparser</span>
+
+
+<div class=viewcode-block id=make_instances>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.experiment_surrogate.make_instances>[docs]</a>
+<span class=k>def</span> <span class=nf>make_instances</span><span class=p>()</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>SystemModel</span><span class=p>]]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the instances to be used in the dynamic control experiment.</span>
+
+<span class=sd>    :return: the instances to be used in the dynamic control experiment.</span>
+<span class=sd>    """</span>
+    <span class=n>res</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>SystemModel</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=k>for</span> <span class=n>system</span> <span class=ow>in</span> <span class=p>[</span><span class=n>STUART_LANDAU_4</span><span class=p>,</span> <span class=n>LORENZ_4</span><span class=p>,</span> <span class=n>THREE_COUPLED_OSCILLATORS</span><span class=p>]:</span>
+        <span class=n>sd</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>system</span><span class=o>.</span><span class=n>state_dims</span>
+        <span class=n>sdp2</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>sd</span> <span class=o>+</span> <span class=mi>2</span>
+        <span class=n>ctrl_dims</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>system</span><span class=o>.</span><span class=n>control_dims</span>
+        <span class=n>controllers</span> <span class=o>=</span> <span class=p>[</span>
+            <span class=n>make_ann</span><span class=p>(</span><span class=n>sd</span><span class=p>,</span> <span class=n>ctrl_dims</span><span class=p>,</span> <span class=p>[</span><span class=n>sd</span><span class=p>,</span> <span class=n>sd</span><span class=p>]),</span>
+            <span class=n>make_ann</span><span class=p>(</span><span class=n>sd</span><span class=p>,</span> <span class=n>ctrl_dims</span><span class=p>,</span> <span class=p>[</span><span class=n>sdp2</span><span class=p>,</span> <span class=n>sdp2</span><span class=p>])]</span>
+        <span class=k>for</span> <span class=n>controller</span> <span class=ow>in</span> <span class=n>controllers</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>ann_model</span> <span class=ow>in</span> <span class=p>[[</span><span class=n>sd</span><span class=p>,</span> <span class=n>sd</span><span class=p>,</span> <span class=n>sd</span><span class=p>],</span> <span class=p>[</span><span class=n>sd</span><span class=p>,</span> <span class=n>sd</span><span class=p>,</span> <span class=n>sd</span><span class=p>,</span> <span class=n>sd</span><span class=p>],</span>
+                              <span class=p>[</span><span class=n>sdp2</span><span class=p>,</span> <span class=n>sdp2</span><span class=p>,</span> <span class=n>sdp2</span><span class=p>]]:</span>
+                <span class=n>res</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>cast</span><span class=p>(</span>
+                    <span class=n>Callable</span><span class=p>[[],</span> <span class=n>SystemModel</span><span class=p>],</span>
+                    <span class=k>lambda</span> <span class=n>_s</span><span class=o>=</span><span class=n>system</span><span class=p>,</span> <span class=n>_c</span><span class=o>=</span><span class=n>controller</span><span class=p>,</span> <span class=n>_m</span><span class=o>=</span><span class=n>make_ann</span><span class=p>(</span>
+                        <span class=n>sd</span> <span class=o>+</span> <span class=n>system</span><span class=o>.</span><span class=n>control_dims</span><span class=p>,</span> <span class=n>sd</span><span class=p>,</span> <span class=n>ann_model</span><span class=p>):</span>
+                    <span class=n>SystemModel</span><span class=p>(</span><span class=n>_s</span><span class=p>,</span> <span class=n>_c</span><span class=p>,</span> <span class=n>_m</span><span class=p>)))</span>
+    <span class=k>return</span> <span class=n>res</span></div>
+
+
+
+<span class=c1>#: the total objective function evaluations</span>
+<span class=n>MAX_FES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>64</span>
+
+
+<div class=viewcode-block id=base_setup>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.experiment_surrogate.base_setup>[docs]</a>
+<span class=k>def</span> <span class=nf>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span>
+        <span class=n>Execution</span><span class=p>,</span> <span class=n>FigureOfMerit</span><span class=p>,</span> <span class=n>VectorSpace</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the basic setup.</span>
+
+<span class=sd>    :param instance: the instance to use</span>
+<span class=sd>    :return: the basic execution</span>
+<span class=sd>    """</span>
+    <span class=n>objective</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>FigureOfMerit</span><span class=p>]</span> <span class=o>=</span> <span class=n>FigureOfMeritLE</span><span class=p>(</span>
+        <span class=n>instance</span><span class=p>,</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>SystemModel</span><span class=p>))</span>
+    <span class=n>space</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>parameter_space</span><span class=p>()</span>
+    <span class=k>return</span> <span class=n>Execution</span><span class=p>()</span><span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=n>MAX_FES</span><span class=p>)</span><span class=o>.</span><span class=n>set_log_all_fes</span><span class=p>(</span><span class=kc>True</span><span class=p>)</span>\
+        <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>objective</span><span class=p>)</span><span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>space</span><span class=p>),</span> <span class=n>objective</span><span class=p>,</span> <span class=n>space</span></div>
+
+
+
+<div class=viewcode-block id=cmaes_raw>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.experiment_surrogate.cmaes_raw>[docs]</a>
+<span class=k>def</span> <span class=nf>cmaes_raw</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the Bi-Pop-CMA-ES setup.</span>
+
+<span class=sd>    :param instance: the problem instance</span>
+<span class=sd>    :return: the setup</span>
+<span class=sd>    """</span>
+    <span class=n>execution</span><span class=p>,</span> <span class=n>_</span><span class=p>,</span> <span class=n>space</span> <span class=o>=</span> <span class=n>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>execution</span><span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>_bpcmaes</span><span class=p>(</span><span class=n>space</span><span class=p>))</span></div>
+
+
+
+<div class=viewcode-block id=cmaes_surrogate>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.experiment_surrogate.cmaes_surrogate>[docs]</a>
+<span class=k>def</span> <span class=nf>cmaes_surrogate</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>SystemModel</span><span class=p>,</span>
+                    <span class=n>fes_for_warmup</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>16</span><span class=p>,</span>
+                    <span class=n>fes_for_training</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>128</span><span class=p>,</span>
+                    <span class=n>fes_per_model_run</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>128</span><span class=p>,</span>
+                    <span class=n>fancy_logs</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the Bi-Pop-CMA-ES setup.</span>
+
+<span class=sd>    :param instance: the problem instance</span>
+<span class=sd>    :param fes_for_warmup: the FEs to be used for warmup</span>
+<span class=sd>    :param fes_for_training: the milliseconds for training</span>
+<span class=sd>    :param fes_per_model_run: the milliseconds per model run</span>
+<span class=sd>    :param fancy_logs: should we do fancy logging?</span>
+<span class=sd>    :return: the setup</span>
+<span class=sd>    """</span>
+    <span class=n>execution</span><span class=p>,</span> <span class=n>objective</span><span class=p>,</span> <span class=n>space</span> <span class=o>=</span> <span class=n>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+
+    <span class=k>return</span> <span class=n>execution</span><span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>space</span><span class=p>)</span><span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span>
+        <span class=n>SurrogateOptimizer</span><span class=p>(</span>
+            <span class=n>system_model</span><span class=o>=</span><span class=n>instance</span><span class=p>,</span>
+            <span class=n>controller_space</span><span class=o>=</span><span class=n>space</span><span class=p>,</span>
+            <span class=n>objective</span><span class=o>=</span><span class=n>objective</span><span class=p>,</span>
+            <span class=n>fes_for_warmup</span><span class=o>=</span><span class=n>fes_for_warmup</span><span class=p>,</span>
+            <span class=n>fes_for_training</span><span class=o>=</span><span class=n>fes_for_training</span><span class=p>,</span>
+            <span class=n>fes_per_model_run</span><span class=o>=</span><span class=n>fes_per_model_run</span><span class=p>,</span>
+            <span class=n>fancy_logs</span><span class=o>=</span><span class=n>fancy_logs</span><span class=p>,</span>
+            <span class=n>warmup_algorithm</span><span class=o>=</span><span class=n>_bpcmaes</span><span class=p>,</span>
+            <span class=n>model_training_algorithm</span><span class=o>=</span><span class=n>_bpcmaes</span><span class=p>,</span>
+            <span class=n>controller_training_algorithm</span><span class=o>=</span><span class=n>_bpcmaes</span><span class=p>))</span></div>
+
+
+
+<div class=viewcode-block id=on_completion>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.experiment_surrogate.on_completion>[docs]</a>
+<span class=k>def</span> <span class=nf>on_completion</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Any</span><span class=p>,</span> <span class=n>log_file</span><span class=p>:</span> <span class=n>Path</span><span class=p>,</span> <span class=n>process</span><span class=p>:</span> <span class=n>Process</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Plot the corresponding figures and print the objective value components.</span>
+
+<span class=sd>    :param instance: the problem instance</span>
+<span class=sd>    :param log_file: the log file</span>
+<span class=sd>    :param process: the process</span>
+<span class=sd>    """</span>
+    <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>SystemModel</span><span class=p>]</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=n>SystemModel</span><span class=p>,</span> <span class=n>instance</span><span class=p>)</span>
+    <span class=n>dest_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>directory_path</span><span class=p>(</span><span class=n>dirname</span><span class=p>(</span><span class=n>log_file</span><span class=p>))</span>
+    <span class=n>base_name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>basename</span><span class=p>(</span><span class=n>log_file</span><span class=p>)</span>
+    <span class=n>base_name</span> <span class=o>=</span> <span class=n>base_name</span><span class=p>[:</span><span class=n>base_name</span><span class=o>.</span><span class=n>rindex</span><span class=p>(</span><span class=s2>"."</span><span class=p>)]</span>
+    <span class=n>result</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>process</span><span class=o>.</span><span class=n>create</span><span class=p>())</span>
+    <span class=n>process</span><span class=o>.</span><span class=n>get_copy_of_best_x</span><span class=p>(</span><span class=n>result</span><span class=p>)</span>
+    <span class=n>j</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>process</span><span class=o>.</span><span class=n>get_best_f</span><span class=p>()</span>
+    <span class=n>inst</span><span class=o>.</span><span class=n>describe_parameterization</span><span class=p>(</span><span class=sa>f</span><span class=s2>"F = </span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>result</span><span class=p>,</span> <span class=n>base_name</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=run>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.experiment_surrogate.run>[docs]</a>
+<span class=k>def</span> <span class=nf>run</span><span class=p>(</span><span class=n>base_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>n_runs</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>64</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Run the experiment.</span>
+
+<span class=sd>    :param base_dir: the base directory</span>
+<span class=sd>    :param n_runs: the number of runs</span>
+<span class=sd>    """</span>
+    <span class=n>use_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>base_dir</span><span class=p>)</span>
+    <span class=n>use_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+    <span class=n>instances</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>SystemModel</span><span class=p>]]]</span> <span class=o>=</span> <span class=n>make_instances</span><span class=p>()</span>
+    <span class=n>keep_instances</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>Instance</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>raw_names</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+    <span class=k>for</span> <span class=n>maker</span> <span class=ow>in</span> <span class=n>instances</span><span class=p>:</span>
+        <span class=n>inst</span><span class=p>:</span> <span class=n>Instance</span> <span class=o>=</span> <span class=n>maker</span><span class=p>()</span>
+        <span class=n>raw</span><span class=p>:</span> <span class=n>Instance</span> <span class=o>=</span> <span class=n>Instance</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>system</span><span class=p>,</span> <span class=n>inst</span><span class=o>.</span><span class=n>controller</span><span class=p>)</span>
+        <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=p>(</span><span class=n>raw</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>name</span> <span class=ow>in</span> <span class=n>raw_names</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>raw_names</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+        <span class=n>raw</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>describe_system_without_control</span><span class=p>(</span><span class=n>use_dir</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+        <span class=n>raw</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>plot_points</span><span class=p>(</span><span class=n>use_dir</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+        <span class=n>keep_instances</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>cast</span><span class=p>(</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>Instance</span><span class=p>],</span> <span class=k>lambda</span> <span class=n>_i</span><span class=o>=</span><span class=n>raw</span><span class=p>:</span> <span class=n>_i</span><span class=p>))</span>
+
+    <span class=n>run_experiment</span><span class=p>(</span>
+        <span class=n>base_dir</span><span class=o>=</span><span class=n>use_dir</span><span class=p>,</span>
+        <span class=n>instances</span><span class=o>=</span><span class=n>keep_instances</span><span class=p>,</span>
+        <span class=n>setups</span><span class=o>=</span><span class=p>[</span><span class=n>cmaes_raw</span><span class=p>],</span>
+        <span class=n>n_runs</span><span class=o>=</span><span class=n>n_runs</span><span class=p>,</span>
+        <span class=n>n_threads</span><span class=o>=</span><span class=n>Parallelism</span><span class=o>.</span><span class=n>PERFORMANCE</span><span class=p>,</span>
+        <span class=n>perform_warmup</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span>
+        <span class=n>perform_pre_warmup</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span>
+        <span class=n>on_completion</span><span class=o>=</span><span class=n>on_completion</span><span class=p>)</span>
+
+    <span class=n>setups</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Any</span><span class=p>],</span> <span class=n>Execution</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>total_training_fes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>MAX_FES</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=p>(</span><span class=mi>2</span> <span class=o>**</span> <span class=mi>15</span><span class=p>)</span>
+    <span class=n>total_on_model_fes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>MAX_FES</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=mi>2048</span>
+
+    <span class=n>fe_choices</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>{</span><span class=mi>2</span> <span class=o>**</span> <span class=n>wfb</span> <span class=k>for</span> <span class=n>wfb</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>6</span><span class=p>)}</span>
+    <span class=n>fe_choices</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>MAX_FES</span> <span class=o>-</span> <span class=p>(</span><span class=mi>2</span> <span class=o>**</span> <span class=n>wfb</span><span class=p>)</span> <span class=k>for</span> <span class=n>wfb</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>6</span><span class=p>))</span>
+
+    <span class=k>for</span> <span class=n>warmup_fes</span> <span class=ow>in</span> <span class=n>fe_choices</span><span class=p>:</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><</span> <span class=n>warmup_fes</span> <span class=o><</span> <span class=n>MAX_FES</span><span class=p>):</span>
+            <span class=k>continue</span>
+        <span class=n>training_fes</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=nb>int</span><span class=p>(</span><span class=mf>0.5</span> <span class=o>+</span> <span class=p>(</span><span class=n>total_training_fes</span> <span class=o>/</span> <span class=p>(</span>
+            <span class=n>MAX_FES</span> <span class=o>-</span> <span class=n>warmup_fes</span><span class=p>))))</span>
+        <span class=n>on_model_fes</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=nb>int</span><span class=p>(</span><span class=mf>0.5</span> <span class=o>+</span> <span class=p>(</span><span class=n>total_on_model_fes</span> <span class=o>/</span> <span class=p>(</span>
+            <span class=n>MAX_FES</span> <span class=o>-</span> <span class=n>warmup_fes</span><span class=p>))))</span>
+
+        <span class=n>setups</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>cast</span><span class=p>(</span>
+            <span class=n>Callable</span><span class=p>[[</span><span class=n>Any</span><span class=p>],</span> <span class=n>Execution</span><span class=p>],</span>
+            <span class=k>lambda</span> <span class=n>i</span><span class=p>,</span> <span class=n>__w</span><span class=o>=</span><span class=n>warmup_fes</span><span class=p>,</span> <span class=n>__t</span><span class=o>=</span><span class=n>training_fes</span><span class=p>,</span> <span class=n>__o</span><span class=o>=</span><span class=n>on_model_fes</span><span class=p>:</span>
+            <span class=n>cmaes_surrogate</span><span class=p>(</span><span class=n>i</span><span class=p>,</span> <span class=n>__w</span><span class=p>,</span> <span class=n>__t</span><span class=p>,</span> <span class=n>__o</span><span class=p>,</span> <span class=kc>True</span><span class=p>)))</span>
+
+    <span class=k>for</span> <span class=n>runs</span> <span class=ow>in</span> <span class=nb>sorted</span><span class=p>({</span><span class=mi>3</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>7</span><span class=p>,</span> <span class=mi>11</span><span class=p>,</span> <span class=mi>17</span><span class=p>,</span> <span class=mi>23</span><span class=p>,</span> <span class=mi>31</span><span class=p>,</span> <span class=mi>51</span><span class=p>,</span> <span class=n>n_runs</span><span class=p>}):</span>
+        <span class=k>if</span> <span class=n>runs</span> <span class=o>></span> <span class=n>n_runs</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=n>run_experiment</span><span class=p>(</span>
+            <span class=n>base_dir</span><span class=o>=</span><span class=n>use_dir</span><span class=p>,</span>
+            <span class=n>instances</span><span class=o>=</span><span class=n>instances</span><span class=p>,</span>
+            <span class=n>setups</span><span class=o>=</span><span class=n>setups</span><span class=p>,</span>
+            <span class=n>n_runs</span><span class=o>=</span><span class=n>runs</span><span class=p>,</span>
+            <span class=n>n_threads</span><span class=o>=</span><span class=n>Parallelism</span><span class=o>.</span><span class=n>ACCURATE_TIME_MEASUREMENTS</span><span class=p>,</span>
+            <span class=n>perform_warmup</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span>
+            <span class=n>perform_pre_warmup</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span>
+            <span class=n>on_completion</span><span class=o>=</span><span class=n>on_completion</span><span class=p>)</span></div>
+
+
+
+<span class=c1># Run the experiment from the command line</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span> <span class=s2>"Dynamic Control"</span><span class=p>,</span>
+        <span class=s2>"Run the dynamic control surrogate model experiment."</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the directory to store the experimental results under"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./results/"</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+    <span class=n>run</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.51 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.experiment_surrogate</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>

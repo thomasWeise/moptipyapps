@@ -1,0 +1,647 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.ode — moptipyapps 0.8.51 documentation</title><link href="../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../_static/bizstyle.css?v=658d757c"rel=stylesheet><script src="../../../_static/documentation_options.js?v=d23bc1b2"></script><script src="../../../_static/doctools.js?v=9a2dae69"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/ode.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.51 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.ode</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.ode</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A primitive integrator for systems of ordinary differential equations.</span>
+
+<span class=sd>Many dynamic systems can be modeled as systems of ordinary differential</span>
+<span class=sd>equations that govern their progress over time. Trying to find out in</span>
+<span class=sd>which state such systems are at a given point in time means to integrate</span>
+<span class=sd>these equations until that point in time (starting from a starting state).</span>
+
+<span class=sd>What we want to play around with, however, is synthesizing controllers.</span>
+<span class=sd>In this case, the differential equations also merge the output of the</span>
+<span class=sd>controller with the current state. If the controller behaves inappropriately,</span>
+<span class=sd>this may make the system diverge, i.e., some of its state variables go to</span>
+<span class=sd>infinity over time or sometimes rather quickly.</span>
+
+<span class=sd>Using ODE integrators that compute the system state at pre-defined time steps</span>
+<span class=sd>is thus cumbersome, as the system may have already exploded at these goal</span>
+<span class=sd>times. Therefore, we perform ODE integration in several steps. First, we try</span>
+<span class=sd>it the "normal" way. However, as soon as the system escapes the sane parameter</span>
+<span class=sd>range, we stop. We then use the last point where the system was stable and the</span>
+<span class=sd>first point where it escaped the reasonable range to estimate a new reasonable</span>
+<span class=sd>end time for the integration. We do this until we finally succeed.</span>
+
+<span class=sd>Thus, we can simulate a well-behaved system over a long time and an</span>
+<span class=sd>ill-behaved system for a shorter time period. Neither system will diverge.</span>
+
+<span class=sd>The following functions are provided:</span>
+
+<span class=sd>- :func:`run_ode` executes a set of differential system equations and</span>
+<span class=sd>  controller equations and returns an array with the system state, controller</span>
+<span class=sd>  output, and time at the different interpolation steps.</span>
+<span class=sd>- :func:`t_from_ode` returns the total time over which the result of</span>
+<span class=sd>  :func:`run_ode` was simulated.</span>
+<span class=sd>- :func:`j_from_ode` returns a figure of merit, i.e., a weighted sum of (a</span>
+<span class=sd>  part of) the system state and the controller output from the result of</span>
+<span class=sd>  :func:`run_ode`.</span>
+<span class=sd>- :func:`diff_from_ode` extracts state difference information from the result</span>
+<span class=sd>  of :func:`run_ode`.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span> <span class=nn>math</span> <span class=kn>import</span> <span class=n>fsum</span><span class=p>,</span> <span class=n>inf</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>TypeVar</span>
+
+<span class=kn>import</span> <span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>scipy.integrate</span> <span class=kn>import</span> <span class=n>RK45</span><span class=p>,</span> <span class=n>DenseOutput</span>  <span class=c1># type: ignore</span>
+
+<span class=c1>#: the type variable for ODE controller parameters</span>
+<span class=n>T</span> <span class=o>=</span> <span class=n>TypeVar</span><span class=p>(</span><span class=s2>"T"</span><span class=p>)</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>_is_ok</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Check whether all values in a vector are acceptable.</span>
+
+<span class=sd>    A vector is "ok" if all of its elements are from the finite range</span>
+<span class=sd>    `(-1e10, 1e10)`.  Anything else indicates that we are somehow moving</span>
+<span class=sd>    out of the reasonable bounds.</span>
+
+<span class=sd>    :param x: the vector</span>
+<span class=sd>    :return: `True` if all values are OK, `False` otherwise</span>
+<span class=sd>    """</span>
+    <span class=k>for</span> <span class=n>xx</span> <span class=ow>in</span> <span class=n>x</span><span class=p>:</span>  <span class=c1># noqa: SIM110</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=o>-</span><span class=mf>1e10</span> <span class=o><</span> <span class=n>xx</span> <span class=o><</span> <span class=mf>1e10</span><span class=p>:</span>
+            <span class=k>return</span> <span class=kc>False</span>
+    <span class=k>return</span> <span class=kc>True</span>
+
+
+<span class=k>class</span> <span class=nc>__IntegrationState</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    The internal integrator state class.</span>
+
+<span class=sd>    This class serves two purposes. First, it encapsulates the system</span>
+<span class=sd>    equations and the controller equations such that they can be called as a</span>
+<span class=sd>    unit. Second, it raises an alert if the system escapes the "OK" state,</span>
+<span class=sd>    i.e., diverge towards infinity. As long as everything is OK,</span>
+<span class=sd>    :attr:`is_ok` will remain `True`. But if either the controller or the</span>
+<span class=sd>    system state escapes the acceptable interval, it becomes `False`.</span>
+<span class=sd>    In that case, :attr:`max_ok_t` holds the highest `t` value at which</span>
+<span class=sd>    the system and controller were in an acceptable state and</span>
+<span class=sd>    :attr:`min_error_t` holds the smallest `t` value at which that was not</span>
+<span class=sd>    the case. We can assume that somewhere inbetween lies the last moment we</span>
+<span class=sd>    can find the system in a sane state.</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span>
+                 <span class=n>equations</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+                     <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+                 <span class=n>controller</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+                     <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>T</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+                 <span class=n>parameters</span><span class=p>:</span> <span class=n>T</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the integrator.</span>
+
+<span class=sd>        :param equations: the differential system</span>
+<span class=sd>        :param controller: the controller function</span>
+<span class=sd>        :param parameters: the controller parameters</span>
+<span class=sd>        :param controller_dim: the dimension of the controller result</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>equations</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__controller</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>T</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>controller</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__parameters</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>T</span><span class=p>]</span> <span class=o>=</span> <span class=n>parameters</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__ctrl</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span><span class=n>controller_dim</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>max_ok_t</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=o>-</span><span class=n>inf</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>min_error_t</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>inf</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>is_ok</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+
+    <span class=k>def</span> <span class=nf>init</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Prepare the system for integration."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>max_ok_t</span> <span class=o>=</span> <span class=o>-</span><span class=n>inf</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>min_error_t</span> <span class=o>=</span> <span class=n>inf</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>is_ok</span> <span class=o>=</span> <span class=kc>True</span>
+
+    <span class=k>def</span> <span class=nf>f</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>t</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute the differential at the given state and time.</span>
+
+<span class=sd>        First, we invoke the controller function at the state and time. Then</span>
+<span class=sd>        we pass the controller vector to the differential equations to update</span>
+<span class=sd>        the system state.</span>
+<span class=sd>        This function also checks if the state or control go out of bounds</span>
+<span class=sd>        and if they do, it sets the :attr:`is_ok` to `False`.</span>
+
+<span class=sd>        :param t: the time</span>
+<span class=sd>        :param state: the state</span>
+<span class=sd>        :return: the differential</span>
+<span class=sd>        """</span>
+        <span class=n>out</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros_like</span><span class=p>(</span><span class=n>state</span><span class=p>)</span>  <span class=c1># allocate output vec</span>
+        <span class=n>ctrl</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__ctrl</span>  <span class=c1># the controller vector</span>
+
+        <span class=c1># invoke the controller</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__controller</span><span class=p>(</span><span class=n>state</span><span class=p>,</span> <span class=n>t</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__parameters</span><span class=p>,</span> <span class=n>ctrl</span><span class=p>)</span>
+        <span class=n>ok</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=n>_is_ok</span><span class=p>(</span><span class=n>ctrl</span><span class=p>)</span>  <span class=c1># is the controller vector ok?</span>
+        <span class=k>if</span> <span class=n>ok</span><span class=p>:</span>  <span class=c1># if yes, let's invoke the state update equations</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span><span class=p>(</span><span class=n>state</span><span class=p>,</span> <span class=n>t</span><span class=p>,</span> <span class=n>ctrl</span><span class=p>,</span> <span class=n>out</span><span class=p>)</span>
+            <span class=n>ok</span> <span class=o>=</span> <span class=n>_is_ok</span><span class=p>(</span><span class=n>out</span><span class=p>)</span>  <span class=c1># and check if their result is ok</span>
+        <span class=k>if</span> <span class=n>ok</span><span class=p>:</span>  <span class=c1># is it ok?</span>
+            <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>max_ok_t</span> <span class=o><</span> <span class=n>t</span> <span class=o><</span> <span class=bp>self</span><span class=o>.</span><span class=n>min_error_t</span><span class=p>:</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>max_ok_t</span> <span class=o>=</span> <span class=n>t</span>
+        <span class=k>else</span><span class=p>:</span>  <span class=c1># no: there was some error, either in state or controller</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>is_ok</span> <span class=o>=</span> <span class=kc>False</span>  <span class=c1># then we are no longer OK</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>min_error_t</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>min_error_t</span><span class=p>,</span> <span class=n>t</span><span class=p>)</span>
+            <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>max_ok_t</span> <span class=o>></span> <span class=n>t</span><span class=p>:</span>  <span class=c1># what? an earlier error?</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>max_ok_t</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=n>t</span><span class=p>,</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>  <span class=c1># ok, reset ok time</span>
+
+        <span class=k>return</span> <span class=n>out</span>
+
+
+<div class=viewcode-block id=run_ode>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.run_ode>[docs]</a>
+<span class=k>def</span> <span class=nf>run_ode</span><span class=p>(</span><span class=n>starting_state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+            <span class=n>equations</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+                <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+            <span class=n>controller</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>T</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+            <span class=n>parameters</span><span class=p>:</span> <span class=n>T</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span><span class=p>,</span>
+            <span class=n>steps</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>5000</span><span class=p>,</span> <span class=n>max_time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>50.0</span><span class=p>)</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Simulate a set of controlled differential system.</span>
+
+<span class=sd>    The system begins in the starting state stored in the vector</span>
+<span class=sd>    `starting_state`. In each time step, first, the `controller` is invoked.</span>
+<span class=sd>    It receives the current system state vector as input, the current time</span>
+<span class=sd>    `t`, its parameters (`parameters`), and an output array to store its</span>
+<span class=sd>    computed control values into. This array has dimension `controller_dim`,</span>
+<span class=sd>    which usually is `1`. Then, the function `system` will be called and</span>
+<span class=sd>    receives the current state vector, the time step `t`, and the controller</span>
+<span class=sd>    output as input, as well as an output array to store the result of the</span>
+<span class=sd>    differential into. This output array has the same dimension as the state</span>
+<span class=sd>    vector.</span>
+
+<span class=sd>    Now the `run_ode` function simulates such a system over `steps` time steps</span>
+<span class=sd>    over the closed interval `[0, max_time]`. If both the system and the</span>
+<span class=sd>    controller are well-behaved, then the output array will contain `steps`</span>
+<span class=sd>    rows with the state, controller, and time information of each step. If</span>
+<span class=sd>    the system diverges at some point in time but we can simulate it</span>
+<span class=sd>    reasonably well before that, then we try to simulate `steps`, but on a</span>
+<span class=sd>    shorter time frame. If even that fails, you will get a single row output</span>
+<span class=sd>    with `1e100` as the controller value.</span>
+
+<span class=sd>    This function returns a matrix where each row corresponds to a simulated</span>
+<span class=sd>    time step. Each row contains three components in a concatenated fashion:</span>
+<span class=sd>    1. the state vector,</span>
+<span class=sd>    2. the control vector,</span>
+<span class=sd>    3. the time value</span>
+
+<span class=sd>    :param starting_state: the starting</span>
+<span class=sd>    :param equations: the differential system</span>
+<span class=sd>    :param controller: the controller function</span>
+<span class=sd>    :param parameters: the controller parameters</span>
+<span class=sd>    :param controller_dim: the dimension of the controller result</span>
+<span class=sd>    :param steps: the number of steps to simulate</span>
+<span class=sd>    :param max_time: the maximum time to simulate for</span>
+<span class=sd>    :returns: a matrix where each row represents a point in time, composed of</span>
+<span class=sd>        the current state, the controller output, and the length of the time</span>
+<span class=sd>        slice</span>
+
+<span class=sd>    If we simulate the flight of a projectile with our ODE execution, then</span>
+<span class=sd>    both the flight time as well as the flight length are about 0.12% off from</span>
+<span class=sd>    what the mathematical solution of the flight system prescribe. That's</span>
+<span class=sd>    actually not bad for a crude and fast integration method...</span>
+
+<span class=sd>    >>> v = 100.0</span>
+<span class=sd>    >>> angle = np.deg2rad(45.0)</span>
+<span class=sd>    >>> v_x = v * np.cos(angle)</span>
+<span class=sd>    >>> print(f"{v_x:.10f}")</span>
+<span class=sd>    70.7106781187</span>
+<span class=sd>    >>> v_y = v * np.sin(angle)</span>
+<span class=sd>    >>> print(f"{v_y:.10f}")</span>
+<span class=sd>    70.7106781187</span>
+<span class=sd>    >>> def projectile(position, ttime, ctrl, out):</span>
+<span class=sd>    ...     out[0] = 70.71067811865474</span>
+<span class=sd>    ...     out[1] = 70.71067811865474 - ttime * 9.80665</span>
+<span class=sd>    >>> param = 0.0   # ignore</span>
+<span class=sd>    >>> def contrl(position, ttime, params, dest):</span>
+<span class=sd>    ...     dest[0] = 0.0  #  controller that does nothing</span>
+<span class=sd>    >>> strt = np.array([0.0, 1.0])</span>
+<span class=sd>    >>> ode = run_ode(strt, projectile, contrl, param, 1, 10000)</span>
+<span class=sd>    >>> print(len(ode))</span>
+<span class=sd>    10000</span>
+<span class=sd>    >>> time_of_flight = 2 * v_y / 9.80665</span>
+<span class=sd>    >>> print(f"{time_of_flight:.10f}")</span>
+<span class=sd>    14.4209649817</span>
+<span class=sd>    >>> travel_distance_x = time_of_flight * v_x</span>
+<span class=sd>    >>> print(f"{travel_distance_x:.10f}")</span>
+<span class=sd>    1019.7162129779</span>
+<span class=sd>    >>> idx = np.argwhere(ode[:, 1] <= 0.0)[0][0]</span>
+<span class=sd>    >>> print(idx)</span>
+<span class=sd>    2887</span>
+<span class=sd>    >>> print(f"{ode[idx - 1, 0]:.10f}")</span>
+<span class=sd>    1020.4571309653</span>
+<span class=sd>    >>> print(f"{ode[idx, 0]:.10f}")</span>
+<span class=sd>    1020.8107197148</span>
+<span class=sd>    >>> print(f"{ode[idx - 1, -1]:.10f}")</span>
+<span class=sd>    14.4314431443</span>
+<span class=sd>    >>> print(f"{ode[idx, -1]:.10f}")</span>
+<span class=sd>    14.4364436444</span>
+<span class=sd>    >>> print(ode[-1, -1])</span>
+<span class=sd>    50.0</span>
+
+<span class=sd>    >>> def contrl2(position, ttime, params, dest):</span>
+<span class=sd>    ...     dest[0] = 1e50  #  controller that is ill-behaved</span>
+<span class=sd>    >>> run_ode(strt, projectile, contrl2, param, 1, 10000)</span>
+<span class=sd>    array([[0.e+000, 1.e+000, 1.e+100, 0.e+000]])</span>
+
+<span class=sd>    >>> def contrl3(position, ttime, params, dest):</span>
+<span class=sd>    ...     dest[0] = 1e50 if ttime > 10 else 0.0  # diverging controller</span>
+<span class=sd>    >>> ode = run_ode(strt, projectile, contrl3, param, 1, 10000)</span>
+<span class=sd>    >>> print(len(ode))</span>
+<span class=sd>    10000</span>
+<span class=sd>    >>> print(ode[-1])</span>
+<span class=sd>    [690.10677249 224.06765771   0.           9.75958357]</span>
+
+<span class=sd>    >>> def projectile2(position, ttime, ctrl, out):</span>
+<span class=sd>    ...     out[:] = 0</span>
+<span class=sd>    >>> ode = run_ode(strt, projectile2, contrl, param, 1, 10000)</span>
+<span class=sd>    >>> print(len(ode))</span>
+<span class=sd>    10000</span>
+<span class=sd>    >>> print(ode[-1])</span>
+<span class=sd>    [ 0.  1.  0. 50.]</span>
+<span class=sd>    >>> ode = run_ode(strt, projectile2, contrl3, param, 1, 10000)</span>
+<span class=sd>    >>> print(len(ode))</span>
+<span class=sd>    10000</span>
+<span class=sd>    >>> print(ode[-1])</span>
+<span class=sd>    [0.         1.         0.         9.41234557]</span>
+<span class=sd>    """</span>
+    <span class=n>func_state</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>__IntegrationState</span><span class=p>]</span> <span class=o>=</span> <span class=n>__IntegrationState</span><span class=p>(</span>
+        <span class=n>equations</span><span class=p>,</span> <span class=n>controller</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>)</span>
+    <span class=n>func_call</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]]</span> <span class=o>=</span> <span class=n>func_state</span><span class=o>.</span><span class=n>f</span>
+    <span class=n>denses</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>DenseOutput</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>starting_state</span><span class=p>)</span>
+    <span class=n>dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>n</span> <span class=o>+</span> <span class=n>controller_dim</span> <span class=o>+</span> <span class=mi>1</span>
+
+    <span class=n>cycle</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>  <span class=c1># loop until we have a sane integration over a sane range</span>
+        <span class=n>cycle</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=c1># first, we reset all the state information</span>
+        <span class=n>func_state</span><span class=o>.</span><span class=n>init</span><span class=p>()</span>  <span class=c1># reset the function state</span>
+        <span class=n>denses</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>  <span class=c1># always discard all interpolators, if there are any</span>
+
+        <span class=c1># then we create the integrator for the time range that we simulate</span>
+        <span class=n>integration</span> <span class=o>=</span> <span class=n>RK45</span><span class=p>(</span>
+            <span class=n>fun</span><span class=o>=</span><span class=n>func_call</span><span class=p>,</span> <span class=n>t0</span><span class=o>=</span><span class=mf>0.0</span><span class=p>,</span> <span class=n>y0</span><span class=o>=</span><span class=n>starting_state</span><span class=p>,</span> <span class=n>t_bound</span><span class=o>=</span><span class=n>max_time</span><span class=p>,</span>
+            <span class=n>max_step</span><span class=o>=</span><span class=n>steps</span><span class=p>)</span>
+        <span class=n>is_finished</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+
+        <span class=c1># perform the integration and collect all the points at which stuff</span>
+        <span class=c1># was computed</span>
+        <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>  <span class=c1># iteratively add interpolation points</span>
+            <span class=n>integration</span><span class=o>.</span><span class=n>step</span><span class=p>()</span>  <span class=c1># do the integration step</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=n>func_state</span><span class=o>.</span><span class=n>is_ok</span><span class=p>:</span>
+                <span class=k>break</span>  <span class=c1># some out-of-bounds thing happened! quit!</span>
+            <span class=n>is_finished</span> <span class=o>=</span> <span class=n>integration</span><span class=o>.</span><span class=n>status</span> <span class=o>==</span> <span class=s2>"finished"</span>
+            <span class=n>is_running</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=n>integration</span><span class=o>.</span><span class=n>status</span> <span class=o>==</span> <span class=s2>"running"</span>
+            <span class=k>if</span> <span class=n>is_finished</span> <span class=ow>or</span> <span class=n>is_running</span><span class=p>:</span>  <span class=c1># keep taking interpolator</span>
+                <span class=n>denses</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>integration</span><span class=o>.</span><span class=n>dense_output</span><span class=p>())</span>
+                <span class=k>if</span> <span class=n>is_finished</span><span class=p>:</span>
+                    <span class=k>break</span>  <span class=c1># we are finished, so we quit and build output</span>
+                <span class=k>continue</span>  <span class=c1># more integration to do, so we go on</span>
+            <span class=k>break</span>  <span class=c1># if we get here, there was an error: quit</span>
+
+        <span class=k>if</span> <span class=n>is_finished</span> <span class=ow>and</span> <span class=n>func_state</span><span class=o>.</span><span class=n>is_ok</span><span class=p>:</span>
+            <span class=c1># if we get here, everything looks fine so far, so we can try</span>
+            <span class=c1># to build the output</span>
+            <span class=n>result</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=n>steps</span><span class=p>,</span> <span class=n>dim</span><span class=p>))</span>
+            <span class=n>point</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>result</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+            <span class=n>point</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>n</span><span class=p>]</span> <span class=o>=</span> <span class=n>starting_state</span>
+
+            <span class=c1># we now compute all the points by using the interpolation</span>
+            <span class=c1># we start with the first point</span>
+            <span class=n>controller</span><span class=p>(</span><span class=n>starting_state</span><span class=p>,</span> <span class=mf>0.0</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>point</span><span class=p>[</span><span class=n>n</span><span class=p>:</span><span class=o>-</span><span class=mi>1</span><span class=p>])</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=n>_is_ok</span><span class=p>(</span><span class=n>point</span><span class=p>):</span>
+                <span class=k>break</span>
+            <span class=n>result</span><span class=p>[:,</span> <span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>linspace</span><span class=p>(</span><span class=mf>0.0</span><span class=p>,</span> <span class=n>max_time</span><span class=p>,</span> <span class=n>steps</span><span class=p>)</span>
+
+            <span class=n>j</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># the index of the dense interpolator to use</span>
+            <span class=n>n_dense</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>denses</span><span class=p>)</span>  <span class=c1># the number of interpolators</span>
+            <span class=n>t</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>  <span class=c1># the current time</span>
+            <span class=n>dense</span><span class=p>:</span> <span class=n>DenseOutput</span> <span class=o>=</span> <span class=n>denses</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>  <span class=c1># the current interpolator</span>
+            <span class=k>for</span> <span class=n>point</span> <span class=ow>in</span> <span class=n>result</span><span class=p>[</span><span class=mi>1</span><span class=p>:]:</span>  <span class=c1># for each of the remaining points...</span>
+                <span class=n>last_time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>t</span>  <span class=c1># remember the last successful point</span>
+                <span class=n>t</span> <span class=o>=</span> <span class=n>point</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span>  <span class=c1># get the time value</span>
+
+                <span class=c1># we now need to find the right interpolator if we have left</span>
+                <span class=c1># the range of the current interpolator</span>
+                <span class=k>while</span> <span class=ow>not</span> <span class=p>(</span><span class=n>dense</span><span class=o>.</span><span class=n>t_min</span> <span class=o><=</span> <span class=n>t</span> <span class=o><=</span> <span class=n>dense</span><span class=o>.</span><span class=n>t_max</span><span class=p>):</span>
+                    <span class=n>j</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># step counter</span>
+                    <span class=k>if</span> <span class=n>j</span> <span class=o>>=</span> <span class=n>n_dense</span><span class=p>:</span>   <span class=c1># we have left the interpolation range??</span>
+                        <span class=n>func_state</span><span class=o>.</span><span class=n>max_ok_t</span> <span class=o>=</span> <span class=n>last_time</span>  <span class=c1># so we need to adjust</span>
+                        <span class=n>func_state</span><span class=o>.</span><span class=n>min_error_t</span> <span class=o>=</span> <span class=n>t</span>
+                        <span class=n>is_finished</span> <span class=o>=</span> <span class=kc>False</span>  <span class=c1># and try the whole thing again</span>
+                        <span class=k>break</span>
+                    <span class=n>dense</span> <span class=o>=</span> <span class=n>denses</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>  <span class=c1># pick next interpolator</span>
+
+                <span class=k>if</span> <span class=n>is_finished</span><span class=p>:</span>  <span class=c1># if we get here, we got a right interpolator</span>
+                    <span class=n>point</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>n</span><span class=p>]</span> <span class=o>=</span> <span class=n>dense</span><span class=p>(</span><span class=n>t</span><span class=p>)</span>  <span class=c1># so we can interpolate the state</span>
+                    <span class=n>controller</span><span class=p>(</span><span class=n>point</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>n</span><span class=p>],</span> <span class=n>t</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>point</span><span class=p>[</span><span class=n>n</span><span class=p>:</span><span class=o>-</span><span class=mi>1</span><span class=p>])</span>
+                    <span class=k>if</span> <span class=ow>not</span> <span class=n>_is_ok</span><span class=p>(</span><span class=n>point</span><span class=p>):</span>  <span class=c1># is there an error in the vector?</span>
+                        <span class=n>func_state</span><span class=o>.</span><span class=n>max_ok_t</span> <span class=o>=</span> <span class=n>last_time</span>  <span class=c1># last ok time</span>
+                        <span class=n>func_state</span><span class=o>.</span><span class=n>min_error_t</span> <span class=o>=</span> <span class=n>t</span>  <span class=c1># error time</span>
+                        <span class=n>is_finished</span> <span class=o>=</span> <span class=kc>False</span>  <span class=c1># we need to quit and try again</span>
+                        <span class=k>break</span>  <span class=c1># stop inner loop</span>
+
+            <span class=k>if</span> <span class=n>is_finished</span><span class=p>:</span>  <span class=c1># did we succeed?</span>
+                <span class=k>return</span> <span class=n>result</span>  <span class=c1># yes! return the result.</span>
+
+        <span class=c1># if we arrive here, things went wrong somehow.</span>
+        <span class=c1># this means that we should reduce the maximum runtime</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>cycle</span> <span class=o><</span> <span class=mi>3</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>func_state</span><span class=o>.</span><span class=n>max_ok_t</span> <span class=o><</span> <span class=n>func_state</span><span class=o>.</span><span class=n>min_error_t</span><span class=p>):</span>
+            <span class=n>max_time</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=nb>min</span><span class=p>(</span><span class=n>func_state</span><span class=o>.</span><span class=n>min_error_t</span><span class=p>,</span> <span class=p>(</span>
+                <span class=mf>0.8</span> <span class=o>*</span> <span class=n>func_state</span><span class=o>.</span><span class=n>max_ok_t</span><span class=p>)</span> <span class=o>+</span> <span class=p>(</span><span class=mf>0.2</span> <span class=o>*</span> <span class=n>func_state</span><span class=o>.</span><span class=n>min_error_t</span><span class=p>)),</span>
+                <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>  <span class=c1># the small reductions did not work out well ... reduce rapidly</span>
+            <span class=n>max_time</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>nextafter</span><span class=p>(</span><span class=mf>0.7</span> <span class=o>*</span> <span class=nb>min</span><span class=p>(</span><span class=n>func_state</span><span class=o>.</span><span class=n>max_ok_t</span><span class=p>,</span>
+                                              <span class=n>max_time</span><span class=p>),</span> <span class=o>-</span><span class=n>inf</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=p>(</span><span class=n>cycle</span> <span class=o>></span> <span class=mi>4</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>max_time</span> <span class=o><=</span> <span class=mf>1e-10</span><span class=p>):</span>
+            <span class=k>break</span>  <span class=c1># if we get here, everything seems so pointless...</span>
+
+    <span class=c1># the default error result</span>
+    <span class=n>result</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=n>dim</span><span class=p>))</span>
+    <span class=n>result</span><span class=p>[</span><span class=mi>0</span><span class=p>,</span> <span class=mi>0</span><span class=p>:</span><span class=n>n</span><span class=p>]</span> <span class=o>=</span> <span class=n>starting_state</span>
+    <span class=n>result</span><span class=p>[</span><span class=mi>0</span><span class=p>,</span> <span class=n>n</span><span class=p>:</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>=</span> <span class=mf>1e100</span>
+    <span class=n>result</span><span class=p>[</span><span class=mi>0</span><span class=p>,</span> <span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=k>return</span> <span class=n>result</span></div>
+
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span> <span class=nf>__j_from_ode_compute</span><span class=p>(</span><span class=n>ode</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                         <span class=n>use_state_dims</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                         <span class=n>gamma</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                         <span class=n>dest</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Prepare the input array for the figure of merit computation.</span>
+
+<span class=sd>    The `ode` matrix contains one row for each time step.</span>
+<span class=sd>    The row is composed of the current state, the current controller output,</span>
+<span class=sd>    and the current time.</span>
+<span class=sd>    However, all systems of a given simulation start in the same initial</span>
+<span class=sd>    state, so it makes little sense to include this initial state into the</span>
+<span class=sd>    figure of merit computation. It does make sense to include the control</span>
+<span class=sd>    output at that moment, though, because it contributes to the next state.</span>
+<span class=sd>    It also makes no sense to count in the last row of the ODE computation,</span>
+<span class=sd>    because this is the final system state and the system will not spend any</span>
+<span class=sd>    time in it in the simulation.</span>
+
+<span class=sd>    :param ode: the output array from the ODE simulation</span>
+<span class=sd>    :param state_dim: the state dimension</span>
+<span class=sd>    :param use_state_dims: the dimension until which the state is used</span>
+<span class=sd>    :param gamma: the weight for the control variable</span>
+<span class=sd>    :param dest: the destination array</span>
+
+<span class=sd>    >>> od = np.array([[1, 2, 3, 4, 0],</span>
+<span class=sd>    ...                [5, 6, 7, 8, 1],</span>
+<span class=sd>    ...                [9, 6, 4, 3, 3],</span>
+<span class=sd>    ...                [7, 4, 2, 1, 7]])</span>
+<span class=sd>    >>> sta_dim = 3</span>
+<span class=sd>    >>> dst = np.empty((od.shape[0] - 1) * (od.shape[1] - 1) - sta_dim)</span>
+<span class=sd>    >>> __j_from_ode_compute(od, sta_dim, sta_dim, 0.1, dst)</span>
+<span class=sd>    >>> print(dst)</span>
+<span class=sd>    [  1.6  12.8  98.   72.   50.    3.6  64.  144.  324. ]</span>
+<span class=sd>    >>> rs = np.array([0.1 * 1 * 4 * 4,</span>
+<span class=sd>    ...                0.1 * 2 * 8 * 8, 2 * 7 * 7, 2 * 6 * 6, 2 * 5 * 5,</span>
+<span class=sd>    ...                0.1 * 4 * 3 * 3, 4 * 4 * 4, 4 * 6 * 6, 4 * 9 * 9])</span>
+<span class=sd>    >>> print(rs)</span>
+<span class=sd>    [  1.6  12.8  98.   72.   50.    3.6  64.  144.  324. ]</span>
+<span class=sd>    >>> u_sta_dim = 2</span>
+<span class=sd>    >>> dst = np.empty((od.shape[0] - 1) * (</span>
+<span class=sd>    ...     od.shape[1] - 1 - sta_dim + u_sta_dim) - u_sta_dim)</span>
+<span class=sd>    >>> __j_from_ode_compute(od, sta_dim, u_sta_dim, 1.0, dst)</span>
+<span class=sd>    >>> print(dst)</span>
+<span class=sd>    [ 16. 128.  72.  50.  36. 144. 324.]</span>
+<span class=sd>    """</span>
+    <span class=n>index</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=n>start</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>ode</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>-</span> <span class=mi>2</span>
+
+    <span class=c1># from now on, we compute the impact of the state and the controller</span>
+    <span class=n>add_state</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=n>last_row</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>ode</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=n>ode</span><span class=p>)):</span>
+        <span class=n>next_row</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>ode</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+        <span class=n>weight</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>next_row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>-</span> <span class=n>last_row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span>
+        <span class=n>inner</span> <span class=o>=</span> <span class=n>start</span>
+        <span class=n>weight_01</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>weight</span> <span class=o>*</span> <span class=n>gamma</span>
+        <span class=k>while</span> <span class=n>inner</span> <span class=o>>=</span> <span class=n>state_dim</span><span class=p>:</span>
+            <span class=n>v</span> <span class=o>=</span> <span class=n>last_row</span><span class=p>[</span><span class=n>inner</span><span class=p>]</span>
+            <span class=n>inner</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=n>dest</span><span class=p>[</span><span class=n>index</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>v</span> <span class=o>*</span> <span class=n>v</span><span class=p>)</span> <span class=o>*</span> <span class=n>weight_01</span> <span class=k>if</span> <span class=o>-</span><span class=mf>1e100</span> <span class=o><</span> <span class=n>v</span> <span class=o><</span> <span class=mf>1e100</span> <span class=k>else</span> <span class=mf>1e100</span>
+            <span class=n>index</span> <span class=o>+=</span> <span class=mi>1</span>
+
+        <span class=k>if</span> <span class=n>add_state</span><span class=p>:</span>
+            <span class=n>inner</span> <span class=o>=</span> <span class=n>use_state_dims</span>  <span class=c1># jump to the used state</span>
+            <span class=k>while</span> <span class=n>inner</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+                <span class=n>inner</span> <span class=o>-=</span> <span class=mi>1</span>
+                <span class=n>v</span> <span class=o>=</span> <span class=n>last_row</span><span class=p>[</span><span class=n>inner</span><span class=p>]</span>
+                <span class=n>dest</span><span class=p>[</span><span class=n>index</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>v</span> <span class=o>*</span> <span class=n>v</span><span class=p>)</span> <span class=o>*</span> <span class=n>weight</span> <span class=k>if</span> <span class=o>-</span><span class=mf>1e100</span> <span class=o><</span> <span class=n>v</span> <span class=o><</span> <span class=mf>1e100</span> <span class=k>else</span> <span class=mf>1e100</span>
+                <span class=n>index</span> <span class=o>+=</span> <span class=mi>1</span>
+
+        <span class=n>add_state</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=n>last_row</span> <span class=o>=</span> <span class=n>next_row</span>
+
+
+<div class=viewcode-block id=t_from_ode>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.t_from_ode>[docs]</a>
+<span class=k>def</span> <span class=nf>t_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get the time sum from an ODE solution.</span>
+
+<span class=sd>    The total time that we simulate a system depends on the behavior of the</span>
+<span class=sd>    system.</span>
+
+<span class=sd>    :param ode: the ODE solution, as return from :func:`run_ode`.</span>
+<span class=sd>    :return: the total consumed time</span>
+
+<span class=sd>    >>> od = np.array([[1, 2, 3, 4, 0.1],</span>
+<span class=sd>    ...                [5, 6, 7, 8, 0.2],</span>
+<span class=sd>    ...                [9, 6, 4, 3, 0.3],</span>
+<span class=sd>    ...                [7, 4, 2, 1, 0.4]])</span>
+<span class=sd>    >>> print(t_from_ode(od))</span>
+<span class=sd>    0.4</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=n>ode</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>,</span> <span class=o>-</span><span class=mi>1</span><span class=p>]</span></div>
+
+
+
+<div class=viewcode-block id=j_from_ode>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.j_from_ode>[docs]</a>
+<span class=k>def</span> <span class=nf>j_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+               <span class=n>use_state_dims</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span><span class=p>,</span>
+               <span class=n>gamma</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.1</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the original figure of merit from an ODE array.</span>
+
+<span class=sd>    The figure of merit is the sum of state variable squares plus 0.1 times</span>
+<span class=sd>    the control variable squares. We disregard the state variable values of</span>
+<span class=sd>    the starting states (because they are the same for all controllers on</span>
+<span class=sd>    a given training case and because the control cannot influence them) and</span>
+<span class=sd>    we also disregard the final state and final controller output (as there is</span>
+<span class=sd>    no time slice associated with them, i.e., we only "arrive" in them but</span>
+<span class=sd>    basically spent 0 time in them in our simulation).</span>
+
+<span class=sd>    :param ode: the array returned by the ODE function, i.e., :func:`run_ode`</span>
+<span class=sd>    :param state_dim: the state dimension</span>
+<span class=sd>    :param use_state_dims: the dimension until which the state is used,</span>
+<span class=sd>        `-1` for using the complete state</span>
+<span class=sd>    :param gamma: the weight of the controller input</span>
+<span class=sd>    :return: the figure of merit</span>
+
+<span class=sd>    >>> od = np.array([[1, 2, 3, 4, 0],</span>
+<span class=sd>    ...                [5, 6, 7, 8, 1],</span>
+<span class=sd>    ...                [9, 6, 4, 3, 3],</span>
+<span class=sd>    ...                [7, 4, 2, 1, 7]])</span>
+<span class=sd>    >>> sta_dim = 3</span>
+<span class=sd>    >>> print(f"{j_from_ode(od, sta_dim):.10f}")</span>
+<span class=sd>    110.0000000000</span>
+<span class=sd>    >>> print((1.6 + 12.8 + 98 + 72 + 50 + 3.6 + 64 + 144 + 324) / 7)</span>
+<span class=sd>    110.0</span>
+<span class=sd>    >>> sta_dim = 3</span>
+<span class=sd>    >>> print(f"{j_from_ode(od, 3, 2, 0.5):.10f}")</span>
+<span class=sd>    97.1428571429</span>
+<span class=sd>    >>> print((8 + 64 + 72 + 50 + 18 + 144 + 324) / 7)</span>
+<span class=sd>    97.14285714285714</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>ode</span><span class=p>)</span> <span class=o><=</span> <span class=mi>1</span><span class=p>:</span>
+        <span class=k>return</span> <span class=mf>1e200</span>
+    <span class=c1># The used state dimension could be equal to the state dimension or less.</span>
+    <span class=c1># If it is <= 0, then we use the complete state vector</span>
+    <span class=k>if</span> <span class=n>use_state_dims</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=n>use_state_dims</span> <span class=o>=</span> <span class=n>state_dim</span>
+    <span class=n>dest</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>((</span><span class=n>ode</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=p>(</span>
+        <span class=n>ode</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>-</span> <span class=mi>1</span> <span class=o>-</span> <span class=n>state_dim</span> <span class=o>+</span> <span class=n>use_state_dims</span><span class=p>)</span> <span class=o>-</span> <span class=n>use_state_dims</span><span class=p>)</span>
+    <span class=n>__j_from_ode_compute</span><span class=p>(</span><span class=n>ode</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>,</span> <span class=n>use_state_dims</span><span class=p>,</span> <span class=n>gamma</span><span class=p>,</span> <span class=n>dest</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>fsum</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span> <span class=o>/</span> <span class=n>ode</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>,</span> <span class=o>-</span><span class=mi>1</span><span class=p>]</span></div>
+
+
+
+<div class=viewcode-block id=multi_run_ode>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.multi_run_ode>[docs]</a>
+<span class=k>def</span> <span class=nf>multi_run_ode</span><span class=p>(</span>
+        <span class=n>test_starting_states</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span>
+        <span class=n>training_starting_states</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span>
+        <span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=nb>float</span><span class=p>],</span> <span class=kc>None</span><span class=p>]</span> <span class=o>|</span> <span class=n>Iterable</span><span class=p>[</span>
+            <span class=n>Callable</span><span class=p>[[</span><span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=nb>float</span><span class=p>],</span> <span class=kc>None</span><span class=p>]],</span>
+        <span class=n>equations</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+        <span class=n>controller</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>T</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+        <span class=n>parameters</span><span class=p>:</span> <span class=n>T</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span><span class=p>,</span>
+        <span class=n>test_steps</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>5000</span><span class=p>,</span>
+        <span class=n>test_time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>50.0</span><span class=p>,</span>
+        <span class=n>training_steps</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>5000</span><span class=p>,</span>
+        <span class=n>training_time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>50.0</span><span class=p>,</span>
+        <span class=n>use_state_dims</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span><span class=p>,</span> <span class=n>gamma</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.1</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Invoke :func:`run_ode` multiple times and pass the result to `collector`.</span>
+
+<span class=sd>    This function allows us to perform multiple runs of the differential</span>
+<span class=sd>    equation simulator, using different starting points. It also allows us to</span>
+<span class=sd>    distinguish training and test points and to assign them different numbers</span>
+<span class=sd>    of steps. For each of them, :func:`run_ode` will be applied and the</span>
+<span class=sd>    returned matrix is passed to the `collector` function.</span>
+
+<span class=sd>    :param test_starting_states: the iterable of test starting states</span>
+<span class=sd>    :param training_starting_states: the iterable of training starting states</span>
+<span class=sd>    :param collector: the destination to receive the results, in the form of</span>
+<span class=sd>        index, ode array, j, and t.</span>
+<span class=sd>    :param equations: the differential system</span>
+<span class=sd>    :param controller: the controller function</span>
+<span class=sd>    :param parameters: the controller parameters</span>
+<span class=sd>    :param controller_dim: the dimension of the controller result</span>
+<span class=sd>    :param test_steps: the number of test steps to simulate</span>
+<span class=sd>    :param test_time: the time limit for tests</span>
+<span class=sd>    :param training_steps: the number of training steps to simulate</span>
+<span class=sd>    :param training_time: the time limit for training</span>
+<span class=sd>    :param use_state_dims: the dimension until which the state is used,</span>
+<span class=sd>        `-1` for using the complete state</span>
+<span class=sd>    :param gamma: the weight of the controller input</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>collector</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+        <span class=n>collector</span> <span class=o>=</span> <span class=p>(</span><span class=n>collector</span><span class=p>,</span> <span class=p>)</span>
+    <span class=n>index</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>for</span> <span class=n>sp</span> <span class=ow>in</span> <span class=n>test_starting_states</span><span class=p>:</span>
+        <span class=n>ode</span> <span class=o>=</span> <span class=n>run_ode</span><span class=p>(</span><span class=n>sp</span><span class=p>,</span> <span class=n>equations</span><span class=p>,</span> <span class=n>controller</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>,</span>
+                      <span class=n>test_steps</span><span class=p>,</span> <span class=n>test_time</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>c</span> <span class=ow>in</span> <span class=n>collector</span><span class=p>:</span>
+            <span class=n>c</span><span class=p>(</span><span class=n>index</span><span class=p>,</span> <span class=n>ode</span><span class=p>,</span> <span class=n>j_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=n>sp</span><span class=p>),</span> <span class=n>use_state_dims</span><span class=p>,</span> <span class=n>gamma</span><span class=p>),</span>
+              <span class=n>t_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>))</span>
+        <span class=n>index</span> <span class=o>+=</span> <span class=mi>1</span>
+    <span class=k>for</span> <span class=n>sp</span> <span class=ow>in</span> <span class=n>training_starting_states</span><span class=p>:</span>
+        <span class=n>ode</span> <span class=o>=</span> <span class=n>run_ode</span><span class=p>(</span><span class=n>sp</span><span class=p>,</span> <span class=n>equations</span><span class=p>,</span> <span class=n>controller</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>,</span>
+                      <span class=n>training_steps</span><span class=p>,</span> <span class=n>training_time</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>c</span> <span class=ow>in</span> <span class=n>collector</span><span class=p>:</span>
+            <span class=n>c</span><span class=p>(</span><span class=n>index</span><span class=p>,</span> <span class=n>ode</span><span class=p>,</span> <span class=n>j_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=n>sp</span><span class=p>),</span> <span class=n>use_state_dims</span><span class=p>,</span> <span class=n>gamma</span><span class=p>),</span>
+              <span class=n>t_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>))</span>
+        <span class=n>index</span> <span class=o>+=</span> <span class=mi>1</span></div>
+
+
+
+<div class=viewcode-block id=diff_from_ode>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.ode.diff_from_ode>[docs]</a>
+<span class=k>def</span> <span class=nf>diff_from_ode</span><span class=p>(</span><span class=n>ode</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> \
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute all the state+control vectors and the resulting differentials.</span>
+
+<span class=sd>    This function returns two matrices. Each row of both matrices corresponds</span>
+<span class=sd>    to a time slot. Each row in the first matrix holds the state vector and</span>
+<span class=sd>    the control vector (that was computed by the controller). The</span>
+<span class=sd>    corresponding row in the second matrix then holds the state differential</span>
+<span class=sd>    resulting from the control vector being applied in the differential</span>
+<span class=sd>    equations that govern the system state change.</span>
+
+<span class=sd>    The idea is that this function basically provides the data that we would</span>
+<span class=sd>    like to learn when training a surrogate model for a system: From the</span>
+<span class=sd>    current state and the computed control vector, we want that our model can</span>
+<span class=sd>    give us the resulting system differential. If we have such a model and it</span>
+<span class=sd>    works reasonably well, then we could essentially plug this model into</span>
+<span class=sd>    :func:`run_ode` instead of the original `equations` parameter.</span>
+
+<span class=sd>    What this function does to compute the differential is to basically</span>
+<span class=sd>    "invert" the dynamic weighting done by :func:`run_ode`. :func:`run_ode`</span>
+<span class=sd>    starts in a given starting state `s`. It then computes the control vector</span>
+<span class=sd>    `c` as a function of `s`, i.e., `c(s)`. Then, the equations of the dynamic</span>
+<span class=sd>    system (see module :mod:`~moptipyapps.dynamic_control.system`) to compute</span>
+<span class=sd>    the state differential `D=ds/dt` as a function of `c(s)` and `s`, i.e., as</span>
+<span class=sd>    something like `D(s, c(s))`. The next step would be to update the state,</span>
+<span class=sd>    i.e., to set `s=s+D(s, c(s))`. Unfortunately, this can make `s` go to</span>
+<span class=sd>    infinity. So :func:`run_ode` will compute a dynamic weight `w` and do</span>
+<span class=sd>    `s=s+w*D(s, c(s))`, where `w` is chosen such that the state vector `s`</span>
+<span class=sd>    does not grow unboundedly. While `s` and `c(s)` and `w` are stored in one</span>
+<span class=sd>    row of the result matrix of :func:`run_ode`, `s+w*D(s,c(s))` is stored as</span>
+<span class=sd>    state `s` in the next row. So what this function here basically does is to</span>
+<span class=sd>    subtract the old state from the next state and divide the result by `w` to</span>
+<span class=sd>    get `D(s, c(s))`. `s` and `c(s)` are already available directly in the ODE</span>
+<span class=sd>    result and `w` is not needed anymore.</span>
+
+<span class=sd>    We then get the rows `s, c(s)` and `D(s, c(s))` in the first and second</span>
+<span class=sd>    result matrix, respectively. This can then be used to train a system model</span>
+<span class=sd>    as proposed in model :mod:`~moptipyapps.dynamic_control.system_model`.</span>
+
+<span class=sd>    :param ode: the result of :func:`run_ode`</span>
+<span class=sd>    :param state_dim: the state dimensions</span>
+<span class=sd>    :returns: a tuple of the state+control vectors and the resulting</span>
+<span class=sd>        state differential vectors</span>
+
+<span class=sd>    >>> od = np.array([</span>
+<span class=sd>    ...     [0, 0, 0, 0, 0, 0],  # state 0,0,0; control 0,0; time 0</span>
+<span class=sd>    ...     [1, 2, 3, 4, 5, 1],  # state 1,2,3; control 4,5; time 1</span>
+<span class=sd>    ...     [2, 3, 4, 5, 6, 3],  # state 2,3,4; control 5,6; time 3</span>
+<span class=sd>    ...     [4, 6, 8, 7, 7, 7]])    # state 4,6,8; control 7,7, time 7</span>
+<span class=sd>    >>> res = diff_from_ode(od, 3)</span>
+<span class=sd>    >>> res[0]  # state and control vectors, time col and last row removed</span>
+<span class=sd>    array([[0, 0, 0, 0, 0],</span>
+<span class=sd>           [1, 2, 3, 4, 5],</span>
+<span class=sd>           [2, 3, 4, 5, 6]])</span>
+<span class=sd>    >>> res[1]  # (state[i + 1] - state[i]) / (time[i + 1] / time[i])</span>
+<span class=sd>    array([[1.  , 2.  , 3.  ],</span>
+<span class=sd>           [0.5 , 0.5 , 0.5 ],</span>
+<span class=sd>           [0.5 , 0.75, 1.  ]])</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>ode</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=o>-</span><span class=mi>1</span><span class=p>,</span> <span class=mi>0</span><span class=p>:</span><span class=o>-</span><span class=mi>1</span><span class=p>],</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>diff</span><span class=p>(</span><span class=n>ode</span><span class=p>[:,</span> <span class=mi>0</span><span class=p>:</span><span class=n>state_dim</span><span class=p>],</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>0</span><span class=p>)</span>
+            <span class=o>/</span> <span class=n>np</span><span class=o>.</span><span class=n>diff</span><span class=p>(</span><span class=n>ode</span><span class=p>[:,</span> <span class=o>-</span><span class=mi>1</span><span class=p>])[:,</span> <span class=kc>None</span><span class=p>])</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.51 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.ode</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>
