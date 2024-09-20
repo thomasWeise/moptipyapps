@@ -140,7 +140,7 @@ def _from_stream(stream: TextIO) -> "Instance":
                 if mi is not None:
                     if home_streak_min is not None:
                         raise ValueError("minimum home streak already defined")
-                    home_streak_min = 1 if mi < 1 else mi
+                    home_streak_min = max(mi, 1)
                 if ma is not None:
                     if home_streak_max is not None:
                         raise ValueError("maximum home streak already defined")
@@ -149,7 +149,7 @@ def _from_stream(stream: TextIO) -> "Instance":
                 if mi is not None:
                     if away_streak_min is not None:
                         raise ValueError("minimum away streak already defined")
-                    away_streak_min = 1 if mi < 1 else mi
+                    away_streak_min = max(mi, 1)
                 if ma is not None:
                     if away_streak_max is not None:
                         raise ValueError("maximum away streak already defined")

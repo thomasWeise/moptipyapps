@@ -64,14 +64,13 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
         controllers = [
             make_ann(sd, ctrl_dims, [sd, sd]),
             make_ann(sd, ctrl_dims, [sdp2, sdp2])]
-        for controller in controllers:
-            for ann_model in [[sd, sd, sd], [sd, sd, sd, sd],
-                              [sdp2, sdp2, sdp2]]:
-                res.append(cast(
-                    Callable[[], SystemModel],
-                    lambda _s=system, _c=controller, _m=make_ann(
-                        sd + system.control_dims, sd, ann_model):
-                    SystemModel(_s, _c, _m)))
+        res.extend(cast(
+            Callable[[], SystemModel],
+            lambda _s=system, _c=controller, _m=make_ann(
+                sd + system.control_dims, sd, ann_model): SystemModel(
+                _s, _c, _m)) for ann_model in [[sd, sd, sd], [
+                    sd, sd, sd, sd], [sdp2, sdp2, sdp2]]
+            for controller in controllers)
     return res
 
 

@@ -1024,8 +1024,7 @@ def make_comparison_table(
     writer: list[str] = [r"\begin{tabular}{@{}r"]
     if inst_cols > 1:
         writer.append("@{}l")
-    for _ in range(tuple.__len__(data[0])):
-        writer.append("r")
+    writer.extend("r" for _ in range(tuple.__len__(data[0])))
     writer.append("@{}}%")
     dest("".join(writer))
     writer.clear()

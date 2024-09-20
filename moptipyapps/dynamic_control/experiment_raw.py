@@ -53,10 +53,9 @@ def make_instances() -> Iterable[Callable[[], Instance]]:
         controllers.extend(partially_linear(system))
         controllers.extend(predefined(system))
         controllers.extend(peaks(system))
-        for controller in controllers:
-            res.append(cast(
-                Callable[[], Instance],
-                lambda _s=system, _c=controller: Instance(_s, _c)))
+        res.extend(cast(
+            Callable[[], Instance], lambda _s=system, _c=controller:
+            Instance(_s, _c)) for controller in controllers)
     return res
 
 

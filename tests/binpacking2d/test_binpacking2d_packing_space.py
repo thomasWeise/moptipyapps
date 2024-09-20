@@ -34,11 +34,10 @@ def test_packing_space() -> None:
                          random=use_random) -> Packing:
             encoding = (ImprovedBottomLeftEncoding1 if random.integers(2) == 0
                         else ImprovedBottomLeftEncoding2)(ins)
-            x_data = []  # generate the data for a random packing
-            for i in range(1, ins.n_different_items + 1):
-                for _ in range(ins[i - 1, IDX_REPETITION]):
-                    x_data.append(  # append the item id
-                        i if random.integers(2) == 0 else -i)
+            # generate the data for a random packing
+            x_data = [i if random.integers(2) == 0 else -i
+                      for i in range(1, ins.n_different_items + 1)
+                      for _ in range(ins[i - 1, IDX_REPETITION])]
             xx = np.array(x_data, ins.dtype)  # convert data to numpy array
             random.shuffle(xx)  # shuffle the data
             encoding.decode(xx, x)

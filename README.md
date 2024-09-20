@@ -1,4 +1,4 @@
-[![make build](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yml/badge.svg)](https://github.com/thomasWeise/moptipy/actions/workflows/build.yml)
+[![build](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yml/badge.svg)](https://github.com/thomasWeise/moptipy/actions/workflows/build.yml)
 [![pypi version](https://img.shields.io/pypi/v/moptipyapps)](https://pypi.org/project/moptipyapps)
 [![pypi downloads](https://img.shields.io/pypi/dw/moptipyapps.svg)](https://pypistats.org/packages/moptipyapps)
 [![coverage report](https://thomasweise.github.io/moptipyapps/tc/badge.svg)](https://thomasweise.github.io/moptipyapps/tc/index.html)
@@ -22,7 +22,7 @@
 
 ## 1. Introduction
 
-[`moptipy`](https://thomasweise.github.io/moptipy/) is a library with implementations of metaheuristic optimization methods in Python&nbsp;3.10 that also offers an environment for replicable experiments ([`flyer`](https://thomasweise.github.io/moptipy/_static/moptipy_flyer.pdf)).
+[`moptipy`](https://thomasweise.github.io/moptipy/) is a library with implementations of metaheuristic optimization methods in Python&nbsp;3.12 that also offers an environment for replicable experiments ([`flyer`](https://thomasweise.github.io/moptipy/_static/moptipy_flyer.pdf)).
 [`moptipyapps`](https://thomasweise.github.io/moptipyapps) is a collection of applications and experiments based on `moptipy`.
 
 
@@ -295,7 +295,7 @@ Improving code quality can *never* come later.
 We *always* must maintain high coding and documentation standards from the very beginning.
 While `moptipy` may still be far from achieving these goals, at least we try to get there.
 
-Anyway, you can find our [full `make` build](https://thomasweise.github.io/moptipyapps/Makefile.html) running all the tests, doing all the static analyses, creating the documentation, and creating and packaging the distribution files [here](https://thomasweise.github.io/moptipyapps/Makefile.html).
+Anyway, you can find our full build script running all the tests, doing all the static analyses, creating the documentation, and creating and packaging the distribution files in the repository, too.
 Besides the [basic `moptipyapps` dependencies](https://thomasweise.github.io/moptipyapps/requirements-dev_txt.html), it requires [a set of additional dependencies](https://thomasweise.github.io/moptipyapps/requirements-dev_txt.html).
 These are all automatically installed during the build procedure.
 The build only works under Linux.

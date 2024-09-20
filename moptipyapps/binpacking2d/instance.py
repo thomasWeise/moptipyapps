@@ -470,7 +470,7 @@ def __lb_q(bin_width: int, bin_height: int, q: int, j_js: list[int]) -> int:
     if (b2 * div) < len_s3:
         b2 = b2 + 1
 
-    l_tilde: Final[int] = len(s2) + (b1 if b1 >= b2 else b2)  # Equation 6.
+    l_tilde: Final[int] = len(s2) + max(b1, b2)  # Equation 6.
     bound: int = len(s1) + l_tilde
 
     # Now compute the final bound based on Theorem 3 / Equation 7.

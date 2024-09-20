@@ -60,10 +60,8 @@ def __check_resource_instance(name: str, root_class) -> None:
                 if i == j:
                     assert instance[i, j] == 0
                 dij = instance[i, j]
-                if dij < nearest:
-                    nearest = dij
-                if dij > farthest:
-                    farthest = dij
+                nearest = min(dij, nearest)
+                farthest = max(dij, farthest)
                 is_symmetric = is_symmetric and (dij == instance[j, i])
             assert 0 <= nearest <= farthest <= 1_000_000_000_000_000
             lb += int(nearest)

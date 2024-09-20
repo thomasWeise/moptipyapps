@@ -22,10 +22,10 @@
 
 # `moptipy` provides the basic optimization infrastructure and the spaces and
 # tools that we use for optimization.
-moptipy == 0.9.113
+moptipy == 0.9.115
 
 # the common tools package
-pycommons == 0.8.41
+pycommons == 0.8.44
 
 # `numpy` is needed for its efficient data structures.
 numpy == 1.26.4
@@ -34,16 +34,16 @@ numpy == 1.26.4
 numba == 0.60.0
 
 # matplotlib is used to create plots in the evaluation procedures.
-matplotlib == 3.9.1
+matplotlib == 3.9.2
 
 # scipy is used, e.g., for integrating systems of differential equations.
-scipy == 1.14.0
+scipy == 1.14.1
 
 # urllib3 and certifi are used to build instance data from internet resources.
 # They are also used to check the URLs in the README.md as part of the build
 # process, we check all the URLs in the README.md file..
-urllib3 == 2.2.2
-certifi == 2024.7.4
+urllib3 == 2.2.3
+certifi == 2024.8.30
 
 # defusedxml is used as safe alternative for XML parsing the TTP data
 defusedxml == 0.7.1
