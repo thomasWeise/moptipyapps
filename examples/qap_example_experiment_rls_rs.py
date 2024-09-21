@@ -6,7 +6,7 @@ from typing import Callable, Final, Iterable
 from moptipy.algorithms.random_sampling import RandomSampling
 from moptipy.algorithms.so.rls import RLS
 from moptipy.api.execution import Execution
-from moptipy.api.experiment import Parallelism, run_experiment
+from moptipy.api.experiment import run_experiment
 from moptipy.operators.permutations.op0_shuffle import Op0Shuffle
 from moptipy.operators.permutations.op1_swap2 import Op1Swap2
 from moptipy.spaces.permutations import Permutations
@@ -75,8 +75,7 @@ def run(base_dir: str, n_runs: int = 3) -> None:
         base_dir=use_dir,
         instances=make_instances(),
         setups=[rls, rs],
-        n_runs=n_runs,
-        n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS)
+        n_runs=n_runs)
 
 
 # Run the experiment from the command line

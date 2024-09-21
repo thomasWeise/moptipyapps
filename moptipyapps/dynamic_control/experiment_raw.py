@@ -18,7 +18,7 @@ from typing import Any, Callable, Final, Iterable, cast
 import numpy as np
 from moptipy.algorithms.so.vector.cmaes_lib import BiPopCMAES
 from moptipy.api.execution import Execution
-from moptipy.api.experiment import Parallelism, run_experiment
+from moptipy.api.experiment import run_experiment
 from moptipy.api.process import Process
 from pycommons.io.path import Path, directory_path
 
@@ -120,7 +120,6 @@ def run(base_dir: str, n_runs: int = 5) -> None:
         instances=instances,
         setups=[cmaes],
         n_runs=n_runs,
-        n_threads=Parallelism.PERFORMANCE,
         perform_warmup=False,
         perform_pre_warmup=False,
         on_completion=on_completion)

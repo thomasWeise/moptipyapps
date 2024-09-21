@@ -15,7 +15,7 @@ from typing import Callable, Final, Iterable
 
 from moptipy.algorithms.mo.nsga2 import NSGA2
 from moptipy.algorithms.so.rls import RLS
-from moptipy.api.experiment import Parallelism, run_experiment
+from moptipy.api.experiment import run_experiment
 from moptipy.api.mo_execution import MOExecution
 from moptipy.mo.problem.weighted_sum import Prioritize
 from moptipy.operators.permutations.op0_shuffle import Op0Shuffle
@@ -99,8 +99,7 @@ def run(base_dir: str, n_runs: int = 3) -> None:
         base_dir=use_dir,
         instances=make_instances(),
         setups=[rls, mo_nsga2],
-        n_runs=n_runs,
-        n_threads=Parallelism.PERFORMANCE)
+        n_runs=n_runs)
 
 
 # Run the experiment from the command line

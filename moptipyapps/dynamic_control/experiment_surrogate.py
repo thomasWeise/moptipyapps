@@ -26,7 +26,7 @@ from typing import Any, Callable, Final, Iterable, cast
 
 import numpy as np
 from moptipy.api.execution import Execution
-from moptipy.api.experiment import Parallelism, run_experiment
+from moptipy.api.experiment import run_experiment
 from moptipy.api.process import Process
 from moptipy.spaces.vectorspace import VectorSpace
 from pycommons.io.path import Path, directory_path
@@ -181,7 +181,6 @@ def run(base_dir: str, n_runs: int = 64) -> None:
         instances=keep_instances,
         setups=[cmaes_raw],
         n_runs=n_runs,
-        n_threads=Parallelism.PERFORMANCE,
         perform_warmup=False,
         perform_pre_warmup=False,
         on_completion=on_completion)
@@ -214,7 +213,6 @@ def run(base_dir: str, n_runs: int = 64) -> None:
             instances=instances,
             setups=setups,
             n_runs=runs,
-            n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
             perform_warmup=False,
             perform_pre_warmup=False,
             on_completion=on_completion)

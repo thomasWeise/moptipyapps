@@ -7,7 +7,7 @@ from moptipy.algorithms.so.fea1plus1 import FEA1plus1
 from moptipy.algorithms.so.rls import RLS
 from moptipy.api.encoding import Encoding
 from moptipy.api.execution import Execution
-from moptipy.api.experiment import Parallelism, run_experiment
+from moptipy.api.experiment import run_experiment
 from moptipy.api.objective import Objective
 from moptipy.operators.signed_permutations.op0_shuffle_and_flip import (
     Op0ShuffleAndFlip,
@@ -121,7 +121,6 @@ def run(base_dir: str, n_runs: int = 23) -> None:
                     cast(Callable, lambda ins, _e=encoding, _o=objective: fea(
                         ins, _e, _o))],
                 n_runs=n_runs,
-                n_threads=Parallelism.ACCURATE_TIME_MEASUREMENTS,
                 perform_warmup=True,
                 perform_pre_warmup=True)
 

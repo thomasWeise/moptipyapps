@@ -72,7 +72,7 @@ def test_surrogate_cmaes() -> None:
             model_equation = model_equation.py_func
         _rsm(model_equation)
 
-    objective.set_model = __set_model_unpacked
+    objective.set_model = __set_model_unpacked  # type: ignore
 
     space = instance.controller.parameter_space()
 
@@ -111,4 +111,4 @@ def test_surrogate_cmaes() -> None:
     assert model_counter[0] >= n_training_invocations + n_model_ode_steps
 
     mo._evaluate = old
-    objective.set_model = real_set_model
+    objective.set_model = real_set_model  # type: ignore
