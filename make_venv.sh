@@ -8,7 +8,7 @@ set -o errtrace  # trace ERR through 'time command' and other functions
 set -o nounset   # set -u : exit the script if you try to use an uninitialized variable
 set -o errexit   # set -e : exit the script if any statement returns a non-true return value
 
-echo "$(date +'%0Y-%0m-%0d %0R:%0S'): Welcome to the build script."
+echo "$(date +'%0Y-%0m-%0d %0R:%0S'): Welcome to the virtual environment creation script."
 
 currentDir="$(pwd)"
 echo "$(date +'%0Y-%0m-%0d %0R:%0S'): We are working in directory: '$currentDir'."
@@ -43,4 +43,4 @@ done
 echo "$(date +'%0Y-%0m-%0d %0R:%0S'): Printing the list of installed packages."
 "$PYTHON_INTERPRETER" -m pip freeze
 
-echo "$(date +'%0Y-%0m-%0d %0R:%0S'): We have finished the c process."
+echo "$(date +'%0Y-%0m-%0d %0R:%0S'): We have finished the virtual environment creation process."
