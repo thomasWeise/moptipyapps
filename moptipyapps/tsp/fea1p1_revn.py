@@ -33,7 +33,7 @@ from typing import Callable, Final, cast
 
 import numba  # type: ignore
 import numpy as np
-from moptipy.algorithms.so.fea1plus1 import log_h
+from moptipy.algorithms.so.ffa.ffa_h import log_h
 from moptipy.api.algorithm import Algorithm
 from moptipy.api.process import Process
 from moptipy.utils.logger import KeyValueLogSection
@@ -84,16 +84,21 @@ def rev_if_h_not_worse(i: int, j: int, n_cities: int, dist: np.ndarray,
 class TSPFEA1p1revn(Algorithm):
     """A (1+1) FEA using the reversal operator for the TSP."""
 
-    def __init__(self, instance: Instance) -> None:
+    def __init__(self, instance: Instance,
+                 do_log_h: bool = False) -> None:
         """
         Initialize the RLS algorithm for the TSP with reversal move.
 
         :param instance: the problem instance
+        :param do_log_h: shall we log the `h`-table?
         """
         super().__init__()
         if not isinstance(instance, Instance):
             raise type_error(instance, "instance", Instance)
+        #: the instance
         self.instance: Final[Instance] = instance
+        #: shall we log the `h`-table`?
+        self.do_log_h: Final[bool] = do_log_h
 
     def solve(self, process: Process) -> None:
         """
@@ -131,11 +136,11 @@ class TSPFEA1p1revn(Algorithm):
             y = rev_if_h_not_worse(i, j, n, instance, h, x, y)  # move
             register(x, y)  # register the objective value
 
-        # we log the frequency table at the very end of the run
-        if h[y] == 0:
-            h[y] = 1
-        log_h(process, range(len(h)),
-              cast(Callable[[int | float], int], h.__getitem__), str)
+        if self.do_log_h:
+            # we log the frequency table at the very end of the run
+            if h[y] == 0:
+                h[y] = 1
+            log_h(process, h, 0)
 
     def __str__(self):
         """
@@ -156,5 +161,6 @@ class TSPFEA1p1revn(Algorithm):
         :param logger: the logger for the parameters
         """
         super().log_parameters_to(logger)
+        logger.key_value("doLogH", self.do_log_h)
         with logger.scope(SCOPE_INSTANCE) as kv:
             self.instance.log_parameters_to(kv)

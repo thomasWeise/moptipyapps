@@ -3,7 +3,7 @@
 import argparse
 from typing import Callable, Final, cast
 
-from moptipy.algorithms.so.fea1plus1 import FEA1plus1
+from moptipy.algorithms.so.ffa.fea1plus1 import FEA1plus1
 from moptipy.algorithms.so.rls import RLS
 from moptipy.api.encoding import Encoding
 from moptipy.api.execution import Execution
