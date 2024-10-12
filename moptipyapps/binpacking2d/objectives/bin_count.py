@@ -15,48 +15,6 @@ from moptipyapps.binpacking2d.packing import IDX_BIN
 BIN_COUNT_NAME: Final[str] = "binCount"
 
 
-def ceil_div(a: int, b: int) -> int:
-    """
-    Compute a ceiling division.
-
-    This function is needed by sub-classes.
-
-    :param a: the number to be divided by `b`
-    :param b: the number dividing `a`
-    :return: the rounded-up result of the division
-
-    >>> ceil_div(1, 1)
-    1
-    >>> ceil_div(98, 98)
-    1
-    >>> ceil_div(98, 99)
-    1
-    >>> ceil_div(98, 97)
-    2
-    >>> ceil_div(3, 1)
-    3
-    >>> ceil_div(3, 2)
-    2
-    >>> ceil_div(3, 3)
-    1
-    >>> ceil_div(3, 4)
-    1
-    >>> ceil_div(4, 1)
-    4
-    >>> ceil_div(4, 2)
-    2
-    >>> ceil_div(4, 3)
-    2
-    >>> ceil_div(4, 4)
-    1
-    >>> ceil_div(4, 5)
-    1
-    >>> ceil_div(4, 23242398)
-    1
-    """
-    return -((-a) // b)
-
-
 class BinCount(Objective):
     """Compute the number of bins."""
 
@@ -119,7 +77,7 @@ lower_bound_bins`
 
     def upper_bound(self) -> int:
         """
-        Get the upper bound of the number of bins plus emptiness.
+        Get the upper bound of the number of bins.
 
         :return: the number of items in the instance, i.e.,
             :attr:`~moptipyapps.binpacking2d.instance.Instance.n_items`

@@ -25,4 +25,11 @@ The following objective functions are implemented:
   returns a combination of the number of bins occupied by a given packing and
   the smallest area under the skyline in the last bin, where the "skyline" is
   the upper border of the space occupied by objects.
+
+Important initial work on this code has been contributed by Mr. Rui ZHAO
+(赵睿), <zr1329142665@163.com> a Master's student at the Institute of Applied
+Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of
+Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University
+(合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of
+Prof. Dr. Thomas Weise (汤卫思教授).
 """

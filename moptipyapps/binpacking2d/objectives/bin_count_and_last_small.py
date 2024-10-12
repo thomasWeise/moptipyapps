@@ -23,9 +23,10 @@ from typing import Final
 
 import numba  # type: ignore
 import numpy as np
+from pycommons.math.int_math import ceil_div
 
 from moptipyapps.binpacking2d.instance import Instance
-from moptipyapps.binpacking2d.objectives.bin_count import BinCount, ceil_div
+from moptipyapps.binpacking2d.objectives.bin_count import BinCount
 from moptipyapps.binpacking2d.packing import (
     IDX_BIN,
     IDX_BOTTOM_Y,

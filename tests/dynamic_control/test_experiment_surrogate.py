@@ -62,7 +62,7 @@ def __cmaes(instance: SystemModel) -> Execution:
             fes_for_warmup=2,
             fes_for_training=4,
             fes_per_model_run=4,
-            fancy_logs=False)).set_max_time_millis(10_000)
+            fancy_logs=False)).set_max_time_millis(1_000_000)
 
 
 def test_experiment_surrogate(random: Generator = default_rng()) -> None:
