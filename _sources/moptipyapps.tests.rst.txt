@@ -1,0 +1,26 @@
+moptipyapps.tests package
+=========================
+
+.. automodule:: moptipyapps.tests
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Submodules
+----------
+
+moptipyapps.tests.on\_binpacking2d module
+-----------------------------------------
+
+.. automodule:: moptipyapps.tests.on_binpacking2d
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.tests.on\_tsp module
+--------------------------------
+
+.. automodule:: moptipyapps.tests.on_tsp
+   :members:
+   :undoc-members:
+   :show-inheritance:

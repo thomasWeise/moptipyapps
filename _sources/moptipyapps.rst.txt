@@ -1,0 +1,40 @@
+moptipyapps package
+===================
+
+.. automodule:: moptipyapps
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.binpacking2d
+   moptipyapps.dynamic_control
+   moptipyapps.order1d
+   moptipyapps.qap
+   moptipyapps.tests
+   moptipyapps.tsp
+   moptipyapps.ttp
+
+Submodules
+----------
+
+moptipyapps.shared module
+-------------------------
+
+.. automodule:: moptipyapps.shared
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.version module
+--------------------------
+
+.. automodule:: moptipyapps.version
+   :members:
+   :undoc-members:
+   :show-inheritance:
