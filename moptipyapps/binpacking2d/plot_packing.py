@@ -124,12 +124,12 @@ def plot_packing(packing: Packing | str,
     # we now plot the items one-by-one
     bin_counters: Counter[int] = Counter()
     for item_index in range(packing.instance.n_items):
-        item_id: int = packing[item_index, IDX_ID]
-        item_bin: int = packing[item_index, IDX_BIN]
-        x_left: int = packing[item_index, IDX_LEFT_X]
-        y_bottom: int = packing[item_index, IDX_BOTTOM_Y]
-        x_right: int = packing[item_index, IDX_RIGHT_X]
-        y_top: int = packing[item_index, IDX_TOP_Y]
+        item_id: int = int(packing[item_index, IDX_ID])
+        item_bin: int = int(packing[item_index, IDX_BIN])
+        x_left: int = int(packing[item_index, IDX_LEFT_X])
+        y_bottom: int = int(packing[item_index, IDX_BOTTOM_Y])
+        x_right: int = int(packing[item_index, IDX_RIGHT_X])
+        y_top: int = int(packing[item_index, IDX_TOP_Y])
         item_in_bin_index: int = bin_counters[item_bin] + 1
         bin_counters[item_bin] = item_in_bin_index
         width: int = x_right - x_left

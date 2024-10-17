@@ -216,13 +216,13 @@ class PackingSpace(Space):
         items: Final[Counter[int]] = Counter()
 
         for i in range(inst.n_items):
-            item_id: int = x[i, IDX_ID]
+            item_id: int = int(x[i, IDX_ID])
             if (item_id <= 0) or (item_id > inst.n_different_items):
                 raise ValueError(
                     f"Encountered invalid id={item_id} for object at index "
                     f"{i}, must be in 1..{inst.n_different_items}.")
 
-            bin_id: int = x[i, IDX_BIN]
+            bin_id: int = int(x[i, IDX_BIN])
             if (bin_id <= 0) or (bin_id > inst.n_items):
                 raise ValueError(
                     f"Encountered invalid bin-id={bin_id} for object at index"
@@ -230,10 +230,10 @@ class PackingSpace(Space):
             bins.add(bin_id)
 
             items[item_id] += 1
-            x_left: int = x[i, IDX_LEFT_X]
-            y_bottom: int = x[i, IDX_BOTTOM_Y]
-            x_right: int = x[i, IDX_RIGHT_X]
-            y_top: int = x[i, IDX_TOP_Y]
+            x_left: int = int(x[i, IDX_LEFT_X])
+            y_bottom: int = int(x[i, IDX_BOTTOM_Y])
+            x_right: int = int(x[i, IDX_RIGHT_X])
+            y_top: int = int(x[i, IDX_TOP_Y])
 
             if (x_left >= x_right) or (y_bottom >= y_top):
                 raise ValueError(
@@ -248,27 +248,27 @@ class PackingSpace(Space):
                     f"outside of the bin ({bin_width}, {bin_height}).")
 
             real_width: int = x_right - x_left
-            real_heigth: int = y_top - y_bottom
-            width: int = inst[item_id - 1, IDX_WIDTH]
-            height: int = inst[item_id - 1, IDX_HEIGHT]
+            real_height: int = y_top - y_bottom
+            width: int = int(inst[item_id - 1, IDX_WIDTH])
+            height: int = int(inst[item_id - 1, IDX_HEIGHT])
 
-            if ((real_width != width) or (real_heigth != height)) \
-                    and ((real_width != height) and (real_heigth != width)):
+            if ((real_width != width) or (real_height != height)) \
+                    and ((real_width != height) and (real_height != width)):
                 raise ValueError(
                     f"Item coordinates ({x_left}, {y_bottom}, {x_right}, "
                     f"{y_top}) mean width={real_width} and height="
-                    f"{real_heigth} for item of id {item_id} at index {i}, "
+                    f"{real_height} for item of id {item_id} at index {i}, "
                     f"which should have width={width} and height={height}.")
 
-            for j in range(i):
-                if x[j, IDX_BIN] != bin_id:
+            for j in range(inst.n_items):
+                if (int(x[j, IDX_BIN]) != bin_id) or (i == j):
                     continue
-                x_left_2: int = x[j, IDX_LEFT_X]
-                y_bottom_2: int = x[j, IDX_BOTTOM_Y]
-                x_right_2: int = x[j, IDX_RIGHT_X]
-                y_top_2: int = x[j, IDX_TOP_Y]
+                x_left_2: int = int(x[j, IDX_LEFT_X])
+                y_bottom_2: int = int(x[j, IDX_BOTTOM_Y])
+                x_right_2: int = int(x[j, IDX_RIGHT_X])
+                y_top_2: int = int(x[j, IDX_TOP_Y])
                 if (x_left_2 < x_right) and (x_right_2 > x_left) \
-                        and (y_bottom_2 > y_top) and (y_top_2 < y_bottom):
+                        and (y_bottom_2 < y_top) and (y_top_2 > y_bottom):
                     raise ValueError(
                         f"Item {x[j, IDX_ID]} in bin {bin_id} and at index "
                         f"{j} is ({x_left_2}, {y_bottom_2}, {x_right_2}, "
@@ -277,7 +277,7 @@ class PackingSpace(Space):
                         f" {y_bottom}, {x_right}, {y_top}).")
 
         for item_id, count in items.items():
-            should: int = inst[item_id - 1, IDX_REPETITION]
+            should: int = int(inst[item_id - 1, IDX_REPETITION])
             if should != count:
                 raise ValueError(
                     f"Item {item_id} should occur {should} times, but occurs"

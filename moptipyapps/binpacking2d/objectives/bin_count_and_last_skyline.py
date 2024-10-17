@@ -2,7 +2,7 @@
 An objective function indirectly minimizing the number of bins in packings.
 
 This objective function minimizes the number of bins and maximizes the
-"useable" space in the last bin.
+"usable" space in the last bin.
 
 Which space is actually useful for our encodings? Let's say we have filled
 a bin to a certain degree and somewhere there is a "hole" in the filled area,

@@ -40,7 +40,7 @@ Initial work on this code has been contributed by Mr. Rui ZHAO (赵睿),
 <zr1329142665@163.com> a Master's student at the Institute of Applied
 Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of
 Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University
-(合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of
+(合肥大学) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of
 Prof. Dr. Thomas Weise (汤卫思教授).
 
 1. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele Monaci.
@@ -594,7 +594,7 @@ class Instance(Component, np.ndarray):
             repetitions = check_int_range(int(repetitions), "repetitions",
                                           1, 100_000_000)
             item_area += (width * height * repetitions)
-            max_size = max(width, height)
+            max_size = max(max_size, width, height)
             if (width > min_dim) and (height > min_dim):
                 raise ValueError(
                     f"object with width={width} and height={height} does "
@@ -604,8 +604,8 @@ class Instance(Component, np.ndarray):
 
         obj: Final[Instance] = super().__new__(
             cls, use_shape, int_range_to_dtype(
-                min_value=0, max_value=max(max_dim + max_size, n_items),
-                force_signed=True))
+                min_value=0, max_value=max(
+                    max_dim + max_size + 1, n_items + 1), force_signed=True))
         for i in range(n_different_items):
             obj[i, :] = matrix[i]
 

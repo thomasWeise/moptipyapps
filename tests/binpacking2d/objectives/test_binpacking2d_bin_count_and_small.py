@@ -1,4 +1,4 @@
-"""Test the bin-count-and--small objective."""
+"""Test the bin-count-and-small objective."""
 import numpy.random as rnd
 from moptipy.operators.signed_permutations.op0_shuffle_and_flip import (
     Op0ShuffleAndFlip,

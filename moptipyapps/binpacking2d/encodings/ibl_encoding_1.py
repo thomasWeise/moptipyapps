@@ -54,7 +54,7 @@ This procedure has originally been developed and implemented by Mr. Rui ZHAO
 (赵睿), <zr1329142665@163.com> a Master's student at the Institute of Applied
 Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of
 Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University
-(合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of
+(合肥大学) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of
 Prof. Dr. Thomas Weise (汤卫思教授).
 
 1. Dequan Liu and Hongfei Teng. An Improved BL-Algorithm for Genetic Algorithm
