@@ -19,7 +19,7 @@ ill-advised to do so on a normal PC (at the time of this writing).
 
 The TSPLib contains many instances of the symmetric TSP, where the distance
 `A[i, j]` from city `i` to city `j` is the same as the distance `A[j, i]` from
-`j` to `i`. Here, we provide 110 of them as resource. The cities of some of
+`j` to `i`. Here, we provide 111 of them as resource. The cities of some of
 these instances are points in the Euclidean plain and the distances are the
 (approximate) Euclidean distances. Others use geographical coordinates
 (longitude/latitude), and yet others are provides as distances matrices
@@ -83,12 +83,56 @@ i.e., as permutations of the numbers `0` to `n_cities-1`. The optimal
 solutions corresponding to the instances provides as resources can be obtained
 via :mod:`~moptipyapps.tsp.known_optima`.
 
+>>> inst = Instance.from_resource("si175")
+>>> print(inst.n_cities)
+175
+>>> inst[0, 1]
+113
+>>> inst[173, 174]
+337
+>>> inst[1, 174]
+384
+>>> inst[2, 174]
+384
+>>> inst[2, 3]
+248
+>>> inst[3, 5]
+335
+>>> inst[4, 6]
+134
+
 The original data of TSPLib can be found at
 <http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/>. Before doing
 anything with these data directly, you should make sure to read the FAQ
 <http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/TSPFAQ.html> and the
 documentation
 <http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf>.
+
+On 2024-10-18, we added a small eleven city instance based on the car travel
+distances in km between the Chinese cities
+Shanghai (上海), Beijing (北京), Nanjing (南京), Hefei (合肥),
+Harbin (哈尔滨), Kunming (昆明), Wuhan (武汉),
+Xi'an (西安), Chongqing (重庆), Changsha (长沙),
+and Hong Kong (香港), determined using BaiDu Maps on 2024-10-18.
+The optimal solution for this instance has length 14441 (km) and visits the
+cities in the following order: Shanghai (上海),
+Nanjing (南京), Hefei (合肥), Wuhan (武汉), Changsha (长沙),
+Hong Kong (香港), Kunming (昆明), Chongqing (重庆),
+Xi'an (西安), Beijing (北京), Harbin (哈尔滨).
+This instance can be used to validate and santity-test algorithms, as its
+solution can easily be determined using exhaustive enumeration.
+
+>>> inst = Instance.from_resource("cn11")
+>>> inst[0, 0]
+0
+>>> inst[1, 2]
+1007
+>>> inst[1, 3]
+1017
+>>> inst[9, 10]
+830
+>>> inst[5, 6]
+1560
 
 Important initial work on this code has been contributed by Mr. Tianyu LIANG
 (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of
@@ -154,49 +198,50 @@ _LOWER_BOUNDS: dict[str, int] = {
     "a280": 2579, "ali535": 202339, "att48": 10628, "att532": 27686,
     "bayg29": 1610, "bays29": 2020, "berlin52": 7542, "bier127": 118282,
     "br17": 39, "brazil58": 25395, "brd14051": 469385, "brg180": 1950,
-    "burma14": 3323, "ch130": 6110, "ch150": 6528, "d1291": 50801,
-    "d15112": 1573084, "d1655": 62128, "d18512": 645238, "d198": 15780,
-    "d2103": 80450, "d493": 35002, "d657": 48912, "dantzig42": 699,
-    "dsj1000": 18660188, "eil101": 629, "eil51": 426, "eil76": 538,
-    "fl1400": 20127, "fl1577": 22249, "fl3795": 28772, "fl417": 11861,
-    "fnl4461": 182566, "fri26": 937, "ft53": 6905, "ft70": 38673,
-    "ftv100": 1788, "ftv110": 1958, "ftv120": 2166, "ftv130": 2307,
-    "ftv140": 2420, "ftv150": 2611, "ftv160": 2683, "ftv170": 2755,
-    "ftv33": 1286, "ftv35": 1473, "ftv38": 1530, "ftv44": 1613, "ftv47": 1776,
-    "ftv55": 1608, "ftv64": 1839, "ftv70": 1950, "ftv90": 1579,
-    "gil262": 2378, "gr120": 6942, "gr137": 69853, "gr17": 2085,
-    "gr202": 40160, "gr21": 2707, "gr229": 134602, "gr24": 1272,
-    "gr431": 171414, "gr48": 5046, "gr666": 294358, "gr96": 55209,
-    "hk48": 11461, "kro124p": 36230, "kroA100": 21282, "kroA150": 26524,
-    "kroA200": 29368, "kroB100": 22141, "kroB150": 26130, "kroB200": 29437,
-    "kroC100": 20749, "kroD100": 21294, "kroE100": 22068, "lin105": 14379,
-    "lin318": 42029, "nrw1379": 56638, "p43": 5620, "p654": 34643,
-    "pa561": 2763, "pcb1173": 56892, "pcb3038": 137694, "pcb442": 50778,
-    "pla33810": 66048945, "pla7397": 23260728, "pla85900": 142382641,
-    "pr1002": 259045, "pr107": 44303, "pr124": 59030, "pr136": 96772,
-    "pr144": 58537, "pr152": 73682, "pr226": 80369, "pr2392": 378032,
-    "pr264": 49135, "pr299": 48191, "pr439": 107217, "pr76": 108159,
-    "rat195": 2323, "rat575": 6773, "rat783": 8806, "rat99": 1211,
-    "rbg323": 1326, "rbg358": 1163, "rbg403": 2465, "rbg443": 2720,
-    "rd100": 7910, "rd400": 15281, "rl11849": 923288, "rl1304": 252948,
-    "rl1323": 270199, "rl1889": 316536, "rl5915": 565530, "rl5934": 556045,
-    "ry48p": 14422, "si1032": 92650, "si175": 21407, "si535": 48450,
-    "st70": 675, "swiss42": 1273, "ts225": 126643, "tsp225": 3916,
-    "u1060": 224094, "u1432": 152970, "u159": 42080, "u1817": 57201,
-    "u2152": 64253, "u2319": 234256, "u574": 36905, "u724": 41910,
-    "ulysses16": 6859, "ulysses22": 7013, "usa13509": 19982859,
-    "vm1084": 239297, "vm1748": 336556}
+    "burma14": 3323, "ch130": 6110, "ch150": 6528, "cn11": 14441,
+    "d1291": 50801, "d15112": 1573084, "d1655": 62128, "d18512": 645238,
+    "d198": 15780, "d2103": 80450, "d493": 35002, "d657": 48912,
+    "dantzig42": 699, "dsj1000": 18660188, "eil101": 629, "eil51": 426,
+    "eil76": 538, "fl1400": 20127, "fl1577": 22249, "fl3795": 28772,
+    "fl417": 11861, "fnl4461": 182566, "fri26": 937, "ft53": 6905,
+    "ft70": 38673, "ftv100": 1788, "ftv110": 1958, "ftv120": 2166,
+    "ftv130": 2307, "ftv140": 2420, "ftv150": 2611, "ftv160": 2683,
+    "ftv170": 2755, "ftv33": 1286, "ftv35": 1473, "ftv38": 1530,
+    "ftv44": 1613, "ftv47": 1776, "ftv55": 1608, "ftv64": 1839,
+    "ftv70": 1950, "ftv90": 1579, "gil262": 2378, "gr120": 6942,
+    "gr137": 69853, "gr17": 2085, "gr202": 40160, "gr21": 2707,
+    "gr229": 134602, "gr24": 1272, "gr431": 171414, "gr48": 5046,
+    "gr666": 294358, "gr96": 55209, "hk48": 11461, "kro124p": 36230,
+    "kroA100": 21282, "kroA150": 26524, "kroA200": 29368, "kroB100": 22141,
+    "kroB150": 26130, "kroB200": 29437, "kroC100": 20749, "kroD100": 21294,
+    "kroE100": 22068, "lin105": 14379, "lin318": 42029, "nrw1379": 56638,
+    "p43": 5620, "p654": 34643, "pa561": 2763, "pcb1173": 56892,
+    "pcb3038": 137694, "pcb442": 50778, "pla33810": 66048945,
+    "pla7397": 23260728, "pla85900": 142382641, "pr1002": 259045,
+    "pr107": 44303, "pr124": 59030, "pr136": 96772, "pr144": 58537,
+    "pr152": 73682, "pr226": 80369, "pr2392": 378032, "pr264": 49135,
+    "pr299": 48191, "pr439": 107217, "pr76": 108159, "rat195": 2323,
+    "rat575": 6773, "rat783": 8806, "rat99": 1211, "rbg323": 1326,
+    "rbg358": 1163, "rbg403": 2465, "rbg443": 2720, "rd100": 7910,
+    "rd400": 15281, "rl11849": 923288, "rl1304": 252948, "rl1323": 270199,
+    "rl1889": 316536, "rl5915": 565530, "rl5934": 556045, "ry48p": 14422,
+    "si1032": 92650, "si175": 21407, "si535": 48450, "st70": 675,
+    "swiss42": 1273, "ts225": 126643, "tsp225": 3916, "u1060": 224094,
+    "u1432": 152970, "u159": 42080, "u1817": 57201, "u2152": 64253,
+    "u2319": 234256, "u574": 36905, "u724": 41910, "ulysses16": 6859,
+    "ulysses22": 7013, "usa13509": 19982859, "vm1084": 239297,
+    "vm1748": 336556}
 
 #: the TSPLib instances
 _SYMMETRIC_INSTANCES: Final[tuple[str, ...]] = (
     "a280", "ali535", "att48", "att532", "bayg29", "bays29", "berlin52",
-    "bier127", "brazil58", "brg180", "burma14", "ch130", "ch150", "d1291",
-    "d1655", "d198", "d493", "d657", "dantzig42", "eil101", "eil51", "eil76",
-    "fl1400", "fl1577", "fl417", "fri26", "gil262", "gr120", "gr137", "gr17",
-    "gr202", "gr21", "gr229", "gr24", "gr431", "gr48", "gr666", "gr96",
-    "hk48", "kroA100", "kroA150", "kroA200", "kroB100", "kroB150", "kroB200",
-    "kroC100", "kroD100", "kroE100", "lin105", "lin318", "nrw1379", "p654",
-    "pcb1173", "pcb442", "pr1002", "pr107", "pr124", "pr136", "pr144",
+    "bier127", "brazil58", "brg180", "burma14", "ch130", "ch150", "cn11",
+    "d1291", "d1655", "d198", "d493", "d657", "dantzig42", "eil101", "eil51",
+    "eil76", "fl1400", "fl1577", "fl417", "fri26", "gil262", "gr120", "gr137",
+    "gr17", "gr202", "gr21", "gr229", "gr24", "gr431", "gr48", "gr666",
+    "gr96", "hk48", "kroA100", "kroA150", "kroA200", "kroB100", "kroB150",
+    "kroB200", "kroC100", "kroD100", "kroE100", "lin105", "lin318", "nrw1379",
+    "p654", "pcb1173", "pcb442", "pr1002", "pr107", "pr124", "pr136", "pr144",
     "pr152", "pr226", "pr264", "pr299", "pr439", "pr76", "rat195", "rat575",
     "rat783", "rat99", "rd100", "rd400", "rl1304", "rl1323", "rl1889",
     "si1032", "si175", "si535", "st70", "swiss42", "ts225", "tsp225", "u1060",
@@ -589,7 +634,7 @@ def _matrix_from_edge_weights(
                 i = i + 1
                 if i >= n_cities:
                     j = j + 1
-                    i = 0
+                    i = j
             return res
     raise ValueError(
         f"unsupported combination of {_KEY_EDGE_WEIGHT_TYPE}="
@@ -972,10 +1017,10 @@ symmetric: T@dtype: i@END_I'
 
         >>> a = len(Instance.list_resources(True, True))
         >>> print(a)
-        110
+        111
         >>> b = len(Instance.list_resources(True, False))
         >>> print(b)
-        91
+        92
         >>> c = len(Instance.list_resources(False, True))
         >>> print(c)
         19
