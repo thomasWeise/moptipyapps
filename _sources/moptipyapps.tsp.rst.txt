@@ -1,0 +1,58 @@
+moptipyapps.tsp package
+=======================
+
+.. automodule:: moptipyapps.tsp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.tsp.tsplib
+
+Submodules
+----------
+
+moptipyapps.tsp.ea1p1\_revn module
+----------------------------------
+
+.. automodule:: moptipyapps.tsp.ea1p1_revn
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.tsp.fea1p1\_revn module
+-----------------------------------
+
+.. automodule:: moptipyapps.tsp.fea1p1_revn
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.tsp.instance module
+-------------------------------
+
+.. automodule:: moptipyapps.tsp.instance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.tsp.known\_optima module
+------------------------------------
+
+.. automodule:: moptipyapps.tsp.known_optima
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.tsp.tour\_length module
+-----------------------------------
+
+.. automodule:: moptipyapps.tsp.tour_length
+   :members:
+   :undoc-members:
+   :show-inheritance:

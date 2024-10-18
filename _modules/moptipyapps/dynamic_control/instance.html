@@ -1,0 +1,133 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.instance — moptipyapps 0.8.56 documentation</title><link href="../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=19b2517f"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/instance.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.56 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.instance</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.instance</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An instance of the dynamic control synthesis problem.</span>
+
+<span class=sd>An instance of the dynamic control synthesis problem is comprised of two</span>
+<span class=sd>components: a :mod:`~moptipyapps.dynamic_control.system` of differential</span>
+<span class=sd>equations governing how the state of a system changes over time and a</span>
+<span class=sd>:mod:`~moptipyapps.dynamic_control.controller` that uses the current system</span>
+<span class=sd>state as input and computes a controller value as output that influences the</span>
+<span class=sd>state change. Notice that the controller here is a parametric function. The</span>
+<span class=sd>goal of the dynamic system control is to find the right parameterization of</span>
+<span class=sd>the controller such that an :mod:`~moptipyapps.dynamic_control.objective` is</span>
+<span class=sd>minimized. The objective here usually has the goal to bring the dynamic system</span>
+<span class=sd>into a stable state while using as little controller "energy" as possible.</span>
+
+<span class=sd>An instance of the simultaneous control and model synthesis problem is an</span>
+<span class=sd>instance of the class :class:`~moptipyapps.dynamic_control.system_\</span>
+<span class=sd>model.SystemModel`, which is a subclass of :class:`~moptipyapps.\</span>
+<span class=sd>dynamic_control.instance.Instance`. It also adds a controller blueprint for</span>
+<span class=sd>modelling the systems response (state differential) based on the system state</span>
+<span class=sd>and controller output.</span>
+
+<span class=sd>The starting point of the work here were conversations with Prof. Dr. Bernd</span>
+<span class=sd>NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute of Technology in</span>
+<span class=sd>Shenzhen, China (哈尔滨工业大学(深圳)).</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.component</span> <span class=kn>import</span> <span class=n>Component</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.logger</span> <span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.strings</span> <span class=kn>import</span> <span class=n>sanitize_name</span>
+<span class=kn>from</span> <span class=nn>pycommons.io.path</span> <span class=kn>import</span> <span class=n>Path</span>
+<span class=kn>from</span> <span class=nn>pycommons.types</span> <span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.controller</span> <span class=kn>import</span> <span class=n>Controller</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.system</span> <span class=kn>import</span> <span class=n>System</span>
+
+
+<div class=viewcode-block id=Instance>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.instance.Instance>[docs]</a>
+<span class=k>class</span> <span class=nc>Instance</span><span class=p>(</span><span class=n>Component</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An instance of the dynamic control problem."""</span>
+
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>system</span><span class=p>:</span> <span class=n>System</span><span class=p>,</span> <span class=n>controller</span><span class=p>:</span> <span class=n>Controller</span><span class=p>,</span>
+                 <span class=n>name_base</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create an instance of the dynamic control problem.</span>
+
+<span class=sd>        :param system: the system of equations governing the dynamic system</span>
+<span class=sd>        :param controller: the controller applied to the system</span>
+<span class=sd>        :param name_base: the name base</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>system</span><span class=p>,</span> <span class=n>System</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>system</span><span class=p>,</span> <span class=s2>"system"</span><span class=p>,</span> <span class=n>System</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>controller</span><span class=p>,</span> <span class=n>Controller</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>controller</span><span class=p>,</span> <span class=s2>"controller"</span><span class=p>,</span> <span class=n>Controller</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>controller</span><span class=o>.</span><span class=n>state_dims</span> <span class=o>!=</span> <span class=n>system</span><span class=o>.</span><span class=n>state_dims</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"controller.state_dims=</span><span class=si>{</span><span class=n>controller</span><span class=o>.</span><span class=n>state_dims</span><span class=si>}</span><span class=s2>, but "</span>
+                <span class=sa>f</span><span class=s2>"system.state_dims=</span><span class=si>{</span><span class=n>system</span><span class=o>.</span><span class=n>state_dims</span><span class=si>}</span><span class=s2> for controller "</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>controller</span><span class=p>)</span><span class=si>!r}</span><span class=s2> and system </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>system</span><span class=p>)</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>controller</span><span class=o>.</span><span class=n>control_dims</span> <span class=o>!=</span> <span class=n>system</span><span class=o>.</span><span class=n>control_dims</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"controller.control_dims=</span><span class=si>{</span><span class=n>controller</span><span class=o>.</span><span class=n>control_dims</span><span class=si>}</span><span class=s2>, but "</span>
+                <span class=sa>f</span><span class=s2>"system.control_dims=</span><span class=si>{</span><span class=n>system</span><span class=o>.</span><span class=n>control_dims</span><span class=si>}</span><span class=s2> for controller "</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>controller</span><span class=p>)</span><span class=si>!r}</span><span class=s2> and system </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>system</span><span class=p>)</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=c1>#: the system governing the dynamic system</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>system</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>System</span><span class=p>]</span> <span class=o>=</span> <span class=n>system</span>
+        <span class=c1>#: the controller applied to the system</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>controller</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Controller</span><span class=p>]</span> <span class=o>=</span> <span class=n>controller</span>
+
+        <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>system</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>controller</span><span class=si>}</span><span class=s2>"</span>
+        <span class=k>if</span> <span class=n>name_base</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name_base</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>name_base</span><span class=p>,</span> <span class=s2>"name_base"</span><span class=p>,</span> <span class=p>(</span><span class=nb>str</span><span class=p>,</span> <span class=kc>None</span><span class=p>))</span>
+            <span class=n>nn</span> <span class=o>=</span> <span class=n>sanitize_name</span><span class=p>(</span><span class=n>name_base</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>nn</span> <span class=o>!=</span> <span class=n>name_base</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"sanitized name base </span><span class=si>{</span><span class=n>nn</span><span class=si>!r}</span><span class=s2> different "</span>
+                                 <span class=sa>f</span><span class=s2>"from original </span><span class=si>{</span><span class=n>name_base</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>name</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>name_base</span><span class=si>}</span><span class=s2>"</span>
+        <span class=c1>#: the name of this instance</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>name</span>
+
+    <span class=k>def</span> <span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this instance.</span>
+
+<span class=sd>        :return: a combination of the equation name and the controller name</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>name</span>
+
+<div class=viewcode-block id=Instance.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.instance.Instance.log_parameters_to>[docs]</a>
+    <span class=k>def</span> <span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"sys"</span><span class=p>)</span> <span class=k>as</span> <span class=n>scope</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>scope</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"ctrl"</span><span class=p>)</span> <span class=k>as</span> <span class=n>scope</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>scope</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.describe_parameterization>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.instance.Instance.describe_parameterization>[docs]</a>
+    <span class=k>def</span> <span class=nf>describe_parameterization</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>title</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>parameters</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>base_name</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+            <span class=n>dest_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Path</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Describe the performance of a given system of system.</span>
+
+<span class=sd>        :param title: the optional title</span>
+<span class=sd>        :param parameters: the controller parameters</span>
+<span class=sd>        :param base_name: the base name of the file to produce</span>
+<span class=sd>        :param dest_dir: the destination directory</span>
+<span class=sd>        :returns: the paths of the generated files</span>
+<span class=sd>        """</span>
+        <span class=n>the_title</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>name</span>
+        <span class=k>if</span> <span class=n>title</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>the_title</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>the_title</span><span class=si>}</span><span class=se>\n</span><span class=si>{</span><span class=n>title</span><span class=si>}</span><span class=s2>"</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>describe_system</span><span class=p>(</span>
+            <span class=n>the_title</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>controller</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span>
+            <span class=n>base_name</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.56 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.instance</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>
