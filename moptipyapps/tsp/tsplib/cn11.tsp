@@ -1,6 +1,6 @@
 NAME: cn11
 TYPE: TSP
-COMMENT: The travel distances by car in km between the eleven Chinese cities Shanghai (上海), Beijing (北京), Nanjing (南京), Hefei (合肥), Harbin (哈尔滨), Kunming (昆明), Wuhan (武汉), Xi'an (西安), Chongqing (重庆), Changsha (长沙), and Hong Kong (香港), determined using BaiDu Maps on 2024-10-18.
+COMMENT: The travel distances by car in km between the eleven Chinese cities Shanghai (上海), Beijing (北京), Nanjing (南京), Hefei (合肥), Harbin (哈尔滨), Kunming (昆明), Wuhan (武汉), Xi'an (西安), Chongqing (重庆), Changsha (长沙), and Hong Kong (香港), determined using BaiDu Maps on 2024-10-18. The optimal tour length is 9547.
 DIMENSION: 11
 EDGE_WEIGHT_TYPE: EXPLICIT
 EDGE_WEIGHT_FORMAT: UPPER_DIAG_ROW

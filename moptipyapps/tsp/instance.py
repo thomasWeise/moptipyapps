@@ -114,7 +114,7 @@ Shanghai (上海), Beijing (北京), Nanjing (南京), Hefei (合肥),
 Harbin (哈尔滨), Kunming (昆明), Wuhan (武汉),
 Xi'an (西安), Chongqing (重庆), Changsha (长沙),
 and Hong Kong (香港), determined using BaiDu Maps on 2024-10-18.
-The optimal solution for this instance has length 14441 (km) and visits the
+The optimal solution for this instance has length 9547 (km) and visits the
 cities in the following order: Shanghai (上海),
 Nanjing (南京), Hefei (合肥), Wuhan (武汉), Changsha (长沙),
 Hong Kong (香港), Kunming (昆明), Chongqing (重庆),
@@ -198,7 +198,7 @@ _LOWER_BOUNDS: dict[str, int] = {
     "a280": 2579, "ali535": 202339, "att48": 10628, "att532": 27686,
     "bayg29": 1610, "bays29": 2020, "berlin52": 7542, "bier127": 118282,
     "br17": 39, "brazil58": 25395, "brd14051": 469385, "brg180": 1950,
-    "burma14": 3323, "ch130": 6110, "ch150": 6528, "cn11": 14441,
+    "burma14": 3323, "ch130": 6110, "ch150": 6528, "cn11": 9547,
     "d1291": 50801, "d15112": 1573084, "d1655": 62128, "d18512": 645238,
     "d198": 15780, "d2103": 80450, "d493": 35002, "d657": 48912,
     "dantzig42": 699, "dsj1000": 18660188, "eil101": 629, "eil51": 426,

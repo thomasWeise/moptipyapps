@@ -36,10 +36,10 @@ from moptipyapps.tsp.tsplib import open_resource_stream
 #: the set of known optimal tours
 _TOURS: Final[tuple[str, ...]] = (
     "a280", "att48", "bayg29", "bays29", "berlin52", "brg180", "ch130",
-    "ch150", "eil101", "eil51", "eil76", "fri26", "gr120", "gr202", "gr24",
-    "gr48", "gr666", "gr96", "kroA100", "kroC100", "kroD100", "lin105",
-    "pcb442", "pr1002", "pr76", "rd100", "st70", "tsp225", "ulysses16",
-    "ulysses22")
+    "ch150", "cn11", "eil101", "eil51", "eil76", "fri26", "gr120", "gr202",
+    "gr24", "gr48", "gr666", "gr96", "kroA100", "kroC100", "kroD100",
+    "lin105", "pcb442", "pr1002", "pr76", "rd100", "st70", "tsp225",
+    "ulysses16", "ulysses22")
 
 
 def _from_stream(stream: TextIO) -> np.ndarray:
@@ -102,6 +102,9 @@ def opt_tour_from_resource(name: str) -> np.ndarray:
     >>> np.array2string(opt_tour_from_resource("ulysses16"))
     '[ 0 13 12 11  6  5 14  4 10  8  9 15  2  1  3  7]'
 
+    >>> np.array2string(opt_tour_from_resource("cn11"))
+    '[ 0  2  3  6  9 10  5  8  7  1  4]'
+
     :param name: the name string
     :return: the optimal tour
     """
@@ -117,8 +120,8 @@ def list_resource_tours() -> tuple[str, ...]:
 
     >>> list_resource_tours()
     ('a280', 'att48', 'bayg29', 'bays29', 'berlin52', 'brg180', 'ch130', \
-'ch150', 'eil101', 'eil51', 'eil76', 'fri26', 'gr120', 'gr202', 'gr24', \
-'gr48', 'gr666', 'gr96', 'kroA100', 'kroC100', 'kroD100', 'lin105', \
+'ch150', 'cn11', 'eil101', 'eil51', 'eil76', 'fri26', 'gr120', 'gr202', \
+'gr24', 'gr48', 'gr666', 'gr96', 'kroA100', 'kroC100', 'kroD100', 'lin105', \
 'pcb442', 'pr1002', 'pr76', 'rd100', 'st70', 'tsp225', 'ulysses16', \
 'ulysses22')
 
