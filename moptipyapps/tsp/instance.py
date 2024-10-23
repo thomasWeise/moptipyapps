@@ -122,6 +122,25 @@ Xi'an (西安), Beijing (北京), Harbin (哈尔滨).
 This instance can be used to validate and santity-test algorithms, as its
 solution can easily be determined using exhaustive enumeration.
 
+Interestingly, it holds that the calculated travel distance from
+Harbin (哈尔滨) to Kunming (昆明) is longer than the travel distance
+from Harbin (哈尔滨) to Xi'an (西安) and then from
+Xi'an (西安) to Kunming (昆明).
+
+- Harbin (哈尔滨) - Kunming (昆明) = 3781 km
+- Harbin (哈尔滨) - Xi'an (西安) = 2291 km
+- Xi'an (西安) - Kunming (昆明) = 1483 km
+- 2291 km + 1483 km = 3774 km, which is less than 3781 km
+
+This may be because BaiduMaps ranked the paths by travel time and not travel
+distance, or by any other strange effect I cannot account for. Maybe it is
+related to which lane of a road one would naturally drive on or lengths of
+intersections depending on the direction one is coming from.
+Either way, this shows that this simple instance `cn11` may already have
+interesting properties. It violates the triangle equation and it is
+non-Euclidean. It is also not based on Geo-coordinates, but on actual street
+distances and times.
+
 >>> inst = Instance.from_resource("cn11")
 >>> inst[0, 0]
 0
