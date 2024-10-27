@@ -1,4 +1,5 @@
 NAME : cn11.opt.tour
+COMMENT : This is the optimal solution for the cn11 instance. It has length 9547 km and visits the cities in the following order: Shanghai (上海), Nanjing (南京), Hefei (合肥), Wuhan (武汉), Changsha (长沙), Hong Kong (香港), Kunming (昆明), Chongqing (重庆), Xi'an (西安), Beijing (北京), Harbin (哈尔滨). Interestingly, it holds that the calculated travel distance from Harbin (哈尔滨) to Kunming (昆明) is longer than the travel distance from Harbin (哈尔滨) to Xi'an (西安) and then from Xi'an (西安) to Kunming (昆明).
 TYPE : TOUR
 DIMENSION : 11
 TOUR_SECTION

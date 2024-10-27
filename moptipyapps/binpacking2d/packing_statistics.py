@@ -22,6 +22,7 @@ from moptipy.utils.strings import (
     num_to_str,
 )
 from pycommons.ds.immutable_map import immutable_mapping
+from pycommons.ds.sequences import reiterable
 from pycommons.io.console import logger
 from pycommons.io.csv import (
     SCOPE_SEPARATOR,
@@ -37,7 +38,7 @@ from pycommons.math.sample_statistics import CsvWriter as SsCsvWriter
 from pycommons.math.sample_statistics import SampleStatistics
 from pycommons.math.sample_statistics import from_samples as ss_from_samples
 from pycommons.strings.string_conv import str_to_num
-from pycommons.types import check_int_range, reiterable, type_error
+from pycommons.types import check_int_range, type_error
 
 from moptipyapps.binpacking2d.objectives.bin_count import BIN_COUNT_NAME
 from moptipyapps.binpacking2d.packing_result import (

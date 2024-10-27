@@ -23,6 +23,7 @@ from moptipy.evaluation.end_results import EndResult
 from moptipy.evaluation.end_results import from_logs as er_from_logs
 from moptipy.evaluation.log_parser import LogParser
 from pycommons.ds.immutable_map import immutable_mapping
+from pycommons.ds.sequences import reiterable
 from pycommons.io.console import logger
 from pycommons.io.csv import (
     SCOPE_SEPARATOR,
@@ -37,7 +38,7 @@ from pycommons.strings.string_conv import (
     num_to_str,
     str_to_num,
 )
-from pycommons.types import check_int_range, reiterable, type_error
+from pycommons.types import check_int_range, type_error
 
 from moptipyapps.binpacking2d.instance import (
     Instance,
