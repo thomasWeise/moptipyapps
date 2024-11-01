@@ -43,6 +43,22 @@ def cmaes(problem: Problem) -> Execution:
             .set_log_improvements(True))
 
 
+#: the instances to use as blueprints
+__USE_INSTANCES: Final[tuple[str, ...]] = (
+    "beng01", "beng02", "beng03", "beng04", "beng05", "beng06", "beng07",
+    "beng08", "beng09", "beng10", "cl01_020_01", "cl01_040_01", "cl01_060_01",
+    "cl01_080_01", "cl01_100_01", "cl02_020_01", "cl02_040_01", "cl02_060_01",
+    "cl02_080_01", "cl02_100_01", "cl03_020_01", "cl03_040_01", "cl03_060_01",
+    "cl03_080_01", "cl03_100_01", "cl04_020_01", "cl04_040_01", "cl04_060_01",
+    "cl04_080_01", "cl04_100_01", "cl05_020_01", "cl05_040_01", "cl05_060_01",
+    "cl05_080_01", "cl05_100_01", "cl06_020_01", "cl06_040_01", "cl06_060_01",
+    "cl06_080_01", "cl06_100_01", "cl07_020_01", "cl07_040_01", "cl07_060_01",
+    "cl07_080_01", "cl07_100_01", "cl08_020_01", "cl08_040_01", "cl08_060_01",
+    "cl08_080_01", "cl08_100_01", "cl09_020_01", "cl09_040_01", "cl09_060_01",
+    "cl09_080_01", "cl09_100_01", "cl10_020_01", "cl10_040_01", "cl10_060_01",
+    "cl10_080_01", "cl10_100_01", "cl10_100_10")
+
+
 def run(base_dir: str) -> None:
     """
     Run the experiment.
@@ -52,12 +68,9 @@ def run(base_dir: str) -> None:
     use_dir: Final[Path] = Path(base_dir)
     use_dir.ensure_dir_exists()
 
-    instances: list[str] = [
-        inst for inst in Instance.list_resources()
-        if inst.startswith("b")]
     inst_creators: list[Callable[[], Instance]] = [cast(
         Callable[[], Instance], lambda __s=_s, __t=_t: Problem(__s, __t))
-        for _s in instances for _t in (0.25, 0.125)]
+        for _s in __USE_INSTANCES for _t in (0.25, 0.125)]
 
     run_experiment(
         base_dir=use_dir,
