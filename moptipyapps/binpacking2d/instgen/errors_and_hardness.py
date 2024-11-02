@@ -31,14 +31,14 @@ a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\
 
 >>> obj = ErrorsAndHardness(space, max_fes=100)
 >>> obj.lower_bound()
-1.0
+0.0
 >>> obj.upper_bound()
-14664088.0
+1.0
 >>> obj.evaluate(y)
-4132864.157998087
+0.8776461858988774
 
 >>> obj.evaluate(orig)
-1.9606359978301315
+0.9866528870384179
 """
 from typing import Callable, Final, Iterable
 
@@ -87,26 +87,24 @@ class ErrorsAndHardness(Objective):
         :param x: the instance
         :return: the hardness and errors
         """
-        return (1 + self.errors.evaluate(x)) * (
-            1.0 + self.hardness.evaluate(x))
+        return max(0.0, min(1.0, ((self.hardness.evaluate(
+            x) * 1000.0) + self.errors.evaluate(x)) / 1001.0))
 
     def lower_bound(self) -> float:
         """
         Get the lower bound of the instance error and hardness.
 
-        :return: the lower bound for the hardness and errors
+        :returns 0.0: always
         """
-        return (1 + self.errors.lower_bound()) * (
-            1.0 + self.hardness.lower_bound())
+        return 0.0
 
     def upper_bound(self) -> float:
         """
         Get the upper bound of the instance error and hardness.
 
-        :return: the upper bound for the instance hardness and errors
+        :returns 1.0: always
         """
-        return (1 + self.errors.upper_bound()) * (
-            1.0 + self.hardness.upper_bound())
+        return 1.0
 
     def is_always_integer(self) -> bool:
         """

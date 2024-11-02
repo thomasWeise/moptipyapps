@@ -63,19 +63,20 @@ a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\
 
 >>> errors = Errors(space)
 >>> errors.lower_bound()
-0
+0.0
 >>> errors.upper_bound()
-7332043
+1.0
 >>> errors.evaluate(y)
-2770589
+0.3778740795710009
 
 >>> y[0] = orig
 >>> errors.evaluate(y)
-0
+0.0
 """
 from typing import Final
 
 from moptipy.api.objective import Objective
+from moptipy.utils.logger import KeyValueLogSection
 from pycommons.types import type_error
 
 from moptipyapps.binpacking2d.instance import (
@@ -102,12 +103,44 @@ class Errors(Objective):
         #: the instance description
         self.space: Final[InstanceSpace] = space
 
-    def evaluate(self, x: list[Instance] | Instance) -> int:
+        # These errors are permitted.
+        max_errors: int = max(
+            space.n_different_items - 1,
+            space.n_items - space.n_different_items - 1)
+
+        goal_min_width: Final[int] = space.item_width_min
+        goal_max_width: Final[int] = space.item_width_max
+        goal_min_height: Final[int] = space.item_height_min
+        goal_max_height: Final[int] = space.item_height_max
+        bin_width: Final[int] = space.bin_width
+        bin_height: Final[int] = space.bin_height
+
+        n_items: Final[int] = space.n_items
+        max_errors += n_items * max(
+            goal_min_width - 1, bin_width - goal_max_width)
+        max_errors += n_items * max(
+            goal_min_height - 1, bin_height - goal_max_height)
+        max_errors += max(goal_min_width, bin_width - goal_min_width)
+        max_errors += max(goal_max_width, bin_width - goal_max_width)
+        max_errors += max(goal_min_height, bin_height - goal_min_height)
+        max_errors += max(goal_max_height, bin_height - goal_max_height)
+
+        alt_area: Final[int] = (space.min_bins * bin_width * bin_height
+                                - space.total_item_area)
+        if alt_area < 0:
+            raise ValueError("Invalid item area in space?")
+        max_errors += max(space.total_item_area, alt_area)
+
+        #: the maximum number of errors
+        self.__max_errors: Final[int] = max_errors
+
+    def evaluate(self, x: list[Instance] | Instance) -> float:
         """
         Compute the deviations from the instance definition.
 
         :param x: the instance
-        :return: the number of deviations
+        :return: the number of deviations divided by the maximum of
+            the deviations
         """
         errors: int = 0
         inst: Final[Instance] = x[0] if isinstance(x, list) else x
@@ -163,61 +196,40 @@ class Errors(Objective):
             raise ValueError("Invalid total area?")
         errors += abs(total_area - space.total_item_area)
 
-        return errors
+        return max(0.0, min(1.0, errors / self.__max_errors))
 
-    def lower_bound(self) -> int:
+    def log_parameters_to(self, logger: KeyValueLogSection) -> None:
+        """
+        Log the parameters of this instance.
+
+        :param logger: the logger
+        """
+        super().log_parameters_to(logger)
+        logger.key_value("maxErrors", self.__max_errors)
+
+    def lower_bound(self) -> float:
         """
         Get the lower bound of the instance template deviations.
 
-        :return: the lower bound for the errors
+        :returs 0.0: always
         """
-        return 0
+        return 0.0
 
     def is_always_integer(self) -> bool:
         """
         Return `True` because there are only integer errors.
 
-        :retval True: always
+        :retval False: always
         """
-        return True
+        return False
 
-    def upper_bound(self) -> int:
+    def upper_bound(self) -> float:
         """
         Get the upper bound of the number of deviations.
 
-        :return: the upper bound
+        :returs 1.0: always
         """
-        space: Final[InstanceSpace] = self.space
-
-        # These errors are permitted.
-        max_errors: int = max(
-            space.n_different_items - 1,
-            space.n_items - space.n_different_items - 1)
-
-        goal_min_width: Final[int] = space.item_width_min
-        goal_max_width: Final[int] = space.item_width_max
-        goal_min_height: Final[int] = space.item_height_min
-        goal_max_height: Final[int] = space.item_height_max
-        bin_width: Final[int] = space.bin_width
-        bin_height: Final[int] = space.bin_height
-
-        n_items: Final[int] = space.n_items
-        max_errors += n_items * max(
-            goal_min_width - 1, bin_width - goal_max_width)
-        max_errors += n_items * max(
-            goal_min_height - 1, bin_height - goal_max_height)
-        max_errors += max(goal_min_width, bin_width - goal_min_width)
-        max_errors += max(goal_max_width, bin_width - goal_max_width)
-        max_errors += max(goal_min_height, bin_height - goal_min_height)
-        max_errors += max(goal_max_height, bin_height - goal_max_height)
-
-        alt_area: Final[int] = (space.min_bins * bin_width * bin_height
-                                - space.total_item_area)
-        if alt_area < 0:
-            raise ValueError("Invalid item area in space?")
-        max_errors += max(space.total_item_area, alt_area)
-
-        return max_errors
+        return 1.0
 
     def __str__(self) -> str:
         """

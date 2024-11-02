@@ -36,17 +36,17 @@ a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\
 >>> hardness.upper_bound()
 1.0
 >>> hardness.evaluate(y)
-0.4916909965018594
+0.8781459580052053
 
 >>> y[0] = orig
 >>> hardness.evaluate(y)
-0.9606359978301315
+0.9876395399254564
 
 >>> z = Instance.from_compact_str(
 ...     "cl04_020_01n;19;100;100;1,10;2,38;2,62;1,4,2;3,38;1,7;27,93;1,62;1,"
 ...     "3;13,38;1,38;1,17;1,45;36,62;39,3;1,2;20,10;3,24;12,4")
 >>> hardness.evaluate(z)
-0.6430950952328174
+0.9995959203471327
 """
 from math import isfinite
 from typing import Callable, Final, Iterable
@@ -235,8 +235,9 @@ class Hardness(Objective):
                     if not (0.0 <= runtime <= 1.0):
                         raise ValueError(
                             f"invalid normalized runtime {runtime}.")
-                    result += quality * runtime
-        return result / runs
+                    result += max(0.0, min(1.0, (
+                        (quality * 1000.0) + runtime) / 1001.0))
+        return max(0.0, min(1.0, result / runs))
 
     def lower_bound(self) -> float:
         """
