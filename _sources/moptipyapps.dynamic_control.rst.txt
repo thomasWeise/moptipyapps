@@ -1,0 +1,123 @@
+moptipyapps.dynamic\_control package
+====================================
+
+.. automodule:: moptipyapps.dynamic_control
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.dynamic_control.controllers
+   moptipyapps.dynamic_control.systems
+
+Submodules
+----------
+
+moptipyapps.dynamic\_control.controller module
+----------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.controller
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.experiment\_raw module
+---------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.experiment_raw
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.experiment\_surrogate module
+---------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.experiment_surrogate
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.instance module
+--------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.instance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.model\_objective module
+----------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.model_objective
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.objective module
+---------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.objective
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.ode module
+---------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.ode
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.results\_log module
+------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.results_log
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.results\_plot module
+-------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.results_plot
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.starting\_points module
+----------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.starting_points
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.surrogate\_optimizer module
+--------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.surrogate_optimizer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.system module
+------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.system
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.dynamic\_control.system\_model module
+-------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.system_model
+   :members:
+   :undoc-members:
+   :show-inheritance:

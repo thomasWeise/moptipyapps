@@ -1,0 +1,491 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.surrogate_optimizer — moptipyapps 0.8.62 documentation</title><link href="../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=48933b14"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/surrogate_optimizer.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.62 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.surrogate_optimizer</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.surrogate_optimizer</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A surrogate system model-based Optimization approach.</span>
+
+<span class=sd>In the real world, we want to synthesize a controller `c(s, p)` that can</span>
+<span class=sd>drive a dynamic system into a good state. The controller receives as input</span>
+<span class=sd>the current state `s`, say, from sensor readings. It can also be</span>
+<span class=sd>parameterized by a vector `p`, imagine `c` to be, for example, an artificial</span>
+<span class=sd>neural network and then `p` would be its weight vector. The output of `c` will</span>
+<span class=sd>influence the system in some way. In our example experiments, this is done</span>
+<span class=sd>by becoming part of the state differential `ds/dt`. Anyway, in the real world,</span>
+<span class=sd>the controller may steer the rotation speed of a rotor or the angles of rotor</span>
+<span class=sd>blades or whatever. Now you can imagine that doing real-world experiments is</span>
+<span class=sd>costly and takes a long time. Everytime we want to test a parameterization</span>
+<span class=sd>`p`, some form experiment, maybe in a wind tunnel, has to be done.</span>
+
+<span class=sd>So it would be beneficial if we could replace the actual experiment by a</span>
+<span class=sd>simulation. This would mean that we learn a model `M` that can compute the</span>
+<span class=sd>state change `ds/dt` based on the current state `s` and controller output `c`</span>
+<span class=sd>at reasonable accuracy. If we had such a computational model, then we could</span>
+<span class=sd>run the controller optimization process on that model. Once finished, we could</span>
+<span class=sd>apply and evaluate the best controller that we have discovered in a real</span>
+<span class=sd>experiment. With the observed behavior of the actual controller system, we may</span>
+<span class=sd>even be able to update and improve our system model to become more accurate.</span>
+<span class=sd>So we could alternate between real experiments and optimization runs on the</span>
+<span class=sd>simulation. Of course, we would always need to do some real experiments at</span>
+<span class=sd>first to gather the data to obtain our initial model `M`. But if we can get</span>
+<span class=sd>this to work, then we could probably get much better controllers with fewer</span>
+<span class=sd>actual experiments.</span>
+
+<span class=sd>This here is an algorithm that tries to implement the above pattern.</span>
+<span class=sd>This algorithm employs three different sub-algorithms:</span>
+
+<span class=sd>1. For sampling the initial :attr:`~SurrogateOptimizer.fes_for_warmup` FEs,</span>
+<span class=sd>   it uses a warm-up algorithm - by default, this is done by</span>
+<span class=sd>   :mod:`~moptipy.algorithms.random_sampling`.</span>
+<span class=sd>2. Then, it spends :attr:`~SurrogateOptimizer.fes_for_training` steps on the</span>
+<span class=sd>   collected data to train the model using the model training algorithm,</span>
+<span class=sd>   which, by default, is</span>
+<span class=sd>   :class:`~moptipy.algorithms.so.vector.cmaes_lib.BiPopCMAES`.</span>
+<span class=sd>3. Then, it spends :attr:`~SurrogateOptimizer.fes_per_model_run` steps</span>
+<span class=sd>   to train controllers on the model, by default again with a</span>
+<span class=sd>   :class:`~moptipy.algorithms.so.vector.cmaes_lib.BiPopCMAES`.</span>
+
+<span class=sd>For the model and controller optimization, it thus uses by default the</span>
+<span class=sd>BiPop-CMA-ES offered by `moptipy`</span>
+<span class=sd>(:class:`~moptipy.algorithms.so.vector.cmaes_lib.BiPopCMAES`).</span>
+<span class=sd>But it uses two instances of this algorithm, namely one to optimize the</span>
+<span class=sd>controller parameters and one that optimizes the model parameters.</span>
+<span class=sd>And, as said, a random sampling method to gather the initial samples.</span>
+
+<span class=sd>The idea is that we divide the computational budget into a warmup and a</span>
+<span class=sd>model-based phase. In the warmup phase, we use CMA-ES to normally optimize</span>
+<span class=sd>the controller based on the actual simulation of the dynamic system.</span>
+<span class=sd>However, while doing so, for every time step in the simulation, we collect</span>
+<span class=sd>three things: The current state vector `s`, the control vector `c`, and the</span>
+<span class=sd>resulting state differential `ds/dt`. Now if we have such data, we can look</span>
+<span class=sd>at the dynamic system as a function `D(s, c) = ds/dt`. If we consider the</span>
+<span class=sd>dynamic system to be such a function and we have collected the vectors</span>
+<span class=sd>`(s, c)` and `ds/dt`, then we may as well attempt to *learn* this system.</span>
+<span class=sd>So after the warmup phase, our algorithm does the following: In a loop (for</span>
+<span class=sd>the rest of the computational budget), it first tries to learn a model `M` of</span>
+<span class=sd>`D`. Then, it replaces the actual differential equations of the system in ODE</span>
+<span class=sd>solution approach of the objective function with `M`. In other words, we kick</span>
+<span class=sd>out the actual system and instead use the learned system model `M`. We replace</span>
+<span class=sd>the differential equations that describe the system using `M`. We can now</span>
+<span class=sd>run an entire optimization process on this learned model only, with ODE</span>
+<span class=sd>integration and all. This optimization process gives us one new solution which</span>
+<span class=sd>we then evaluate on the real objective function (which costs 1 FE and gives us</span>
+<span class=sd>a new heap of `(s, c)` and `ds/dt` vectors). With this new data, we again</span>
+<span class=sd>learn a new and hopefully more accurate model `M`. This process is iterated</span>
+<span class=sd>until the rest of the computational budget is exhausted.</span>
+
+<span class=sd>This approach hopefully allows us to learn a model of a dynamic system while</span>
+<span class=sd>synthesizing a controller for it. Since we can have infinitely more time to</span>
+<span class=sd>synthesize the controller on a learned system model compared to an actual</span>
+<span class=sd>model, this may give us much better results.</span>
+
+<span class=sd>The starting points of the work here were conversations with Prof. Dr. Bernd</span>
+<span class=sd>NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute of Technology in</span>
+<span class=sd>Shenzhen, China (哈尔滨工业大学(深圳)).</span>
+<span class=sd>"""</span>
+
+
+<span class=kn>from</span> <span class=nn>copy</span> <span class=kn>import</span> <span class=n>copy</span>
+<span class=kn>from</span> <span class=nn>gc</span> <span class=kn>import</span> <span class=n>collect</span>
+<span class=kn>from</span> <span class=nn>os.path</span> <span class=kn>import</span> <span class=n>basename</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span> <span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>moptipy.algorithms.random_sampling</span> <span class=kn>import</span> <span class=n>RandomSampling</span>
+<span class=kn>from</span> <span class=nn>moptipy.algorithms.so.vector.cmaes_lib</span> <span class=kn>import</span> <span class=n>BiPopCMAES</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.algorithm</span> <span class=kn>import</span> <span class=n>Algorithm</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.execution</span> <span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.logging</span> <span class=kn>import</span> <span class=n>FILE_SUFFIX</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.process</span> <span class=kn>import</span> <span class=n>Process</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.subprocesses</span> <span class=kn>import</span> <span class=n>for_fes</span>
+<span class=kn>from</span> <span class=nn>moptipy.operators.vectors.op0_uniform</span> <span class=kn>import</span> <span class=n>Op0Uniform</span>
+<span class=kn>from</span> <span class=nn>moptipy.spaces.vectorspace</span> <span class=kn>import</span> <span class=n>VectorSpace</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.logger</span> <span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.nputils</span> <span class=kn>import</span> <span class=n>rand_seed_generate</span>
+<span class=kn>from</span> <span class=nn>numpy.random</span> <span class=kn>import</span> <span class=n>Generator</span>
+<span class=kn>from</span> <span class=nn>pycommons.io.path</span> <span class=kn>import</span> <span class=n>Path</span>
+<span class=kn>from</span> <span class=nn>pycommons.types</span> <span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.model_objective</span> <span class=kn>import</span> <span class=n>ModelObjective</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.objective</span> <span class=kn>import</span> <span class=n>FigureOfMerit</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.system</span> <span class=kn>import</span> <span class=n>System</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.system_model</span> <span class=kn>import</span> <span class=n>SystemModel</span>
+
+
+<span class=k>def</span> <span class=nf>_nop</span><span class=p>()</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""Do absolutely nothing."""</span>
+
+
+<span class=k>def</span> <span class=nf>_bpcmaes</span><span class=p>(</span><span class=n>vs</span><span class=p>:</span> <span class=n>VectorSpace</span><span class=p>)</span> <span class=o>-></span> <span class=n>BiPopCMAES</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the Bi-Pop CMA-ES.</span>
+
+<span class=sd>    :param vs: the vector space</span>
+<span class=sd>    :return: the algorithm</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=n>BiPopCMAES</span><span class=p>(</span><span class=n>vs</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=SurrogateOptimizer>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.surrogate_optimizer.SurrogateOptimizer>[docs]</a>
+<span class=k>class</span> <span class=nc>SurrogateOptimizer</span><span class=p>(</span><span class=n>Algorithm</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A surrogate model-based CMA-ES algorithm."""</span>
+
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>system_model</span><span class=p>:</span> <span class=n>SystemModel</span><span class=p>,</span> <span class=n>controller_space</span><span class=p>:</span> <span class=n>VectorSpace</span><span class=p>,</span>
+            <span class=n>objective</span><span class=p>:</span> <span class=n>FigureOfMerit</span><span class=p>,</span> <span class=n>fes_for_warmup</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+            <span class=n>fes_for_training</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>ms_for_training</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>fes_per_model_run</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>ms_per_model_run</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>fancy_logs</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span><span class=p>,</span>
+            <span class=n>warmup_algorithm</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[</span>
+                <span class=p>[</span><span class=n>VectorSpace</span><span class=p>],</span> <span class=n>Algorithm</span><span class=p>]</span> <span class=o>=</span>
+            <span class=k>lambda</span> <span class=n>v</span><span class=p>:</span> <span class=n>RandomSampling</span><span class=p>(</span><span class=n>Op0Uniform</span><span class=p>(</span><span class=n>v</span><span class=p>)),</span>
+            <span class=n>model_training_algorithm</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[</span>
+                <span class=p>[</span><span class=n>VectorSpace</span><span class=p>],</span> <span class=n>Algorithm</span><span class=p>]</span> <span class=o>=</span> <span class=n>_bpcmaes</span><span class=p>,</span>
+            <span class=n>controller_training_algorithm</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[</span>
+                <span class=p>[</span><span class=n>VectorSpace</span><span class=p>],</span> <span class=n>Algorithm</span><span class=p>]</span> <span class=o>=</span> <span class=n>_bpcmaes</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the algorithm.</span>
+
+<span class=sd>        :param system_model: the system and model</span>
+<span class=sd>        :param controller_space: the controller space</span>
+<span class=sd>        :param objective: the figure of merit</span>
+<span class=sd>        :param fes_for_warmup: the number of objective function evaluations</span>
+<span class=sd>            (FEs) to be used on the initial stage on the real system for</span>
+<span class=sd>            warming up</span>
+<span class=sd>        :param fes_for_training: the number of FEs to be used to train the</span>
+<span class=sd>            model</span>
+<span class=sd>        :param ms_for_training: the number of milliseconds for model training</span>
+<span class=sd>        :param fes_per_model_run: the number of FEs to be applied to each</span>
+<span class=sd>            optimization run on the model</span>
+<span class=sd>        :param ms_per_model_run: the number of milliseconds for a model run</span>
+<span class=sd>        :param fancy_logs: should we perform fancy logging?</span>
+<span class=sd>        :param warmup_algorithm: the algorithm for sampling the warmup points</span>
+<span class=sd>        :param model_training_algorithm: the model training algorithm builder</span>
+<span class=sd>        :param controller_training_algorithm: the controller training</span>
+<span class=sd>            algorithm builder</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>system_model</span><span class=p>,</span> <span class=n>SystemModel</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>system_model</span><span class=p>,</span> <span class=s2>"system_model"</span><span class=p>,</span> <span class=n>SystemModel</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>controller_space</span><span class=p>,</span> <span class=n>VectorSpace</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                <span class=n>controller_space</span><span class=p>,</span> <span class=s2>"controller_space"</span><span class=p>,</span> <span class=n>VectorSpace</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>objective</span><span class=p>,</span> <span class=n>FigureOfMerit</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>objective</span><span class=p>,</span> <span class=s2>"objective"</span><span class=p>,</span> <span class=n>FigureOfMerit</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>fancy_logs</span><span class=p>,</span> <span class=nb>bool</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>fancy_logs</span><span class=p>,</span> <span class=s2>"fancy_logs"</span><span class=p>,</span> <span class=nb>bool</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>warmup_algorithm</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>warmup_algorithm</span><span class=p>,</span> <span class=s2>"warmup_algorithm"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>model_training_algorithm</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>model_training_algorithm</span><span class=p>,</span>
+                             <span class=s2>"model_training_algorithm"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>controller_training_algorithm</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>controller_training_algorithm</span><span class=p>,</span>
+                             <span class=s2>"controller_training_algorithm"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+
+        <span class=c1># the controller space</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>controller_space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>VectorSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>controller_space</span>
+        <span class=c1>#: should we do fancy logging?</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fancy_logs</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>bool</span><span class=p>]</span> <span class=o>=</span> <span class=n>fancy_logs</span>
+        <span class=c1>#: the number of objective function evaluations to be used for warmup</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fes_for_warmup</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>fes_for_warmup</span><span class=p>,</span> <span class=s2>"fes_for_warmup"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the FEs for training the model</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fes_for_training</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=kc>None</span> \
+            <span class=k>if</span> <span class=n>fes_for_training</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>fes_for_training</span><span class=p>,</span> <span class=s2>"fes_for_training"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the ms for training the model</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>ms_for_training</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=kc>None</span> \
+            <span class=k>if</span> <span class=n>ms_for_training</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>ms_for_training</span><span class=p>,</span> <span class=s2>"ms_for_training"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>fes_for_training</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ms_for_training</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"One of fes_for_training or "</span>
+                             <span class=s2>"ms_for_training must not be None."</span><span class=p>)</span>
+        <span class=c1>#: the FEs for each run on the model</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fes_per_model_run</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=kc>None</span> \
+            <span class=k>if</span> <span class=n>fes_per_model_run</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>fes_per_model_run</span><span class=p>,</span> <span class=s2>"fes_per_model_run"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the ms for each run on the model</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>ms_per_model_run</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=kc>None</span> \
+            <span class=k>if</span> <span class=n>ms_per_model_run</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>ms_per_model_run</span><span class=p>,</span> <span class=s2>"ms_per_model_run"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>((</span><span class=bp>self</span><span class=o>.</span><span class=n>fes_per_model_run</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>)</span>
+                <span class=ow>and</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ms_per_model_run</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"One of fes_per_model_run or "</span>
+                             <span class=s2>"ms_per_model_run must not be None."</span><span class=p>)</span>
+        <span class=c1>#: the system model</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>system_model</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>SystemModel</span><span class=p>]</span> <span class=o>=</span> <span class=n>system_model</span>
+        <span class=c1>#: the internal warmup algorithm</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__warmup_algorithm</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Algorithm</span><span class=p>]</span> <span class=o>=</span> <span class=n>warmup_algorithm</span><span class=p>(</span>
+            <span class=n>controller_space</span><span class=p>)</span>
+        <span class=c1>#: the internal controller training algorithm</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__control_algorithm</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Algorithm</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span>
+            <span class=n>controller_training_algorithm</span><span class=p>(</span><span class=n>controller_space</span><span class=p>))</span>
+        <span class=c1>#: the model parameter space</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__model_space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>VectorSpace</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=n>system_model</span><span class=o>.</span><span class=n>model</span><span class=o>.</span><span class=n>parameter_space</span><span class=p>()</span>
+        <span class=c1>#: the model training algorithm</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__model_training</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Algorithm</span><span class=p>]</span> <span class=o>=</span> <span class=n>model_training_algorithm</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__model_space</span><span class=p>)</span>
+        <span class=c1>#: the control objective function reference</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__control_objective</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>FigureOfMerit</span><span class=p>]</span> <span class=o>=</span> <span class=n>objective</span>
+        <span class=c1>#: the model objective</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__model_objective</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>ModelObjective</span><span class=p>]</span> <span class=o>=</span> <span class=n>ModelObjective</span><span class=p>(</span>
+            <span class=n>objective</span><span class=p>,</span> <span class=n>system_model</span><span class=o>.</span><span class=n>model</span><span class=p>)</span>
+
+<div class=viewcode-block id=SurrogateOptimizer.initialize>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.surrogate_optimizer.SurrogateOptimizer.initialize>[docs]</a>
+    <span class=k>def</span> <span class=nf>initialize</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Initialize."""</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>initialize</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__warmup_algorithm</span><span class=o>.</span><span class=n>initialize</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__model_training</span><span class=o>.</span><span class=n>initialize</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__control_algorithm</span><span class=o>.</span><span class=n>initialize</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__model_space</span><span class=o>.</span><span class=n>initialize</span><span class=p>()</span></div>
+
+
+<div class=viewcode-block id=SurrogateOptimizer.solve>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.surrogate_optimizer.SurrogateOptimizer.solve>[docs]</a>
+    <span class=k>def</span> <span class=nf>solve</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>process</span><span class=p>:</span> <span class=n>Process</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Solve the modelling problem.</span>
+
+<span class=sd>        This function begins by spending :attr:`fes_for_warmup` objective</span>
+<span class=sd>        function evaluations (FEs) on the actual problem, i.e., by trying to</span>
+<span class=sd>        synthesize controllers for the "real" system, using `process` to</span>
+<span class=sd>        evaluate the controller performance. The objective function passed to</span>
+<span class=sd>        the constructor (an instance of</span>
+<span class=sd>        :class:`~moptipyapps.dynamic_control.objective.FigureOfMerit`) must be</span>
+<span class=sd>        used by `process` as well. This way, during the warm-up phase, we can</span>
+<span class=sd>        collect tuples of the (system state, controller output) and the</span>
+<span class=sd>        resulting system differential for each simulated time step. This is</span>
+<span class=sd>        done via</span>
+<span class=sd>        :meth:`~moptipyapps.dynamic_control.objective.FigureOfMerit.set_raw`.</span>
+
+<span class=sd>        After the warm-up phase, we can obtain these collected data via</span>
+<span class=sd>        :meth:`~moptipyapps.dynamic_control.objective.FigureOfMerit.\</span>
+<span class=sd>get_differentials`. The data is then used to train a model via the model</span>
+<span class=sd>        objective function</span>
+<span class=sd>        :mod:`~moptipyapps.dynamic_control.model_objective`. The system model</span>
+<span class=sd>        is again basically a</span>
+<span class=sd>        :class:`~moptipyapps.dynamic_control.controller.Controller` which is</span>
+<span class=sd>        parameterized appropriately. For this, we use a CMA-ES algorithm for</span>
+<span class=sd>        :attr:`fes_for_training` FEs.</span>
+
+<span class=sd>        Once the model training is completed, we switch the objective function</span>
+<span class=sd>        to use the model instead of the actual system for evaluating</span>
+<span class=sd>        controllers, which is done via :meth:`~moptipyapps.dynamic_control.\</span>
+<span class=sd>objective.FigureOfMerit.set_model`. We then train a completely new controller</span>
+<span class=sd>        on the model objective function. Notice that now, the actual system is</span>
+<span class=sd>        not involved at all. We do this again using a CMA-ES algorithm for</span>
+<span class=sd>        :attr:`fes_per_model_run` FEs.</span>
+
+<span class=sd>        After training the controller, we can evaluate it on the real system</span>
+<span class=sd>        using the :meth:`~moptipy.api.process.Process.evaluate` method</span>
+<span class=sd>        of the actual `process` (after switching back to the real model via</span>
+<span class=sd>        :meth:`~moptipyapps.dynamic_control.objective.FigureOfMerit.set_raw`).</span>
+<span class=sd>        This nets us a) the actual controller performance and b) a new set of</span>
+<span class=sd>        (system state, controller output) + system state differential tuples.</span>
+
+<span class=sd>        Since we now have more data, we can go back and train a new system</span>
+<span class=sd>        model and then use this model for another model-based optimization</span>
+<span class=sd>        run. And so on, and so on. Until the budget is exhausted.</span>
+
+<span class=sd>        :param process: the original optimization process, which must use</span>
+<span class=sd>            the `objective` function (an instance of</span>
+<span class=sd>            :class:`~moptipyapps.dynamic_control.objective.FigureOfMerit`) as</span>
+<span class=sd>            its objective function.</span>
+<span class=sd>        """</span>
+        <span class=c1># First, we set up the local variables and fast calls.</span>
+        <span class=n>should_terminate</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=nb>bool</span><span class=p>]]</span> <span class=o>=</span> <span class=n>process</span><span class=o>.</span><span class=n>should_terminate</span>
+        <span class=n>model_space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>VectorSpace</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__model_space</span>
+        <span class=n>model_objective</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>ModelObjective</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__model_objective</span>
+        <span class=n>model</span> <span class=o>=</span> <span class=n>model_space</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>
+        <span class=n>model_equations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span>\
+            <span class=bp>self</span><span class=o>.</span><span class=n>system_model</span><span class=o>.</span><span class=n>model</span><span class=o>.</span><span class=n>controller</span>
+        <span class=n>raw</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>FigureOfMerit</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__control_objective</span>
+        <span class=n>random</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Generator</span><span class=p>]</span> <span class=o>=</span> <span class=n>process</span><span class=o>.</span><span class=n>get_random</span><span class=p>()</span>
+
+        <span class=n>training_execute</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Execution</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span>
+            <span class=n>Execution</span><span class=p>()</span><span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>model_space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__model_training</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>model_objective</span><span class=p>))</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>fes_for_training</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>training_execute</span><span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>fes_for_training</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>ms_for_training</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>training_execute</span><span class=o>.</span><span class=n>set_max_time_millis</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ms_for_training</span><span class=p>)</span>
+
+        <span class=n>on_model_execute</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Execution</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=p>(</span><span class=n>Execution</span><span class=p>()</span><span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>controller_space</span><span class=p>)</span>
+             <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>raw</span><span class=p>)</span>
+             <span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__control_algorithm</span><span class=p>))</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>fes_per_model_run</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>on_model_execute</span><span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>fes_per_model_run</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>ms_per_model_run</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>on_model_execute</span><span class=o>.</span><span class=n>set_max_time_millis</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ms_per_model_run</span><span class=p>)</span>
+
+        <span class=n>result</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>controller_space</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>
+        <span class=n>orig_init</span><span class=p>:</span> <span class=n>Callable</span> <span class=o>=</span> <span class=n>raw</span><span class=o>.</span><span class=n>initialize</span>
+
+<span class=c1># Get a log dir if logging is enabled and set up all the logging information.</span>
+        <span class=n>log_dir_name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=n>process</span><span class=o>.</span><span class=n>get_log_basename</span><span class=p>()</span> \
+            <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>fancy_logs</span> <span class=k>else</span> <span class=kc>None</span>
+        <span class=n>model_training_dir</span><span class=p>:</span> <span class=n>Path</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=n>model_training_log_name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=n>models_dir</span><span class=p>:</span> <span class=n>Path</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=n>models_name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=n>tempsys</span><span class=p>:</span> <span class=n>System</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=n>ctrl_dir</span><span class=p>:</span> <span class=n>Path</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=n>ctrl_log_name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=n>controllers_dir</span><span class=p>:</span> <span class=n>Path</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=n>controllers_name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=k>if</span> <span class=n>log_dir_name</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>log_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>log_dir_name</span><span class=p>)</span>
+            <span class=n>log_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+            <span class=n>prefix</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>"modelTraining"</span>
+            <span class=n>model_training_dir</span> <span class=o>=</span> <span class=n>log_dir</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=n>prefix</span><span class=p>)</span>
+            <span class=n>model_training_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+            <span class=n>base_name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>basename</span><span class=p>(</span><span class=n>log_dir_name</span><span class=p>)</span>
+            <span class=n>model_training_log_name</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>base_name</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>prefix</span><span class=si>}</span><span class=s2>_"</span>
+            <span class=n>training_execute</span><span class=o>.</span><span class=n>set_log_improvements</span><span class=p>(</span><span class=kc>True</span><span class=p>)</span>
+            <span class=n>prefix</span> <span class=o>=</span> <span class=s2>"controllerOnModel"</span>
+            <span class=n>ctrl_dir</span> <span class=o>=</span> <span class=n>log_dir</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=n>prefix</span><span class=p>)</span>
+            <span class=n>ctrl_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+            <span class=n>ctrl_log_name</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>base_name</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>prefix</span><span class=si>}</span><span class=s2>_"</span>
+            <span class=n>on_model_execute</span><span class=o>.</span><span class=n>set_log_improvements</span><span class=p>(</span><span class=kc>True</span><span class=p>)</span>
+            <span class=n>prefix</span> <span class=o>=</span> <span class=s2>"model"</span>
+            <span class=n>models_dir</span> <span class=o>=</span> <span class=n>log_dir</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=n>prefix</span><span class=p>)</span>
+            <span class=n>models_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+            <span class=n>tempsys</span> <span class=o>=</span> <span class=n>copy</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>system_model</span><span class=o>.</span><span class=n>system</span><span class=p>)</span>
+            <span class=n>models_name</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>tempsys</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>prefix</span><span class=si>}</span><span class=s2>_"</span>
+            <span class=n>prefix</span> <span class=o>=</span> <span class=s2>"controllersOnReal"</span>
+            <span class=n>controllers_dir</span> <span class=o>=</span> <span class=n>log_dir</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=n>prefix</span><span class=p>)</span>
+            <span class=n>controllers_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+            <span class=n>controllers_name</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>base_name</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>prefix</span><span class=si>}</span><span class=s2>_"</span>
+
+<span class=c1># Now we do the setup run that creates some basic results and</span>
+<span class=c1># gathers the initial information for modelling the system.</span>
+        <span class=k>with</span> <span class=n>for_fes</span><span class=p>(</span><span class=n>process</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>fes_for_warmup</span><span class=p>)</span> <span class=k>as</span> <span class=n>prc</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__warmup_algorithm</span><span class=o>.</span><span class=n>solve</span><span class=p>(</span><span class=n>prc</span><span class=p>)</span>
+
+        <span class=k>while</span> <span class=ow>not</span> <span class=n>should_terminate</span><span class=p>():</span>  <span class=c1># until budget exhausted</span>
+            <span class=n>consumed_fes</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>process</span><span class=o>.</span><span class=n>get_consumed_fes</span><span class=p>()</span>
+
+            <span class=c1># We now train a model on the data that was gathered.</span>
+            <span class=n>training_execute</span><span class=o>.</span><span class=n>set_rand_seed</span><span class=p>(</span><span class=n>rand_seed_generate</span><span class=p>(</span><span class=n>random</span><span class=p>))</span>
+            <span class=k>if</span> <span class=n>model_training_dir</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>training_execute</span><span class=o>.</span><span class=n>set_log_file</span><span class=p>(</span>
+                    <span class=n>model_training_dir</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>model_training_log_name</span><span class=si>}{</span><span class=n>consumed_fes</span><span class=si>}</span><span class=s2>"</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>FILE_SUFFIX</span><span class=si>}</span><span class=s2>"</span><span class=p>))</span>
+            <span class=n>model_objective</span><span class=o>.</span><span class=n>begin</span><span class=p>()</span>  <span class=c1># get the collected data</span>
+            <span class=k>with</span> <span class=n>training_execute</span><span class=o>.</span><span class=n>execute</span><span class=p>()</span> <span class=k>as</span> <span class=n>sub</span><span class=p>:</span>  <span class=c1># train model</span>
+                <span class=n>sub</span><span class=o>.</span><span class=n>get_copy_of_best_y</span><span class=p>(</span><span class=n>model</span><span class=p>)</span>  <span class=c1># get best model</span>
+            <span class=n>model_objective</span><span class=o>.</span><span class=n>end</span><span class=p>()</span>  <span class=c1># dispose the collected data</span>
+
+            <span class=nb>setattr</span><span class=p>(</span><span class=n>raw</span><span class=p>,</span> <span class=s2>"initialize"</span><span class=p>,</span> <span class=n>_nop</span><span class=p>)</span>  <span class=c1># prevent resetting to "raw"</span>
+
+<span class=c1># The trained model is wrapped into an equation function that can be passed to</span>
+<span class=c1># the ODE integrator.</span>
+            <span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span>
+                        <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+            <span class=k>def</span> <span class=nf>__new_model</span><span class=p>(</span><span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                            <span class=n>control</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                            <span class=n>_params</span><span class=o>=</span><span class=n>model</span><span class=p>,</span> <span class=n>_eq</span><span class=o>=</span><span class=n>model_equations</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>_eq</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>hstack</span><span class=p>((</span><span class=n>state</span><span class=p>,</span> <span class=n>control</span><span class=p>)),</span> <span class=n>time</span><span class=p>,</span> <span class=n>_params</span><span class=p>,</span> <span class=n>out</span><span class=p>)</span>
+
+            <span class=nb>setattr</span><span class=p>(</span><span class=n>__new_model</span><span class=p>,</span> <span class=s2>"modelParameters"</span><span class=p>,</span> <span class=n>model</span><span class=p>)</span>  <span class=c1># see objective</span>
+
+            <span class=k>if</span> <span class=n>tempsys</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>  <span class=c1># plot the model behavior</span>
+                <span class=n>tempsys</span><span class=o>.</span><span class=n>equations</span> <span class=o>=</span> <span class=n>__new_model</span>  <span class=c1># type: ignore</span>
+                <span class=nb>setattr</span><span class=p>(</span><span class=n>tempsys</span><span class=p>,</span> <span class=s2>"name"</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>models_name</span><span class=si>}{</span><span class=n>consumed_fes</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=n>tempsys</span><span class=o>.</span><span class=n>describe_system_without_control</span><span class=p>(</span><span class=n>models_dir</span><span class=p>)</span>
+
+            <span class=n>collect</span><span class=p>()</span>  <span class=c1># now we collect all garbage ... there should be much</span>
+
+<span class=c1># OK, now that we got the model, we can perform the model optimization run.</span>
+            <span class=n>raw</span><span class=o>.</span><span class=n>set_model</span><span class=p>(</span><span class=n>__new_model</span><span class=p>)</span>  <span class=c1># switch to use the model</span>
+            <span class=n>on_model_execute</span><span class=o>.</span><span class=n>set_rand_seed</span><span class=p>(</span><span class=n>rand_seed_generate</span><span class=p>(</span><span class=n>random</span><span class=p>))</span>
+            <span class=k>if</span> <span class=n>ctrl_dir</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>on_model_execute</span><span class=o>.</span><span class=n>set_log_file</span><span class=p>(</span><span class=n>ctrl_dir</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ctrl_log_name</span><span class=si>}{</span><span class=n>consumed_fes</span><span class=si>}{</span><span class=n>FILE_SUFFIX</span><span class=si>}</span><span class=s2>"</span><span class=p>))</span>
+            <span class=k>with</span> <span class=n>on_model_execute</span><span class=o>.</span><span class=n>execute</span><span class=p>()</span> <span class=k>as</span> <span class=n>ome</span><span class=p>:</span>
+                <span class=n>ome</span><span class=o>.</span><span class=n>get_copy_of_best_y</span><span class=p>(</span><span class=n>result</span><span class=p>)</span>  <span class=c1># get best controller</span>
+            <span class=n>raw</span><span class=o>.</span><span class=n>set_raw</span><span class=p>()</span>  <span class=c1># switch to the actual problem and data collection</span>
+            <span class=nb>setattr</span><span class=p>(</span><span class=n>raw</span><span class=p>,</span> <span class=s2>"initialize"</span><span class=p>,</span> <span class=n>orig_init</span><span class=p>)</span>  <span class=c1># allow resetting to "raw"</span>
+
+            <span class=k>if</span> <span class=n>tempsys</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>  <span class=c1># plot the controller on that model</span>
+                <span class=nb>setattr</span><span class=p>(</span><span class=n>tempsys</span><span class=p>,</span> <span class=s2>"name"</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>models_name</span><span class=si>}{</span><span class=n>consumed_fes</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=n>tempsys</span><span class=o>.</span><span class=n>describe_system</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>models_name</span><span class=si>}{</span><span class=n>consumed_fes</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span>
+                    <span class=bp>self</span><span class=o>.</span><span class=n>system_model</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>controller</span><span class=p>,</span> <span class=n>result</span><span class=p>,</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>models_name</span><span class=si>}{</span><span class=n>consumed_fes</span><span class=si>}</span><span class=s2>_synthesized_controller"</span><span class=p>,</span>
+                    <span class=n>models_dir</span><span class=p>)</span>
+
+<span class=c1># Finally, we re-evaluate the result that we got from the model run on the</span>
+<span class=c1># actual objective function.</span>
+            <span class=n>process</span><span class=o>.</span><span class=n>evaluate</span><span class=p>(</span><span class=n>result</span><span class=p>)</span>  <span class=c1># get the real objective value</span>
+
+<span class=c1># plot the actual behavior</span>
+            <span class=k>if</span> <span class=n>controllers_dir</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>system_model</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>describe_system</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>system_model</span><span class=o>.</span><span class=n>system</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>consumed_fes</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span>
+                    <span class=bp>self</span><span class=o>.</span><span class=n>system_model</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>controller</span><span class=p>,</span>
+                    <span class=n>result</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>controllers_name</span><span class=si>}{</span><span class=n>consumed_fes</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span>
+                    <span class=n>controllers_dir</span><span class=p>)</span>
+
+            <span class=n>collect</span><span class=p>()</span>  <span class=c1># now we collect all garbage ... there should be much</span></div>
+
+
+    <span class=k>def</span> <span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the algorithm.</span>
+
+<span class=sd>        :return: the algorithm name</span>
+<span class=sd>        """</span>
+        <span class=n>s</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>__warmup_algorithm</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>__control_algorithm</span><span class=si>}</span><span class=s2>_"</span>
+                  <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>__model_training</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>fes_for_warmup</span><span class=si>}</span><span class=s2>_tn"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>fes_for_training</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>s</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>s</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>fes_for_training</span><span class=si>}</span><span class=s2>fes"</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>ms_for_training</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>s</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>s</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>ms_for_training</span><span class=si>}</span><span class=s2>ms"</span>
+        <span class=n>s</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>s</span><span class=si>}</span><span class=s2>_sy"</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>fes_per_model_run</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>s</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>s</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>fes_per_model_run</span><span class=si>}</span><span class=s2>fes"</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>ms_per_model_run</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>s</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>s</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>ms_per_model_run</span><span class=si>}</span><span class=s2>ms"</span>
+        <span class=k>return</span> <span class=n>s</span>
+
+<div class=viewcode-block id=SurrogateOptimizer.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.surrogate_optimizer.SurrogateOptimizer.log_parameters_to>[docs]</a>
+    <span class=k>def</span> <span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"fesForWarmup"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>fes_for_warmup</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"fesForTraining"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>fes_for_training</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"fesPerModelRun"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>fes_per_model_run</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"fancyLogs"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>fancy_logs</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"controlX"</span><span class=p>)</span> <span class=k>as</span> <span class=n>cx</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>controller_space</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>cx</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"warmupA"</span><span class=p>)</span> <span class=k>as</span> <span class=n>wa</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__warmup_algorithm</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>wa</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"controlA"</span><span class=p>)</span> <span class=k>as</span> <span class=n>ca</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__control_algorithm</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>ca</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"controlF"</span><span class=p>)</span> <span class=k>as</span> <span class=n>cf</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__control_objective</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>cf</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"modelX"</span><span class=p>)</span> <span class=k>as</span> <span class=n>mx</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__model_space</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>mx</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"modelF"</span><span class=p>)</span> <span class=k>as</span> <span class=n>mf</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__model_objective</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>mf</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"modelA"</span><span class=p>)</span> <span class=k>as</span> <span class=n>ma</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__model_training</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>ma</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.62 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.surrogate_optimizer</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>

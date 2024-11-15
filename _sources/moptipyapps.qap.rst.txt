@@ -1,0 +1,34 @@
+moptipyapps.qap package
+=======================
+
+.. automodule:: moptipyapps.qap
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.qap.qaplib
+
+Submodules
+----------
+
+moptipyapps.qap.instance module
+-------------------------------
+
+.. automodule:: moptipyapps.qap.instance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.qap.objective module
+--------------------------------
+
+.. automodule:: moptipyapps.qap.objective
+   :members:
+   :undoc-members:
+   :show-inheritance:
