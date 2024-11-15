@@ -119,7 +119,7 @@ def test_packing_results_experiment() -> None:
         assert len(all_objectives) == 2
         with temp_file() as tf:
             pr_to_csv(results_1, tf)
-            pr_from_csv(tf, results_2.append)
+            results_2.extend(pr_from_csv(tf))
             assert len(results_2) == len(results_1)
             results_2.sort()
             assert results_1 == results_2
@@ -133,5 +133,5 @@ def test_packing_results_experiment() -> None:
         end_stats_3: Final[list[PackingStatistics]] = []
         with temp_file() as tf2:
             ps_to_csv(end_stats_1, tf2)
-            ps_from_csv(tf2, end_stats_3.append)
+            end_stats_3.extend(ps_from_csv(tf2))
         assert end_stats_3 == end_stats_2

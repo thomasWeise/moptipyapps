@@ -312,35 +312,33 @@ def to_csv(results: Iterable[PackingStatistics], file: str) -> Path:
     logger(f"Writing packing statistics to CSV file {path!r}.")
     path.ensure_parent_dir_exists()
     with path.open_for_write() as wt:
-        csv_write(
-            data=sorted(results), consumer=line_writer(wt),
-            setup=CsvWriter().setup,
-            get_column_titles=CsvWriter.get_column_titles,
-            get_row=CsvWriter.get_row,
-            get_header_comments=CsvWriter.get_header_comments,
-            get_footer_comments=CsvWriter.get_footer_comments,
-            get_footer_bottom_comments=CsvWriter.get_footer_bottom_comments)
+        consumer: Final[Callable[[str], None]] = line_writer(wt)
+        for p in csv_write(
+                data=sorted(results),
+                setup=CsvWriter().setup,
+                column_titles=CsvWriter.get_column_titles,
+                get_row=CsvWriter.get_row,
+                header_comments=CsvWriter.get_header_comments,
+                footer_comments=CsvWriter.get_footer_comments,
+                footer_bottom_comments=CsvWriter.get_footer_bottom_comments):
+            consumer(p)
     logger(f"Done writing packing statistics to CSV file {path!r}.")
     return path
 
 
-def from_csv(file: str,
-             consumer: Callable[[PackingStatistics], None]) -> None:
+def from_csv(file: str) -> Iterable[PackingStatistics]:
     """
     Load the packing statistics from a CSV file.
 
     :param file: the file to read from
-    :param consumer: the consumer for the statistics
+    :returns: the iterable with the packing statistics
     """
-    if not callable(consumer):
-        raise type_error(consumer, "consumer", call=True)
     path: Final[Path] = file_path(file)
     logger(f"Now reading CSV file {path!r}.")
     with path.open_for_read() as rd:
-        csv_read(rows=rd,
-                 setup=CsvReader,
-                 parse_row=CsvReader.parse_row,
-                 consumer=consumer)
+        yield from csv_read(rows=rd,
+                            setup=CsvReader,
+                            parse_row=CsvReader.parse_row)
     logger(f"Done reading CSV file {path!r}.")
 
 
@@ -408,101 +406,100 @@ class CsvWriter:
 
         return self
 
-    def get_column_titles(self, dest: Callable[[str], None]) -> None:
+    def get_column_titles(self) -> Iterable[str]:
         """
         Get the column titles.
 
         :param dest: the destination string consumer
         """
         p: Final[str | None] = self.scope
-        self.__es.get_column_titles(dest)
+        yield from self.__es.get_column_titles()
 
-        dest(csv_scope(p, KEY_BIN_HEIGHT))
-        dest(csv_scope(p, KEY_BIN_WIDTH))
-        dest(csv_scope(p, KEY_N_ITEMS))
-        dest(csv_scope(p, KEY_N_DIFFERENT_ITEMS))
+        yield csv_scope(p, KEY_BIN_HEIGHT)
+        yield csv_scope(p, KEY_BIN_WIDTH)
+        yield csv_scope(p, KEY_N_ITEMS)
+        yield csv_scope(p, KEY_N_DIFFERENT_ITEMS)
         if self.__bin_bounds:
             for b in self.__bin_bounds:
-                dest(csv_scope(p, b))
+                yield csv_scope(p, b)
         if self.__objective_names and self.__objectives:
             for i, o in enumerate(self.__objectives):
-                dest(csv_scope(p, self.__objective_lb_names[i]))
-                o.get_column_titles(dest)
-                dest(csv_scope(p, self.__objective_ub_names[i]))
+                yield csv_scope(p, self.__objective_lb_names[i])
+                yield from o.get_column_titles()
+                yield csv_scope(p, self.__objective_ub_names[i])
 
-    def get_row(self, data: PackingStatistics,
-                dest: Callable[[str], None]) -> None:
+    def get_row(self, data: PackingStatistics) -> Iterable[str]:
         """
         Render a single packing result record to a CSV row.
 
         :param data: the end result record
-        :param dest: the string consumer
+        :returns: the iterable with the row text
         """
-        self.__es.get_row(data.end_statistics, dest)
-        dest(repr(data.bin_height))
-        dest(repr(data.bin_width))
-        dest(repr(data.n_items))
-        dest(repr(data.n_different_items))
+        yield from self.__es.get_row(data.end_statistics)
+        yield repr(data.bin_height)
+        yield repr(data.bin_width)
+        yield repr(data.n_items)
+        yield repr(data.n_different_items)
         if self.__bin_bounds:
             for bb in self.__bin_bounds:
-                dest(repr(data.bin_bounds[bb])
-                     if bb in data.bin_bounds else "")
+                yield (repr(data.bin_bounds[bb])
+                       if bb in data.bin_bounds else "")
         if self.__objective_names and self.__objectives:
             lb: Final[tuple[str, ...] | None] = self.__objective_lb_names
             ub: Final[tuple[str, ...] | None] = self.__objective_ub_names
             for i, ob in enumerate(self.__objective_names):
                 if lb is not None:
                     ox = lb[i]
-                    dest(num_to_str(data.objective_bounds[ox])
-                         if ox in data.objective_bounds else "")
-                SsCsvWriter.get_optional_row(
-                    self.__objectives[i], data.objectives.get(ob), dest)
+                    yield (num_to_str(data.objective_bounds[ox])
+                           if ox in data.objective_bounds else "")
+                yield from SsCsvWriter.get_optional_row(
+                    self.__objectives[i], data.objectives.get(ob))
                 if ub is not None:
                     ox = ub[i]
-                    dest(num_to_str(data.objective_bounds[ox])
-                         if ox in data.objective_bounds else "")
+                    yield (num_to_str(data.objective_bounds[ox])
+                           if ox in data.objective_bounds else "")
 
-    def get_header_comments(self, dest: Callable[[str], None]) -> None:
+    def get_header_comments(self) -> Iterable[str]:
         """
         Get any possible header comments.
 
-        :param dest: the destination
+        :returns: the header comments
         """
-        dest("End Statistics of Bin Packing Experiments")
-        dest("See the description at the bottom of the file.")
+        return ("End Statistics of Bin Packing Experiments",
+                "See the description at the bottom of the file.")
 
-    def get_footer_comments(self, dest: Callable[[str], None]) -> None:
+    def get_footer_comments(self) -> Iterable[str]:
         """
         Get any possible footer comments.
 
-        :param dest: the destination
+        :returns: the footer comments
         """
-        self.__es.get_footer_comments(dest)
-        dest("")
+        yield from self.__es.get_footer_comments()
+        yield ""
         p: Final[str | None] = self.scope
         if self.__bin_bounds:
             for bb in self.__bin_bounds:
-                dest(f"{csv_scope(p, bb)} is a lower "
-                     "bound for the number of bins.")
+                yield (f"{csv_scope(p, bb)} is a lower "
+                       "bound for the number of bins.")
         if self.__objectives and self.__objective_names:
             for i, obb in enumerate(self.__objective_names):
                 ob: str = csv_scope(p, obb)
                 ox: str = csv_scope(ob, _OBJECTIVE_LOWER)
-                dest(f"{ox}: a lower bound of the {ob} objective function.")
-                self.__objectives[i].get_footer_comments(dest)
+                yield f"{ox}: a lower bound of the {ob} objective function."
+                yield from self.__objectives[i].get_footer_comments()
                 ox = csv_scope(ob, _OBJECTIVE_UPPER)
-                dest(f"{ox}: an upper bound of the {ob} objective function.")
+                yield f"{ox}: an upper bound of the {ob} objective function."
 
-    def get_footer_bottom_comments(self, dest: Callable[[str], None]) -> None:
+    def get_footer_bottom_comments(self) -> Iterable[str]:
         """
         Get the bottom footer comments.
 
         :param dest: the destination
         """
-        motipyapps_footer_bottom_comments(
-            self, dest, "The packing data is assembled using module "
-                        "moptipyapps.binpacking2d.packing_statistics.")
-        EsCsvWriter.get_footer_bottom_comments(self.__es, dest)
+        yield from motipyapps_footer_bottom_comments(
+            self, "The packing data is assembled using module "
+                  "moptipyapps.binpacking2d.packing_statistics.")
+        yield from EsCsvWriter.get_footer_bottom_comments(self.__es)
 
 
 class CsvReader:
@@ -604,7 +601,7 @@ if __name__ == "__main__":
     packing_results: Final[list[PackingResult]] = []
     if src_path.is_file():
         logger(f"{src_path!r} identifies as file, load as end-results csv")
-        pr_from_csv(src_path, packing_results.append)
+        packing_results.extend(pr_from_csv(src_path))
     else:
         logger(f"{src_path!r} identifies as directory, load it as log files")
         pr_from_logs(src_path, packing_results.append)

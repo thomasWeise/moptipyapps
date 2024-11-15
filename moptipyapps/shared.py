@@ -1,7 +1,7 @@
 """Some shared variables and constants."""
 
 import argparse
-from typing import Any, Callable, Final
+from typing import Any, Final, Iterable
 
 import moptipy.examples.jssp.instance as ins
 from pycommons.io.arguments import make_argparser, make_epilog
@@ -38,30 +38,28 @@ def moptipyapps_argparser(file: str, description: str,
 
 
 def motipyapps_footer_bottom_comments(
-        _: Any, dest: Callable[[str], Any],
-        additional: str | None = None) -> None:
+        _: Any, additional: str | None = None) -> Iterable[str]:
     """
     Print the standard csv footer for moptipyapps.
 
     :param _: the setup object, ignored
-    :param dest: the destination callable
-    :param dest: the destination to write to
     :param additional: any additional output string
+    :returns: the comments
 
-    >>> def __qpt(s: str):
+    >>> for s in motipyapps_footer_bottom_comments(None, "bla"):
     ...     print(s[:49])
-    >>> motipyapps_footer_bottom_comments(None, __qpt, "bla")
     This data has been generated with moptipyapps ver
     bla
     You can find moptipyapps at https://thomasweise.g
 
-    >>> motipyapps_footer_bottom_comments(None, __qpt, None)
+    >>> for s in motipyapps_footer_bottom_comments(None, None):
+    ...     print(s[:49])
     This data has been generated with moptipyapps ver
     You can find moptipyapps at https://thomasweise.g
     """
-    dest("This data has been generated with moptipyapps version "
-         f"{moptipyapps_version}.")
+    yield ("This data has been generated with moptipyapps version "
+           f"{moptipyapps_version}.")
     if (additional is not None) and (str.__len__(additional) > 0):
-        dest(additional)
-    dest("You can find moptipyapps at "
-         "https://thomasweise.github.io/moptipyapps.")
+        yield additional
+    yield ("You can find moptipyapps at "
+           "https://thomasweise.github.io/moptipyapps.")
