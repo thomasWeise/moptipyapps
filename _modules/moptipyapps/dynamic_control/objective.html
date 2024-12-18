@@ -1,0 +1,348 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.objective — moptipyapps 0.8.63 documentation</title><link href="../../../_static/pygments.css?v=80d5e7a1"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=ecebbf0d"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/objective.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.63 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.objective</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.objective</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An objective functions for the dynamic control problem.</span>
+
+<span class=sd>The dynamic control problem means that our system starts in a given state</span>
+<span class=sd>and we try to move it to a stable state by using control effort. Controllers</span>
+<span class=sd>are trained over several training states, for each of which we can compute a</span>
+<span class=sd>figure of merit.</span>
+
+<span class=sd>We offer two different approaches for this:</span>
+
+<span class=sd>- :class:`FigureOfMerit` computes the arithmetic mean `z` over the separate</span>
+<span class=sd>  figures of merit `J` of the training cases.</span>
+<span class=sd>- :class:`FigureOfMeritLE` tries to smooth out the impact of bad starting</span>
+<span class=sd>  states by computing `exp(mean[log(J + 1)]) - 1`.</span>
+
+<span class=sd>These objective functions also offer a way to collect the state+control and</span>
+<span class=sd>corresponding differential vectors.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span> <span class=nn>math</span> <span class=kn>import</span> <span class=n>expm1</span>
+<span class=kn>from</span> <span class=nn>typing</span> <span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span> <span class=nn>numpy</span> <span class=k>as</span> <span class=nn>np</span>
+<span class=kn>from</span> <span class=nn>moptipy.api.objective</span> <span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.logger</span> <span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span> <span class=nn>moptipy.utils.nputils</span> <span class=kn>import</span> <span class=n>array_to_str</span>
+<span class=kn>from</span> <span class=nn>pycommons.types</span> <span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.instance</span> <span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.dynamic_control.ode</span> <span class=kn>import</span> <span class=n>diff_from_ode</span><span class=p>,</span> <span class=n>j_from_ode</span><span class=p>,</span> <span class=n>run_ode</span>
+<span class=kn>from</span> <span class=nn>moptipyapps.shared</span> <span class=kn>import</span> <span class=n>SCOPE_INSTANCE</span>
+
+
+<div class=viewcode-block id=FigureOfMerit>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit>[docs]</a>
+<span class=k>class</span> <span class=nc>FigureOfMerit</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A base class for figures of merit."""</span>
+
+    <span class=k>def</span> <span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>,</span>
+                 <span class=n>supports_model_mode</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the figure-of-merit objective of the dynamic control problem.</span>
+
+<span class=sd>        :param instance: the instance</span>
+<span class=sd>        :param supports_model_mode: `True` if this objective is supposed to</span>
+<span class=sd>            support alternating actual and model-based runs, `False` if it is</span>
+<span class=sd>            just applied to the actual instance (see :meth:`set_model` and</span>
+<span class=sd>            :meth:`get_differentials`).</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=c1>#: the dynamic control instance</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+        <span class=c1>#: the simulation steps</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__steps</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>training_steps</span>
+        <span class=c1>#: the training time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>training_time</span>
+        <span class=c1>#: the training starting states</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__training</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>training_starting_states</span>
+        <span class=c1>#: the results</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__results</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span>
+            <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__training</span><span class=p>),</span> <span class=nb>float</span><span class=p>)</span>
+        <span class=c1>#: the equations</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>equations</span>
+        <span class=c1>#: the controller</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__controller</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> \
+            <span class=n>instance</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>controller</span>
+        <span class=c1>#: the controller dimension</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__controller_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>controller</span><span class=o>.</span><span class=n>control_dims</span>
+        <span class=c1>#: the collection of state+control vectors</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collection_sc</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> \
+            <span class=o>=</span> <span class=p>[]</span> <span class=k>if</span> <span class=n>supports_model_mode</span> <span class=k>else</span> <span class=kc>None</span>
+        <span class=c1>#: the collection of differential vectors</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collection_df</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> \
+            <span class=o>=</span> <span class=p>[]</span> <span class=k>if</span> <span class=n>supports_model_mode</span> <span class=k>else</span> <span class=kc>None</span>
+        <span class=c1>#: should we collect data?</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collect</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collection_df</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span>
+        <span class=c1>#: the state dimensions inside the `J`</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__state_dims_in_j</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>state_dims_in_j</span>
+        <span class=c1>#: the weight of the control effort</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__gamma</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>gamma</span>
+
+<div class=viewcode-block id=FigureOfMerit.initialize>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit.initialize>[docs]</a>
+    <span class=k>def</span> <span class=nf>initialize</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Initialize the objective for use."""</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>initialize</span><span class=p>()</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collection_df</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__collection_df</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collection_sc</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__collection_sc</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>set_raw</span><span class=p>()</span></div>
+
+
+<div class=viewcode-block id=FigureOfMerit.set_raw>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit.set_raw>[docs]</a>
+    <span class=k>def</span> <span class=nf>set_raw</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Let this objective work on the original system equations.</span>
+
+<span class=sd>        The objective function here can be used in two modi: a) based on the</span>
+<span class=sd>        original systems model, as given in</span>
+<span class=sd>        :attr:`~moptipyapps.dynamic_control.instance.Instance.system`, or b)</span>
+<span class=sd>        on a learned model of the system. This function here toggles to the</span>
+<span class=sd>        former mode, i.e., to the actual system mode. In this modus, training</span>
+<span class=sd>        data for training the system model will be gathered if the objective</span>
+<span class=sd>        function is configured to do so. In that case, you can toggle to model</span>
+<span class=sd>        mode via :meth:`set_model`.</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>equations</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collect</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collection_sc</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span></div>
+
+
+<div class=viewcode-block id=FigureOfMerit.get_differentials>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit.get_differentials>[docs]</a>
+    <span class=k>def</span> <span class=nf>get_differentials</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the collected differentials.</span>
+
+<span class=sd>        If `supports_model_mode` was set to `True` in the creating of this</span>
+<span class=sd>        objective function, then the system will gather tuples `(s, c)` and</span>
+<span class=sd>        `ds/dt` when in raw mode (see :meth:`set_raw`) and make them available</span>
+<span class=sd>        here to train system models (see :meth:`set_model`). Notice that</span>
+<span class=sd>        gathering training data is a very memory intense process.</span>
+
+<span class=sd>        :returns: the collected differentials</span>
+<span class=sd>        """</span>
+        <span class=n>clsc</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collection_sc</span>
+        <span class=n>cldf</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collection_df</span>
+        <span class=k>if</span> <span class=n>clsc</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Differential collection not supported."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>clsc</span><span class=p>)</span> <span class=o>==</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>return</span> <span class=n>clsc</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=n>cldf</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>  <span class=c1># pylint: disable=E1136</span>
+        <span class=n>sc</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>concatenate</span><span class=p>(</span><span class=n>clsc</span><span class=p>)</span>  <span class=c1># pylint: disable=E1133</span>
+        <span class=n>df</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>concatenate</span><span class=p>(</span><span class=n>cldf</span><span class=p>)</span>  <span class=c1># pylint: disable=E1133</span>
+        <span class=n>clsc</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=n>clsc</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>sc</span><span class=p>)</span>
+        <span class=n>cldf</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=n>cldf</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>df</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>sc</span><span class=p>,</span> <span class=n>df</span></div>
+
+
+<div class=viewcode-block id=FigureOfMerit.set_model>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit.set_model>[docs]</a>
+    <span class=k>def</span> <span class=nf>set_model</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>equations</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the model-driven mode for the evaluation.</span>
+
+<span class=sd>        In this modus, the internal system equations are replaced by the</span>
+<span class=sd>        callable `equations` passed into this function and the data collection</span>
+<span class=sd>        is stopped. The idea is that `equations` could be a model synthesized</span>
+<span class=sd>        on the data gathered (see :meth:`get_differentials`) and thus does not</span>
+<span class=sd>        represent the actual dynamic system but a model thereof. We could</span>
+<span class=sd>        synthesize a controller for this model and for this purpose would use</span>
+<span class=sd>        the exactly same objective function -- just instead of using the</span>
+<span class=sd>        actual system equations, we use the system model. Of course, we then</span>
+<span class=sd>        need to deactivate the data gathering mechanism (see again</span>
+<span class=sd>        :meth:`get_differentials`), because the data would then not be real</span>
+<span class=sd>        system data. You can toggle back to the actual system using</span>
+<span class=sd>        :meth:`set_raw`.</span>
+
+<span class=sd>        :param equations: the equations to be used instead of the actual</span>
+<span class=sd>            system's differential equations.</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collection_sc</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Cannot go into model mode without gathering "</span>
+                             <span class=s2>"model training data!"</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span> <span class=o>=</span> <span class=n>equations</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collect</span> <span class=o>=</span> <span class=kc>False</span></div>
+
+
+    <span class=k>def</span> <span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this objective function.</span>
+
+<span class=sd>        :return: `figureOfMerit`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"figureOfMerit"</span>
+
+    <span class=k>def</span> <span class=nf>__append</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>data</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Internally collect the data.</span>
+
+<span class=sd>        :param data: the data to collect</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collection_sc</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__collection_df</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+
+<div class=viewcode-block id=FigureOfMerit.evaluate>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit.evaluate>[docs]</a>
+    <span class=k>def</span> <span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Evaluate the parameterization of a controller.</span>
+
+<span class=sd>        :param x: the controller parameters</span>
+<span class=sd>        :return: the figure of merit</span>
+<span class=sd>        """</span>
+        <span class=n>steps</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__steps</span>
+        <span class=n>time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span>
+        <span class=n>training</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__training</span>
+        <span class=n>results</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__results</span>
+        <span class=n>equations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> \
+            <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span>
+        <span class=n>controller</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span>
+            <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> \
+            <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__controller</span>
+        <span class=n>controller_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__controller_dim</span>
+        <span class=n>collector</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>tuple</span><span class=p>[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]],</span> <span class=kc>None</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=bp>self</span><span class=o>.</span><span class=n>__append</span> <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collect</span> <span class=k>else</span> <span class=kc>None</span>
+        <span class=n>state_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>training</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span>
+        <span class=n>state_dims_in_j</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__state_dims_in_j</span>
+        <span class=n>gamma</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__gamma</span>
+
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>start</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>training</span><span class=p>):</span>
+            <span class=c1># The following line makes no sense at all. It creates a copy of</span>
+            <span class=c1># the flattened version of the (already flat) start. The copy is</span>
+            <span class=c1># stored nowhere, so it is immediately discarded. The value of</span>
+            <span class=c1># start is not changed. However, the numpy array container</span>
+            <span class=c1># changes, for an unclear reason. This is required and it must</span>
+            <span class=c1># happen exactly here, for an unclear reason. Otherwise, the</span>
+            <span class=c1># results of the objective function are inconsistent. For an</span>
+            <span class=c1># unclear reason.</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>copy</span><span class=p>(</span><span class=n>start</span><span class=o>.</span><span class=n>flatten</span><span class=p>())</span>  <span class=c1># &LT--- This should make no sense...</span>
+            <span class=n>the_ode</span> <span class=o>=</span> <span class=n>run_ode</span><span class=p>(</span>
+                <span class=n>start</span><span class=p>,</span> <span class=n>equations</span><span class=p>,</span> <span class=n>controller</span><span class=p>,</span> <span class=n>x</span><span class=p>,</span> <span class=n>controller_dim</span><span class=p>,</span> <span class=n>steps</span><span class=p>,</span> <span class=n>time</span><span class=p>)</span>
+            <span class=n>results</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>z</span> <span class=o>=</span> <span class=n>j_from_ode</span><span class=p>(</span>
+                <span class=n>the_ode</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>,</span> <span class=n>state_dims_in_j</span><span class=p>,</span> <span class=n>gamma</span><span class=p>)</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mf>0.0</span> <span class=o><=</span> <span class=n>z</span> <span class=o><=</span> <span class=mf>1e100</span><span class=p>):</span>
+                <span class=k>return</span> <span class=mf>1e200</span>
+            <span class=k>if</span> <span class=n>collector</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>collector</span><span class=p>(</span><span class=n>diff_from_ode</span><span class=p>(</span><span class=n>the_ode</span><span class=p>,</span> <span class=n>state_dim</span><span class=p>))</span>
+        <span class=n>z</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>sum_up_results</span><span class=p>(</span><span class=n>results</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>z</span> <span class=k>if</span> <span class=mf>0.0</span> <span class=o><=</span> <span class=n>z</span> <span class=o><=</span> <span class=mf>1e100</span> <span class=k>else</span> <span class=mf>1e200</span></div>
+
+
+<div class=viewcode-block id=FigureOfMerit.sum_up_results>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit.sum_up_results>[docs]</a>
+    <span class=k>def</span> <span class=nf>sum_up_results</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>results</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute the final objective value from several single `J` values.</span>
+
+<span class=sd>        When synthesizing controllers, we do not just apply them to a single</span>
+<span class=sd>        simulation run. Instead, we use multiple training cases (see</span>
+<span class=sd>        :attr:`~moptipyapps.dynamic_control.system.System.\</span>
+<span class=sd>training_starting_states`) and perform :attr:`~moptipyapps.dynamic_control\</span>
+<span class=sd>.system.System.training_steps` simulation steps on each of them. Each such</span>
+<span class=sd>        training starting state will result in a single `J` value, which is</span>
+<span class=sd>        the sum of squared state and control values. We now compute the end</span>
+<span class=sd>        objective value from these different `J` values by using this</span>
+<span class=sd>        function here.</span>
+
+<span class=sd>        This will *destroy* the contents of `results`.</span>
+
+<span class=sd>        :param results: the array of `J` values</span>
+<span class=sd>        :return: the final result</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=nb>float</span><span class=p>(</span><span class=n>results</span><span class=o>.</span><span class=n>mean</span><span class=p>())</span></div>
+
+
+<div class=viewcode-block id=FigureOfMerit.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit.log_parameters_to>[docs]</a>
+    <span class=k>def</span> <span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"modelModeEnabled"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collection_sc</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"dataCollecting"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__collect</span><span class=p>)</span>
+        <span class=n>eq</span><span class=p>:</span> <span class=n>Final</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"usingOriginalEquations"</span><span class=p>,</span>
+                         <span class=n>eq</span> <span class=ow>is</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>equations</span><span class=p>)</span>
+        <span class=n>mp</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"modelParameters"</span>
+        <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__equations</span><span class=p>,</span> <span class=n>mp</span><span class=p>):</span>
+            <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=n>mp</span><span class=p>,</span> <span class=n>array_to_str</span><span class=p>(</span><span class=nb>getattr</span><span class=p>(</span><span class=n>eq</span><span class=p>,</span> <span class=n>mp</span><span class=p>)))</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=n>SCOPE_INSTANCE</span><span class=p>)</span> <span class=k>as</span> <span class=n>scope</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>scope</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=FigureOfMerit.lower_bound>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMerit.lower_bound>[docs]</a>
+    <span class=k>def</span> <span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of the figure of merit, which is 0.</span>
+
+<span class=sd>        :returns: 0.0</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mf>0.0</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=FigureOfMeritLE>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMeritLE>[docs]</a>
+<span class=k>class</span> <span class=nc>FigureOfMeritLE</span><span class=p>(</span><span class=n>FigureOfMerit</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute a `exp(mean(log(z+1)))-1` over the figures of merit `z`.</span>
+
+<span class=sd>    Different from :class:`FigureOfMerit`, we compute the mean of `log(z + 1)`</span>
+<span class=sd>    where `z` be the figures of merit of the single training cases. We then</span>
+<span class=sd>    return `exp(mean[log(z + 1)]) - 1` as final result. The goal is to reduce</span>
+<span class=sd>    the impact of training cases that require more control effort.</span>
+
+<span class=sd>    If we solve the dynamic control problem for diverse training cases, then</span>
+<span class=sd>    we may have some very easy cases, where the system just needs a small</span>
+<span class=sd>    control impulse to move into a stable and cheap state. Others may have</span>
+<span class=sd>    very far out and expensive starting states that require lots of control</span>
+<span class=sd>    efforts to be corrected. If we simply average over all states, then these</span>
+<span class=sd>    expensive states will dominate whatever good we are doing in the cheap</span>
+<span class=sd>    states. Averaging over the `log(J+1)` reduces such impact. We then compute</span>
+<span class=sd>    `exp[...]-1` of the result as cosmetics to get back into the original</span>
+<span class=sd>    range of the figure of merits.</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span> <span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this objective function.</span>
+
+<span class=sd>        :return: `figureOfMeritLE`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"figureOfMeritLE"</span>
+
+<div class=viewcode-block id=FigureOfMeritLE.sum_up_results>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.objective.FigureOfMeritLE.sum_up_results>[docs]</a>
+    <span class=k>def</span> <span class=nf>sum_up_results</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>results</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute the final objective value from several single `J` values.</span>
+
+<span class=sd>        For each training case, there is one basic figure of merit `J` and</span>
+<span class=sd>        here we compute `exp(mean[log(J + 1)]) - 1` over all of these values.</span>
+
+<span class=sd>        :param results: the array of `J` values</span>
+<span class=sd>        :return: the final result</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=nb>float</span><span class=p>(</span><span class=n>expm1</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>log1p</span><span class=p>(</span><span class=n>results</span><span class=p>,</span> <span class=n>results</span><span class=p>)</span><span class=o>.</span><span class=n>mean</span><span class=p>()))</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.63 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.objective</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2024, Thomas Weise.</div>
