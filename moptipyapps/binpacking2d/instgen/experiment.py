@@ -19,10 +19,10 @@ from moptipyapps.shared import moptipyapps_argparser
 MAX_FES: Final[int] = 10_000
 
 #: the maximum number of FEs in for the algorithm runs inside the objective
-INNER_MAX_FES: Final[int] = 100_000
+INNER_MAX_FES: Final[int] = 225_000
 
-#: the numbe rof runs of the algorithms inside the objective
-INNER_RUNS: Final[int] = 3
+#: the number of runs of the algorithms inside the objective
+INNER_RUNS: Final[int] = 2
 
 
 def cmaes(problem: Problem) -> Execution:

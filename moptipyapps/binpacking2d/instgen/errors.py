@@ -67,12 +67,13 @@ a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\
 >>> errors.upper_bound()
 1.0
 >>> errors.evaluate(y)
-0.3778740795710009
+0.614714632631273
 
 >>> y[0] = orig
 >>> errors.evaluate(y)
 0.0
 """
+from math import sqrt
 from typing import Final
 
 from moptipy.api.objective import Objective
@@ -196,7 +197,7 @@ class Errors(Objective):
             raise ValueError("Invalid total area?")
         errors += abs(total_area - space.total_item_area)
 
-        return max(0.0, min(1.0, errors / self.__max_errors))
+        return max(0.0, min(1.0, sqrt(errors / self.__max_errors)))
 
     def log_parameters_to(self, logger: KeyValueLogSection) -> None:
         """

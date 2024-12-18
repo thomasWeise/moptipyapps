@@ -30,28 +30,27 @@ An objective function assessing the hardness of an instance.
 a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\
 441,122;1649,122;2750,10;2750,1,2;2750,3;1649,1098;2750,878;2750,58;660,122
 
->>> hardness = Hardness(max_fes=100)
+>>> hardness = Hardness(max_fes=1000)
 >>> hardness.lower_bound()
 0.0
 >>> hardness.upper_bound()
 1.0
 >>> hardness.evaluate(y)
-0.8781459580052053
+0.6688894353015722
 
 >>> y[0] = orig
 >>> hardness.evaluate(y)
-0.9876395399254564
+0.9298025539793962
 
 >>> z = Instance.from_compact_str(
 ...     "cl04_020_01n;19;100;100;1,10;2,38;2,62;1,4,2;3,38;1,7;27,93;1,62;1,"
 ...     "3;13,38;1,38;1,17;1,45;36,62;39,3;1,2;20,10;3,24;12,4")
 >>> hardness.evaluate(z)
-0.9995959203471327
+0.998823040627722
 """
-from math import isfinite
+from math import fsum, isfinite
 from typing import Callable, Final, Iterable
 
-from moptipy.algorithms.random_sampling import RandomSampling
 from moptipy.algorithms.so.rls import RLS
 from moptipy.api.execution import Execution
 from moptipy.api.objective import Objective
@@ -125,33 +124,9 @@ def setup_rls_f1(instance: Instance) -> tuple[Execution, Objective]:
             .set_objective(objective), objective)
 
 
-def setup_rs_f1(instance: Instance) -> tuple[Execution, Objective]:
-    """
-    Set up the randomized sampling for an instance.
-
-    :param instance: the instance
-    :return: the execution
-    """
-    search_space = SignedPermutations(
-        instance.get_standard_item_sequence())  # Create the search space.
-    solution_space = PackingSpace(instance)  # Create the space of packings.
-    objective: Final[BinCount] = BinCount(instance)
-
-    # Build a single execution of a single run of a single algorithm and
-    # return the lower bound of the objective value
-    return (Execution()
-            .set_search_space(search_space)
-            .set_solution_space(solution_space)
-            .set_encoding(ImprovedBottomLeftEncoding1(instance))
-            .set_algorithm(  # This is the algorithm: Random Sampling
-                RandomSampling(Op0ShuffleAndFlip(search_space)))
-            .set_objective(objective), objective)
-
-
 #: the default executors
 DEFAULT_EXECUTORS: Final[tuple[Callable[[Instance], tuple[
-    Execution, Objective]], ...]] = (
-        setup_rs_f1, setup_rls_f1, setup_rls_f7)
+    Execution, Objective]], ...]] = (setup_rls_f1, setup_rls_f7)
 
 
 class Hardness(Objective):
@@ -183,6 +158,8 @@ class Hardness(Objective):
         self.__last_inst: str | None = None
         #: the last seeds name
         self.__last_seeds: tuple[int, ...] | None = None
+        #: the internal results list
+        self.__results: Final[list[float]] = []
 
     def evaluate(self, x: list[Instance] | Instance) -> float:
         """
@@ -205,7 +182,8 @@ class Hardness(Objective):
 
         max_fes: Final[int] = self.max_fes
         runs: int = 0
-        result: float = 0.0
+        results: Final[list[float]] = self.__results
+        results.clear()
         for executor in self.executors:
             execs, f = executor(instance)
             lb: int | float = f.lower_bound()
@@ -222,22 +200,23 @@ class Hardness(Objective):
                         raise ValueError(
                             f"quality={quality} invalid, must be in "
                             f"[{lb}, {ub}] for objective {f}.")
-                    quality = (ub - quality) / (ub - lb)
-                    if not (0.0 <= quality <= 1.0):
-                        raise ValueError(
-                            f"invalid normalized quality {quality} "
-                            f"for objective {f}.")
                     runtime: int | float = proc.get_last_improvement_fe()
                     if not (0 < runtime <= max_fes):
                         raise ValueError(f"invalid FEs {runtime}, must "
                                          f"be in 1..{max_fes}.")
-                    runtime = (max_fes - runtime) / (max_fes - 1)
-                    if not (0.0 <= runtime <= 1.0):
+                    runtime = (max_fes - runtime) / max_fes
+                    if not (0.0 <= runtime < 1.0):
                         raise ValueError(
                             f"invalid normalized runtime {runtime}.")
-                    result += max(0.0, min(1.0, (
-                        (quality * 1000.0) + runtime) / 1001.0))
-        return max(0.0, min(1.0, result / runs))
+                    quality = ((ub - quality) + runtime) / (ub - lb + 1)
+                    if not (0.0 <= quality <= 1.0):
+                        raise ValueError(
+                            f"invalid normalized quality {quality} "
+                            f"for objective {f}.")
+                    results.append(quality ** 4)
+        ret: Final[float] = max(0.0, min(1.0, fsum(results) / runs))
+        results.clear()
+        return ret
 
     def lower_bound(self) -> float:
         """
