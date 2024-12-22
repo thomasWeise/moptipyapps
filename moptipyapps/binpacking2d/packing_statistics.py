@@ -27,11 +27,11 @@ from pycommons.io.console import logger
 from pycommons.io.csv import (
     SCOPE_SEPARATOR,
     csv_column,
-    csv_read,
     csv_scope,
     csv_select_scope,
-    csv_write,
 )
+from pycommons.io.csv import CsvReader as CsvReaderBase
+from pycommons.io.csv import CsvWriter as CsvWriterBase
 from pycommons.io.path import Path, file_path, line_writer
 from pycommons.math.sample_statistics import CsvReader as SsCsvReader
 from pycommons.math.sample_statistics import CsvWriter as SsCsvWriter
@@ -313,14 +313,7 @@ def to_csv(results: Iterable[PackingStatistics], file: str) -> Path:
     path.ensure_parent_dir_exists()
     with path.open_for_write() as wt:
         consumer: Final[Callable[[str], None]] = line_writer(wt)
-        for p in csv_write(
-                data=sorted(results),
-                setup=CsvWriter().setup,
-                column_titles=CsvWriter.get_column_titles,
-                get_row=CsvWriter.get_row,
-                header_comments=CsvWriter.get_header_comments,
-                footer_comments=CsvWriter.get_footer_comments,
-                footer_bottom_comments=CsvWriter.get_footer_bottom_comments):
+        for p in CsvWriter.write(sorted(results)):
             consumer(p)
     logger(f"Done writing packing statistics to CSV file {path!r}.")
     return path
@@ -336,75 +329,68 @@ def from_csv(file: str) -> Iterable[PackingStatistics]:
     path: Final[Path] = file_path(file)
     logger(f"Now reading CSV file {path!r}.")
     with path.open_for_read() as rd:
-        yield from csv_read(rows=rd,
-                            setup=CsvReader,
-                            parse_row=CsvReader.parse_row)
+        yield from CsvReader.read(rd)
     logger(f"Done reading CSV file {path!r}.")
 
 
-class CsvWriter:
+class CsvWriter(CsvWriterBase[PackingStatistics]):
     """A class for CSV writing of :class:`PackingStatistics`."""
 
-    def __init__(self, scope: str | None = None) -> None:
+    def __init__(self, data: Iterable[PackingStatistics],
+                 scope: str | None = None) -> None:
         """
         Initialize the csv writer.
 
+        :param data: the data to write
         :param scope: the prefix to be pre-pended to all columns
         """
-        #: an optional scope
-        self.scope: Final[str | None] = (
-            str.strip(scope)) if scope is not None else None
-
-        #: has this writer been set up?
-        self.__setup: bool = False
-        #: the end statistics writer
-        self.__es: Final[EsCsvWriter] = EsCsvWriter(scope)
-        #: the bin bounds
-        self.__bin_bounds: list[str] | None = None
-        #: the objectives
-        self.__objectives: list[SsCsvWriter] | None = None
-        #: the objective names
-        self.__objective_names: tuple[str, ...] | None = None
-        #: the lower bound names
-        self.__objective_lb_names: tuple[str, ...] | None = None
-        #: the upper bound names
-        self.__objective_ub_names: tuple[str, ...] | None = None
-
-    def setup(self, data: Iterable[PackingStatistics]) -> "CsvWriter":
-        """
-        Set up this csv writer based on existing data.
-
-        :param data: the data to setup with
-        :returns: this writer
-        """
-        if self.__setup:
-            raise ValueError("CSV writer has already been set up.")
-        self.__setup = True
-
         data = reiterable(data)
-        self.__es.setup(pr.end_statistics for pr in data)
+        super().__init__(data, scope)
+        #: the end statistics writer
+        self.__es: Final[EsCsvWriter] = EsCsvWriter((
+            pr.end_statistics for pr in data), scope)
 
         bin_bounds_set: Final[set[str]] = set()
         objectives_set: Final[set[str]] = set()
         for pr in data:
             bin_bounds_set.update(pr.bin_bounds.keys())
             objectives_set.update(pr.objectives.keys())
-        if set.__len__(bin_bounds_set) > 0:
-            self.__bin_bounds = sorted(bin_bounds_set)
+
+        #: the bin bounds
+        self.__bin_bounds: list[str] | None = None \
+            if set.__len__(bin_bounds_set) <= 0 else sorted(bin_bounds_set)
+
+        #: the objectives
+        objectives: list[SsCsvWriter] | None = None
+        #: the objective names
+        objective_names: tuple[str, ...] | None = None
+        #: the lower bound names
+        objective_lb_names: tuple[str, ...] | None = None
+        #: the upper bound names
+        objective_ub_names: tuple[str, ...] | None = None
         if set.__len__(objectives_set) > 0:
             p: Final[str | None] = self.scope
-            self.__objective_names = tuple(sorted(objectives_set))
-            self.__objective_lb_names = tuple(csv_scope(
-                oxx, _OBJECTIVE_LOWER) for oxx in self.__objective_names)
-            self.__objective_ub_names = tuple(csv_scope(
-                oxx, _OBJECTIVE_UPPER) for oxx in self.__objective_names)
-            self.__objectives = [SsCsvWriter(
+            objective_names = tuple(sorted(objectives_set))
+            objective_lb_names = tuple(csv_scope(
+                oxx, _OBJECTIVE_LOWER) for oxx in objective_names)
+            objective_ub_names = tuple(csv_scope(
+                oxx, _OBJECTIVE_UPPER) for oxx in objective_names)
+            objectives = [SsCsvWriter(
+                data=(ddd.objectives[k] for ddd in data),
                 scope=csv_scope(p, k), n_not_needed=True, what_short=k,
-                what_long=f"objective function {k}").setup(
-                    ddd.objectives[k] for ddd in data
-            ) for k in self.__objective_names]
+                what_long=f"objective function {k}") for k in objective_names]
 
-        return self
+        #: the objectives
+        self.__objectives: Final[list[SsCsvWriter] | None] = objectives
+        #: the objective names
+        self.__objective_names: Final[tuple[str, ...] | None] \
+            = objective_names
+        #: the lower bound names
+        self.__objective_lb_names: Final[tuple[str, ...] | None] \
+            = objective_lb_names
+        #: the upper bound names
+        self.__objective_ub_names: Final[tuple[str, ...] | None] \
+            = objective_ub_names
 
     def get_column_titles(self) -> Iterable[str]:
         """
@@ -502,7 +488,7 @@ class CsvWriter:
         yield from EsCsvWriter.get_footer_bottom_comments(self.__es)
 
 
-class CsvReader:
+class CsvReader(CsvReaderBase[PackingStatistics]):
     """A class for CSV parsing to get :class:`PackingStatistics`."""
 
     def __init__(self, columns: dict[str, int]) -> None:
@@ -511,7 +497,7 @@ class CsvReader:
 
         :param columns: the columns
         """
-        super().__init__()
+        super().__init__(columns)
         #: the end result csv reader
         self.__es: Final[EsCsvReader] = EsCsvReader(columns)
         #: the index of the n-items column

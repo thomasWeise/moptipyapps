@@ -28,11 +28,11 @@ from pycommons.io.console import logger
 from pycommons.io.csv import (
     SCOPE_SEPARATOR,
     csv_column,
-    csv_read,
     csv_scope,
     csv_select_scope,
-    csv_write,
 )
+from pycommons.io.csv import CsvReader as CsvReaderBase
+from pycommons.io.csv import CsvWriter as CsvWriterBase
 from pycommons.io.path import Path, file_path, line_writer
 from pycommons.strings.string_conv import (
     num_to_str,
@@ -401,14 +401,7 @@ def to_csv(results: Iterable[PackingResult], file: str) -> Path:
     path.ensure_parent_dir_exists()
     with path.open_for_write() as wt:
         consumer: Final[Callable[[str], None]] = line_writer(wt)
-        for p in csv_write(
-                data=sorted(results),
-                setup=CsvWriter().setup,
-                column_titles=CsvWriter.get_column_titles,
-                get_row=CsvWriter.get_row,
-                header_comments=CsvWriter.get_header_comments,
-                footer_comments=CsvWriter.get_footer_comments,
-                footer_bottom_comments=CsvWriter.get_footer_bottom_comments):
+        for p in CsvWriter.write(sorted(results)):
             consumer(p)
     logger(f"Done writing packing results to CSV file {path!r}.")
     return path
@@ -424,58 +417,38 @@ def from_csv(file: str) -> Iterable[PackingResult]:
     path: Final[Path] = file_path(file)
     logger(f"Now reading CSV file {path!r}.")
     with path.open_for_read() as rd:
-        yield from csv_read(
-            rows=rd, setup=CsvReader, parse_row=CsvReader.parse_row)
+        yield from CsvReader.read(rd)
     logger(f"Done reading CSV file {path!r}.")
 
 
-class CsvWriter:
+class CsvWriter(CsvWriterBase[PackingResult]):
     """A class for CSV writing of :class:`PackingResult`."""
 
-    def __init__(self, scope: str | None = None) -> None:
+    def __init__(self, data: Iterable[PackingResult],
+                 scope: str | None = None) -> None:
         """
         Initialize the csv writer.
 
+        :param data: the data to write
         :param scope: the prefix to be pre-pended to all columns
         """
-        #: an optional scope
-        self.scope: Final[str | None] = (
-            str.strip(scope)) if scope is not None else None
-
-        #: has this writer been set up?
-        self.__setup: bool = False
-        #: the end result writer
-        self.__er: Final[ErCsvWriter] = ErCsvWriter(scope)
-        #: the bin bounds
-        self.__bin_bounds: list[str] | None = None
-        #: the objectives
-        self.__objectives: list[str] | None = None
-
-    def setup(self, data: Iterable[PackingResult]) -> "CsvWriter":
-        """
-        Set up this csv writer based on existing data.
-
-        :param data: the data to setup with
-        :returns: this writer
-        """
-        if self.__setup:
-            raise ValueError("CSV writer has already been set up.")
-        self.__setup = True
-
         data = reiterable(data)
-        self.__er.setup(pr.end_result for pr in data)
+        super().__init__(data, scope)
+        #: the end result writer
+        self.__er: Final[ErCsvWriter] = ErCsvWriter((
+            pr.end_result for pr in data), scope)
 
         bin_bounds_set: Final[set[str]] = set()
         objectives_set: Final[set[str]] = set()
         for pr in data:
             bin_bounds_set.update(pr.bin_bounds.keys())
             objectives_set.update(pr.objectives.keys())
-        if set.__len__(bin_bounds_set) > 0:
-            self.__bin_bounds = sorted(bin_bounds_set)
-        if set.__len__(objectives_set) > 0:
-            self.__objectives = sorted(objectives_set)
-
-        return self
+        #: the bin bounds
+        self.__bin_bounds: Final[list[str] | None] = None \
+            if set.__len__(bin_bounds_set) <= 0 else sorted(bin_bounds_set)
+        #: the objectives
+        self.__objectives: Final[list[str] | None] = None \
+            if set.__len__(objectives_set) <= 0 else sorted(objectives_set)
 
     def get_column_titles(self) -> Iterable[str]:
         """
@@ -571,7 +544,7 @@ class CsvWriter:
         yield from ErCsvWriter.get_footer_bottom_comments(self.__er)
 
 
-class CsvReader:
+class CsvReader(CsvReaderBase):
     """A class for CSV reading of :class:`PackingResult` instances."""
 
     def __init__(self, columns: dict[str, int]) -> None:
@@ -580,7 +553,7 @@ class CsvReader:
 
         :param columns: the columns
         """
-        super().__init__()
+        super().__init__(columns)
         #: the end result csv reader
         self.__er: Final[ErCsvReader] = ErCsvReader(columns)
         #: the index of the n-items column
