@@ -84,5 +84,5 @@ def test_experiment_surrogate(random: Generator = default_rng()) -> None:
                        n_runs=n_runs,
                        perform_warmup=False,
                        perform_pre_warmup=False)
-        from_logs(use_dir, er.append)
+        er.extend(from_logs(use_dir))
     assert len(er) == (len(insts) * n_runs)

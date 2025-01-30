@@ -590,7 +590,7 @@ if __name__ == "__main__":
         packing_results.extend(pr_from_csv(src_path))
     else:
         logger(f"{src_path!r} identifies as directory, load it as log files")
-        pr_from_logs(src_path, packing_results.append)
+        packing_results.extend(pr_from_logs(src_path))
 
     packing_stats: Final[list[PackingStatistics]] = []
     from_packing_results(

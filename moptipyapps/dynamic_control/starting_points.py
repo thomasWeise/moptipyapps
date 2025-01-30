@@ -49,7 +49,7 @@ def interesting_point_transform(
     >>> print(xx)
     [0.6681531  1.33630621 2.00445931 2.27921153 2.84901441 3.41881729
      3.76928033 4.30774895 4.84621757 5.23423923 5.75766315 6.28108707]
-    >>> print([np.sqrt(np.square(pppp).sum()) for pppp in ppp])
+    >>> print([float(np.sqrt(np.square(pppp).sum())) for pppp in ppp])
     [2.5, 5.0, 7.5, 10.0]
     >>> ppp = interesting_point_transform(xx, 10.0, 3)
     >>> print(ppp)
@@ -57,7 +57,7 @@ def interesting_point_transform(
      [2.27921153 2.84901441 3.41881729]
      [3.76928033 4.30774895 4.84621757]
      [5.23423923 5.75766315 6.28108707]]
-    >>> print([np.sqrt(np.square(pppp).sum()) for pppp in ppp])
+    >>> print([float(np.sqrt(np.square(pppp).sum())) for pppp in ppp])
     [2.5, 5.0, 7.5, 10.0]
     >>> ppp = interesting_point_transform(xx, 10.0, 2)
     >>> print(ppp)

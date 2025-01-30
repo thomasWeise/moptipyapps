@@ -11,7 +11,7 @@ instances.
 import argparse
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, Callable, Final, Iterable, Mapping, cast
+from typing import Any, Callable, Final, Generator, Iterable, Mapping, cast
 
 from moptipy.api.objective import Objective
 from moptipy.evaluation.base import (
@@ -355,37 +355,29 @@ def from_single_log(  # pylint: disable=W0102
     :return: the packing result
     """
     the_file_path = file_path(file)
-    end_results: Final[list[EndResult]] = []
-    er_from_logs(the_file_path, end_results.append)
-    if len(end_results) != 1:
-        raise ValueError(
-            f"needs one end result record in file {the_file_path!r}, "
-            f"but got {end_results}.")
-
+    end_result: Final[EndResult] = next(er_from_logs(the_file_path))
     packing = Packing.from_log(the_file_path)
     if not isinstance(packing, Packing):
         raise type_error(packing, f"packing from {file!r}", Packing)
     return from_packing_and_end_result(
-        end_result=end_results[0], packing=packing,
+        end_result=end_result, packing=packing,
         objectives=objectives, bin_bounds=bin_bounds, cache=cache)
 
 
 def from_logs(  # pylint: disable=W0102
         directory: str,
-        consumer: Callable[[PackingResult], None],
         objectives: Iterable[Callable[[Instance], Objective]] =
         DEFAULT_OBJECTIVES,
         bin_bounds: Mapping[str, Callable[[Instance], int]]
-        = _DEFAULT_BOUNDS) -> None:
+        = _DEFAULT_BOUNDS) -> Generator[PackingResult, None, None]:
     """
     Parse a directory recursively to get all packing results.
 
     :param directory: the directory to parse
-    :param consumer: the consumer for receiving the results
     :param objectives: the objective function factories
     :param bin_bounds: the bin bounds calculators
     """
-    __LogParser(consumer, objectives, bin_bounds).parse_dir(directory)
+    return __LogParser(objectives, bin_bounds).parse(directory)
 
 
 def to_csv(results: Iterable[PackingResult], file: str) -> Path:
@@ -619,11 +611,10 @@ class CsvReader(CsvReaderBase):
              if str.__len__(data[i]) > 0})
 
 
-class __LogParser(LogParser):
+class __LogParser(LogParser[PackingResult]):
     """The internal log parser class."""
 
-    def __init__(self, consumer: Callable[[PackingResult], None],
-                 objectives: Iterable[Callable[[Instance], Objective]],
+    def __init__(self, objectives: Iterable[Callable[[Instance], Objective]],
                  bin_bounds: Mapping[str, Callable[[Instance], int]]) -> None:
         """
         Parse a directory recursively to get all packing results.
@@ -633,14 +624,10 @@ class __LogParser(LogParser):
         :param bin_bounds: the bin bounds calculators
         """
         super().__init__()
-        if not callable(consumer):
-            raise type_error(consumer, "consumer", call=True)
         if not isinstance(objectives, Iterable):
             raise type_error(objectives, "objectives", Iterable)
         if not isinstance(bin_bounds, Mapping):
             raise type_error(bin_bounds, "bin_bounds", Mapping)
-        #: the internal consumer
-        self.__consumer: Final[Callable[[PackingResult], None]] = consumer
         #: the objectives holder
         self.__objectives: Final[
             Iterable[Callable[[Instance], Objective]]] = objectives
@@ -652,16 +639,16 @@ class __LogParser(LogParser):
             str, tuple[Mapping[str, int], tuple[
                 Objective, ...], Mapping[str, int | float]]]] = {}
 
-    def parse_file(self, path: str) -> bool:
+    def parse_file(self, _: Path, current: Path) -> PackingResult:
         """
         Parse a log file.
 
-        :param path: the path to the log file
-        :return: `True`
+        :param _: the root path
+        :param current: the path to the log file
+        :return: the parsed result
         """
-        self.__consumer(from_single_log(path, self.__objectives,
-                                        self.__bin_bounds, self.__cache))
-        return True
+        return from_single_log(
+            current, self.__objectives, self.__bin_bounds, self.__cache)
 
 
 # Evaluate an experiment from the command line
@@ -681,6 +668,4 @@ if __name__ == "__main__":
         type=Path, nargs="?", default="./evaluation/end_results.txt")
     args: Final[argparse.Namespace] = parser.parse_args()
 
-    packing_results: Final[list[PackingResult]] = []
-    from_logs(args.source, packing_results.append)
-    to_csv(packing_results, args.dest)
+    to_csv(from_logs(args.source), args.dest)

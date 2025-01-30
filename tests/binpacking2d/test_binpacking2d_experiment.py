@@ -123,8 +123,7 @@ def __evaluate(results: Path, evaluation: Path) -> None:
     :param results: the results directory
     :param evaluation: the evaluation directory
     """
-    end_results: Final[list[EndResult]] = []
-    er_from_logs(results, end_results.append)
+    end_results: Final[list[EndResult]] = list(er_from_logs(results))
     for err in end_results:
         assert err.max_fes == MAX_FES
         assert err.instance in INSTANCES
@@ -161,8 +160,7 @@ def __evaluate(results: Path, evaluation: Path) -> None:
         end_statistics_2, key=lambda er: (
             er.algorithm, er.instance))
 
-    packing_results: Final[list[PackingResult]] = []
-    pr_from_logs(results, packing_results.append)
+    packing_results: Final[list[PackingResult]] = list(pr_from_logs(results))
     for exr in packing_results:
         assert exr.end_result.rand_seed in seeds_1
         assert exr.end_result.algorithm in algorithms_1

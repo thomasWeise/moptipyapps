@@ -86,19 +86,19 @@ via :mod:`~moptipyapps.tsp.known_optima`.
 >>> inst = Instance.from_resource("si175")
 >>> print(inst.n_cities)
 175
->>> inst[0, 1]
+>>> int(inst[0, 1])
 113
->>> inst[173, 174]
+>>> int(inst[173, 174])
 337
->>> inst[1, 174]
+>>> int(inst[1, 174])
 384
->>> inst[2, 174]
+>>> int(inst[2, 174])
 384
->>> inst[2, 3]
+>>> int(inst[2, 3])
 248
->>> inst[3, 5]
+>>> int(inst[3, 5])
 335
->>> inst[4, 6]
+>>> int(inst[4, 6])
 134
 
 The original data of TSPLib can be found at
@@ -142,15 +142,15 @@ non-Euclidean. It is also not based on Geo-coordinates, but on actual street
 distances and times.
 
 >>> inst = Instance.from_resource("cn11")
->>> inst[0, 0]
+>>> int(inst[0, 0])
 0
->>> inst[1, 2]
+>>> int(inst[1, 2])
 1007
->>> inst[1, 3]
+>>> int(inst[1, 3])
 1017
->>> inst[9, 10]
+>>> int(inst[9, 10])
 830
->>> inst[5, 6]
+>>> int(inst[5, 6])
 1560
 
 Important initial work on this code has been contributed by Mr. Tianyu LIANG

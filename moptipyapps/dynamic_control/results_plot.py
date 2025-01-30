@@ -39,8 +39,7 @@ def _str(f: float) -> str:
     a2 = f"{f:.2f}"
     while a2.endswith("0"):
         a2 = a2[:-1]
-    if a2.endswith("."):
-        a2 = a2[:-1]
+    a2 = a2.removesuffix(".")
     if (a1 == "-0") or (a2 == "-0"):
         return "0"
     return a1 if len(a1) < len(a2) else a2

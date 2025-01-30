@@ -102,9 +102,8 @@ def test_packing_results_experiment() -> None:
                        instances=instance_factories,
                        setups=algorithms,
                        n_runs=n_runs)
-        results_1: list[PackingResult] = []
+        results_1: list[PackingResult] = list(pr_from_logs(td))
         results_2: list[PackingResult] = []
-        pr_from_logs(td, results_1.append)
         assert len(results_1) == \
                len(algorithms) * n_runs * len(instance_factories)
         results_1.sort()

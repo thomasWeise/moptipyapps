@@ -69,7 +69,7 @@ def _evaluate(x: np.ndarray, pin: np.ndarray, pout: np.ndarray,
     >>> y_3_1 = ((8 * 0.5) - 0.2 - 11) - 18
     >>> y_3_2 = ((9 * 0.5) - 0.2 - 11) - 8
     >>> r_3 = y_3_1 ** 2 + y_3_2 ** 2
-    >>> np.sqrt(np.array([r_1, r_2, r_3])).mean()
+    >>> float(np.sqrt(np.array([r_1, r_2, r_3])).mean())
     22.680823177337874
     """
     for i, row in enumerate(pin):  # iterate over all row=(s, c) tuples

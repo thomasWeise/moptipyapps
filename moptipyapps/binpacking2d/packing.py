@@ -75,16 +75,10 @@ class Packing(Component, np.ndarray):
             we try to load it from the resources
         :returns: the Packing
         """
-        parser: Final[_PackingParser] = _PackingParser(instance)
-        parser.parse_file(file)
-        # noinspection PyProtectedMember
-        res = parser._result
-        if not isinstance(res, Packing):
-            raise type_error(res, f"packing from {file!r}", Packing)
-        return res
+        return next(_PackingParser(instance).parse(file))
 
 
-class _PackingParser(LogParser):
+class _PackingParser(LogParser[Packing]):
     """The log parser for loading packings."""
 
     def __init__(self, instance: Instance | None = None):
@@ -103,8 +97,6 @@ class _PackingParser(LogParser):
         self.__sec_mode: int = 0
         #: the packing string
         self.__packing_str: str | None = None
-        #: the result packing
-        self._result: Packing | None = None
 
     def start_section(self, title: str) -> bool:
         """Start a section."""
@@ -140,20 +132,28 @@ class _PackingParser(LogParser):
             raise ValueError("Should not be in section?")
         return (self.__instance is None) or (self.__packing_str is None)
 
-    def end_file(self) -> bool:
+    def before_get_result(self) -> None:
         """End the file."""
+        super().before_get_result()
         if self.__packing_str is None:
             raise ValueError(f"Section {SECTION_RESULT_Y} missing!")
         if self.__instance is None:
             raise ValueError(f"Section {SECTION_SETUP} missing or empty!")
-        if self._result is not None:
-            raise ValueError("Applied parser to more than one log file?")
+
+    def get_result(self) -> Packing:
+        """
+        Get the packing.
+
+        :returns: the packing
+        """
         # pylint: disable=C0415,R0401
         from moptipyapps.binpacking2d.packing_space import (
             PackingSpace,  # pylint: disable=C0415,R0401
         )
-
-        self._result = PackingSpace(self.__instance)\
+        return PackingSpace(self.__instance)\
             .from_str(self.__packing_str)
+
+    def after_get_result(self) -> None:
+        """Cleanup."""
         self.__packing_str = None
-        return False
+        super().after_get_result()
