@@ -143,8 +143,8 @@ def __evaluate(results: Path, evaluation: Path) -> None:
         end_results_2, key=lambda er: (
             er.algorithm, er.instance, er.rand_seed))
 
-    end_statistics: Final[list[EndStatistics]] = []
-    es_from_end_results(end_results, end_statistics.append)
+    end_statistics: Final[list[EndStatistics]] = list(
+        es_from_end_results(end_results))
     assert len(end_statistics) == len(INSTANCES) * 2
     algorithms_2 = {es.algorithm for es in end_statistics}
     assert len(algorithms_2) == 2
@@ -183,9 +183,8 @@ def __evaluate(results: Path, evaluation: Path) -> None:
             er.end_result.algorithm, er.end_result.instance,
             er.end_result.rand_seed))
 
-    packing_statistics: Final[list[PackingStatistics]] = []
-    ps_from_packing_results(
-        packing_results, packing_statistics.append)
+    packing_statistics: Final[list[PackingStatistics]] = list(
+        ps_from_packing_results(packing_results))
     assert len(packing_statistics) == len(INSTANCES) * 2
     assert len({es.end_statistics.algorithm
                 for es in packing_statistics}) == 2

@@ -123,11 +123,11 @@ def test_packing_results_experiment() -> None:
             results_2.sort()
             assert results_1 == results_2
 
-        end_stats_1: Final[list[PackingStatistics]] = []
-        ps_from_packing_results(results_1, end_stats_1.append)
+        end_stats_1: Final[list[PackingStatistics]] = list(
+            ps_from_packing_results(results_1))
         assert len(end_stats_1) == len(algorithms) * len(instance_factories)
-        end_stats_2: Final[list[PackingStatistics]] = []
-        ps_from_packing_results(results_2, end_stats_2.append)
+        end_stats_2: Final[list[PackingStatistics]] = list(
+            ps_from_packing_results(results_2))
         assert len(end_stats_1) == len(end_stats_2)
         end_stats_3: Final[list[PackingStatistics]] = []
         with temp_file() as tf2:

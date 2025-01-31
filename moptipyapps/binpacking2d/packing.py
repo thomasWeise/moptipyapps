@@ -6,6 +6,7 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.api.logging import SECTION_RESULT_Y, SECTION_SETUP
 from moptipy.evaluation.log_parser import LogParser
+from pycommons.io.path import Path
 from pycommons.types import type_error
 
 from moptipyapps.binpacking2d.instance import Instance
@@ -75,7 +76,7 @@ class Packing(Component, np.ndarray):
             we try to load it from the resources
         :returns: the Packing
         """
-        return next(_PackingParser(instance).parse(file))
+        return _PackingParser(instance).parse_file(file)
 
 
 class _PackingParser(LogParser[Packing]):
@@ -98,9 +99,9 @@ class _PackingParser(LogParser[Packing]):
         #: the packing string
         self.__packing_str: str | None = None
 
-    def start_section(self, title: str) -> bool:
+    def _start_section(self, title: str) -> bool:
         """Start a section."""
-        super().start_section(title)
+        super()._start_section(title)
         self.__sec_mode = 0
         if title == SECTION_SETUP:
             if self.__instance is None:
@@ -112,7 +113,7 @@ class _PackingParser(LogParser[Packing]):
             return True
         return False
 
-    def lines(self, lines: list[str]) -> bool:
+    def _lines(self, lines: list[str]) -> bool:
         """Parse the lines."""
         if self.__sec_mode == 1:
             if self.__instance is not None:
@@ -132,28 +133,20 @@ class _PackingParser(LogParser[Packing]):
             raise ValueError("Should not be in section?")
         return (self.__instance is None) or (self.__packing_str is None)
 
-    def before_get_result(self) -> None:
+    def _parse_file(self, file: Path) -> Packing:
         """End the file."""
-        super().before_get_result()
+        super()._parse_file(file)
         if self.__packing_str is None:
             raise ValueError(f"Section {SECTION_RESULT_Y} missing!")
         if self.__instance is None:
             raise ValueError(f"Section {SECTION_SETUP} missing or empty!")
-
-    def get_result(self) -> Packing:
-        """
-        Get the packing.
-
-        :returns: the packing
-        """
         # pylint: disable=C0415,R0401
         from moptipyapps.binpacking2d.packing_space import (
             PackingSpace,  # pylint: disable=C0415,R0401
         )
-        return PackingSpace(self.__instance)\
-            .from_str(self.__packing_str)
+        return PackingSpace(self.__instance).from_str(self.__packing_str)
 
-    def after_get_result(self) -> None:
+    def _end_parse_file(self, file: Path) -> None:
         """Cleanup."""
         self.__packing_str = None
-        super().after_get_result()
+        super()._end_parse_file(file)

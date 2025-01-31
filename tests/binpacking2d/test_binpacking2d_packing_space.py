@@ -24,7 +24,7 @@ def test_packing_space() -> None:
 
     res = list(Instance.list_resources())
 
-    for i in range(30):
+    for _ in range(30):
         if len(res) <= 0:
             break
         name = res.pop(use_random.integers(len(res)))

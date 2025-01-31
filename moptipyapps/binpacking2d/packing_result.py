@@ -525,11 +525,7 @@ class CsvWriter(CsvWriterBase[PackingResult]):
                 yield f"{ox}: an upper bound of the {ob} objective function."
 
     def get_footer_bottom_comments(self) -> Iterable[str]:
-        """
-        Get the bottom footer comments.
-
-        :param dest: the destination
-        """
+        """Get the bottom footer comments."""
         yield from motipyapps_footer_bottom_comments(
             self, "The packing data is assembled using module "
                   "moptipyapps.binpacking2d.packing_statistics.")
@@ -619,7 +615,6 @@ class __LogParser(LogParser[PackingResult]):
         """
         Parse a directory recursively to get all packing results.
 
-        :param consumer: the consumer for receiving the results
         :param objectives: the objective function factories
         :param bin_bounds: the bin bounds calculators
         """
@@ -639,19 +634,16 @@ class __LogParser(LogParser[PackingResult]):
             str, tuple[Mapping[str, int], tuple[
                 Objective, ...], Mapping[str, int | float]]]] = {}
 
-    def parse_file(self, _: Path, current: Path) -> PackingResult:
+    def _parse_file(self, file: Path) -> PackingResult:
         """
         Parse a log file.
 
-        :param _: the root path
-        :param current: the path to the log file
+        :param file: the file path
         :return: the parsed result
         """
-        return from_single_log(
-            current, self.__objectives, self.__bin_bounds, self.__cache)
+        return from_single_log(file, self.__objectives, self.__bin_bounds,
+                               self.__cache)
 
-
-# Evaluate an experiment from the command line
 
 # Run log files to end results if executed as script
 if __name__ == "__main__":

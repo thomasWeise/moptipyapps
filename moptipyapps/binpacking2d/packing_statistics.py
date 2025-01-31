@@ -3,7 +3,7 @@ import argparse
 import os.path
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, Callable, Final, Iterable, Mapping, cast
+from typing import Any, Callable, Final, Generator, Iterable, Mapping, cast
 
 from moptipy.evaluation.base import (
     KEY_N,
@@ -192,20 +192,16 @@ class PackingStatistics(EvaluationDataElement):
         return self.end_statistics._tuple()
 
 
-def from_packing_results(
-        results: Iterable[PackingResult],
-        consumer: Callable[[PackingStatistics], None]) -> None:
+def from_packing_results(results: Iterable[PackingResult]) \
+        -> Generator[PackingStatistics, None, None]:
     """
     Create packing statistics from a sequence of packing results.
 
     :param results: the packing results
-    :param consumer: the consumer receiving the created packing
-        statistics
+    :returns: a sequence of packing statistics
     """
     if not isinstance(results, Iterable):
         raise type_error(results, "results", Iterable)
-    if not callable(consumer):
-        raise type_error(consumer, "consumer", call=True)
     groups: Final[dict[tuple[str, str, str, str], list[PackingResult]]] \
         = {}
     objectives_set: set[str] = set()
@@ -280,11 +276,11 @@ def from_packing_results(
                     f"bin_bounds={bin_bounds!r} for data[0] "
                     f"but {pr.bin_bounds!r} for data[{i}]?")
 
-        es_from_end_results((pr.end_result for pr in data), end_stats.append)
+        end_stats.extend(es_from_end_results(pr.end_result for pr in data))
         if len(end_stats) != 1:
             raise ValueError(f"got {end_stats} from {data}?")
 
-        consumer(PackingStatistics(
+        yield PackingStatistics(
             end_statistics=end_stats[0],
             n_items=n_items,
             n_different_items=n_different_items,
@@ -296,7 +292,7 @@ def from_packing_results(
             },
             objective_bounds=objective_bounds,
             bin_bounds=bin_bounds,
-        ))
+        )
         end_stats.clear()
 
 
@@ -393,11 +389,7 @@ class CsvWriter(CsvWriterBase[PackingStatistics]):
             = objective_ub_names
 
     def get_column_titles(self) -> Iterable[str]:
-        """
-        Get the column titles.
-
-        :param dest: the destination string consumer
-        """
+        """Get the column titles."""
         p: Final[str | None] = self.scope
         yield from self.__es.get_column_titles()
 
@@ -477,11 +469,7 @@ class CsvWriter(CsvWriterBase[PackingStatistics]):
                 yield f"{ox}: an upper bound of the {ob} objective function."
 
     def get_footer_bottom_comments(self) -> Iterable[str]:
-        """
-        Get the bottom footer comments.
-
-        :param dest: the destination
-        """
+        """Get the bottom footer comments."""
         yield from motipyapps_footer_bottom_comments(
             self, "The packing data is assembled using module "
                   "moptipyapps.binpacking2d.packing_statistics.")
@@ -584,15 +572,11 @@ if __name__ == "__main__":
     args: Final[argparse.Namespace] = parser.parse_args()
 
     src_path: Final[Path] = args.source
-    packing_results: Final[list[PackingResult]] = []
+    packing_results: Iterable[PackingResult]
     if src_path.is_file():
         logger(f"{src_path!r} identifies as file, load as end-results csv")
-        packing_results.extend(pr_from_csv(src_path))
+        packing_results = pr_from_csv(src_path)
     else:
         logger(f"{src_path!r} identifies as directory, load it as log files")
-        packing_results.extend(pr_from_logs(src_path))
-
-    packing_stats: Final[list[PackingStatistics]] = []
-    from_packing_results(
-        results=packing_results, consumer=packing_stats.append)
-    to_csv(packing_stats, args.dest)
+        packing_results = pr_from_logs(src_path)
+    to_csv(from_packing_results(results=packing_results), args.dest)
