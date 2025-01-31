@@ -1,0 +1,379 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.system — moptipyapps 0.8.66 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=b4e221b3"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/system.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.66 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.system</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.system</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A class to model a dynamic system governed by differential equations.</span>
+
+<span class=sd>A system has a current state vector at any point in time. The state changes</span>
+<span class=sd>over time based on differential equations. These equations can be influenced</span>
+<span class=sd>by the output of a :mod:`~moptipyapps.dynamic_control.controller`. Our</span>
+<span class=sd>:class:`System` presents the state dimension and differential equations. It</span>
+<span class=sd>also presents several starting states for simulating the system. The starting</span>
+<span class=sd>states are divided into training and testing states. The training states can</span>
+<span class=sd>be used for, well, training controllers to learn how to handle the system.</span>
+<span class=sd>The testing states are then used to verify whether a synthesized controller</span>
+<span class=sd>actually works.</span>
+
+<span class=sd>Examples for different dynamic systems are given in package</span>
+<span class=sd>:mod:`~moptipyapps.dynamic_control.systems`.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>isfinite</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>TypeVar</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>moptipy.utils.plot_utils</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>pu</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.component</span><span class=w> </span><span class=kn>import</span> <span class=n>Component</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>array_to_str</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.dynamic_control.ode</span><span class=w> </span><span class=kn>import</span> <span class=n>multi_run_ode</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.dynamic_control.results_log</span><span class=w> </span><span class=kn>import</span> <span class=n>ResultsLog</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.dynamic_control.results_plot</span><span class=w> </span><span class=kn>import</span> <span class=n>ResultsPlot</span>
+
+<span class=c1>#: the color for training points</span>
+<span class=n>_TRAINING_COLOR</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"orange"</span>
+<span class=c1>#: the color for testing points</span>
+<span class=n>_TEST_COLOR</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"cyan"</span>
+
+<span class=c1>#: the type variable for ODE controller parameters</span>
+<span class=n>T</span> <span class=o>=</span> <span class=n>TypeVar</span><span class=p>(</span><span class=s2>"T"</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_dummy_ctrl</span><span class=p>(</span><span class=n>_</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>__</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>___</span><span class=p>:</span> <span class=n>Any</span><span class=p>,</span>
+                <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""Do nothing as internal dummy controller that does nothing."""</span>
+    <span class=n>out</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mf>0.0</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=System>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.system.System>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>System</span><span class=p>(</span><span class=n>Component</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A class for governing a system via differential system."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>state_dims</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>control_dims</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>state_dim_mod</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>state_dims_in_j</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>gamma</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                 <span class=n>test_starting_states</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                 <span class=n>training_starting_states</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                 <span class=n>test_steps</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>5000</span><span class=p>,</span>
+                 <span class=n>test_time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>50.0</span><span class=p>,</span>
+                 <span class=n>training_steps</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1000</span><span class=p>,</span>
+                 <span class=n>training_time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>50.0</span><span class=p>,</span>
+                 <span class=n>plot_examples</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=p>))</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the system.</span>
+
+<span class=sd>        :param name: the name of the system.</span>
+<span class=sd>        :param state_dims: the state dimensions</span>
+<span class=sd>        :param control_dims: the control dimensions</span>
+<span class=sd>        :param state_dim_mod: the modulus for the state dimensions</span>
+<span class=sd>        :param state_dims_in_j: the dimension until which the state is used in</span>
+<span class=sd>            the computation of the figure of merit; `-1` for using the complete</span>
+<span class=sd>            state</span>
+<span class=sd>        :param gamma: the weight of the controller input</span>
+<span class=sd>        :param test_starting_states: the starting states to be used for</span>
+<span class=sd>            testing, as a matrix with one point per row</span>
+<span class=sd>        :param test_steps: the steps to be taken for the test simulation</span>
+<span class=sd>        :param test_time: the time limit for tests</span>
+<span class=sd>        :param training_steps: the steps to be taken for the training</span>
+<span class=sd>            simulation</span>
+<span class=sd>        :param training_time: the time limit for training</span>
+<span class=sd>        :param training_starting_states: the starting states to be used for</span>
+<span class=sd>            training, as a matrix with one point per row</span>
+<span class=sd>        :param plot_examples: the points that should be plotted</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=s2>"name"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=c1>#: the name of the model</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>name</span>
+        <span class=c1>#: the dimensions of the state variable</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>state_dims</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>state_dims</span><span class=p>,</span> <span class=s2>"state_dims"</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+        <span class=c1>#: the dimensions of the controller output</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>control_dims</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>control_dims</span><span class=p>,</span> <span class=s2>"control_dims"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>100</span><span class=p>)</span>
+        <span class=c1>#: The modulus for the state dimensions for plotting</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>state_dim_mod</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>state_dim_mod</span><span class=p>,</span> <span class=s2>"state_dim_mod"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>state_dims</span><span class=p>)</span>
+        <span class=n>state_dims_in_j</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>state_dims_in_j</span><span class=p>,</span> <span class=s2>"state_dims_in_j"</span><span class=p>,</span> <span class=o>-</span><span class=mi>1</span><span class=p>,</span> <span class=n>state_dims</span><span class=p>)</span>
+        <span class=c1>#: The number of dimensions used in the J computation</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>state_dims_in_j</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>state_dims</span> <span class=k>if</span> <span class=n>state_dims_in_j</span> <span class=o><=</span> <span class=mi>0</span> \
+            <span class=k>else</span> <span class=n>state_dims_in_j</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>gamma</span><span class=p>,</span> <span class=nb>float</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>gamma</span><span class=p>,</span> <span class=s2>"gamma"</span><span class=p>,</span> <span class=nb>float</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>gamma</span><span class=p>))</span> <span class=ow>and</span> <span class=n>gamma</span> <span class=o>></span> <span class=mf>0.0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"gamma must be positive and finite, but is </span><span class=si>{</span><span class=n>gamma</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=c1>#: The Weight of the control values in the figure of merit computation.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>gamma</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>gamma</span>
+
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>test_starting_states</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>test_starting_states</span><span class=p>,</span> <span class=s2>"test_starting_states"</span><span class=p>,</span>
+                             <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>test_starting_states</span><span class=p>)</span> <span class=o><</span> <span class=mi>1</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span>
+                <span class=n>test_starting_states</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>!=</span> <span class=n>state_dims</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"invalid test starting states </span><span class=si>{</span><span class=n>test_starting_states</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=c1>#: the test starting states</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>test_starting_states</span>
+
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>training_starting_states</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>training_starting_states</span><span class=p>,</span>
+                             <span class=s2>"training_starting_states"</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>training_starting_states</span><span class=p>)</span> <span class=o><</span> <span class=mi>1</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span>
+                <span class=n>training_starting_states</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>!=</span> <span class=n>state_dims</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"invalid training starting "</span>
+                             <span class=sa>f</span><span class=s2>"states </span><span class=si>{</span><span class=n>training_starting_states</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=c1>#: the test starting states</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=n>training_starting_states</span>
+
+        <span class=c1>#: the test simulation steps</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>test_steps</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>test_steps</span><span class=p>,</span> <span class=s2>"test_steps"</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>test_time</span><span class=p>,</span> <span class=nb>float</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>test_time</span><span class=p>,</span> <span class=s2>"test_time"</span><span class=p>,</span> <span class=nb>float</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>test_time</span><span class=p>))</span> <span class=ow>and</span> <span class=n>test_time</span> <span class=o>></span> <span class=mf>1e-5</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"test_time must be > 1e-5 and finite, but is </span><span class=si>{</span><span class=n>test_time</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=c1>#: the test time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>test_time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>test_time</span>
+
+        <span class=c1>#: the training simulation steps</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>training_steps</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>training_steps</span><span class=p>,</span> <span class=s2>"training_steps"</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>training_time</span><span class=p>,</span> <span class=nb>float</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>training_time</span><span class=p>,</span> <span class=s2>"training_time"</span><span class=p>,</span> <span class=nb>float</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>training_time</span><span class=p>))</span> <span class=ow>and</span> <span class=n>training_time</span> <span class=o>></span> <span class=mf>1e-5</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"training_time must be > 1e-5 and finite, "</span>
+                             <span class=sa>f</span><span class=s2>"but is </span><span class=si>{</span><span class=n>training_time</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=c1>#: the training time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>training_time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>training_time</span>
+
+        <span class=c1>#: the plot examples</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>plot_examples</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span><span class=nb>set</span><span class=p>(</span>
+            <span class=n>plot_examples</span><span class=p>)))</span>
+        <span class=n>total</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>)</span> \
+            <span class=o>+</span> <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>plot_examples</span><span class=p>:</span>
+            <span class=n>check_int_range</span><span class=p>(</span><span class=n>i</span><span class=p>,</span> <span class=s2>"plot_examples[i]"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>total</span><span class=p>)</span>
+
+<div class=viewcode-block id=System.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.system.System.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"stateDims"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>state_dims</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"controlDims"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>control_dims</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"stateDimMod"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>state_dim_mod</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"stateDimsInJ"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>state_dims_in_j</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"gamma"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>gamma</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"testStartingStates"</span><span class=p>,</span>
+                         <span class=n>array_to_str</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=o>.</span><span class=n>flatten</span><span class=p>()))</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span>
+            <span class=s2>"trainingStartingStates"</span><span class=p>,</span>
+            <span class=n>array_to_str</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=o>.</span><span class=n>flatten</span><span class=p>()))</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"testSteps"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>test_steps</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"testTime"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>test_time</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"trainingSteps"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>training_steps</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"trainingTime"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>training_time</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"examplePlots"</span><span class=p>,</span> <span class=n>array_to_str</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>plot_examples</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span><span class=o>.</span><span class=n>flatten</span><span class=p>()))</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this model.</span>
+
+<span class=sd>        :return: the name of this model</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>name</span>
+
+<div class=viewcode-block id=System.equations>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.system.System.equations>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>equations</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>state</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>
+                  <span class=n>control</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute the values of the differential equations to be simulated.</span>
+
+<span class=sd>        :param state: the state of the system</span>
+<span class=sd>        :param time: the time index</span>
+<span class=sd>        :param control: the output of the controller</span>
+<span class=sd>        :param out: the differential, i.e., the output of this function</span>
+<span class=sd>        """</span></div>
+
+
+<div class=viewcode-block id=System.plot_points>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.system.System.plot_points>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>plot_points</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>skip_if_exists</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> <span class=o>-></span> <span class=n>Path</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Plot the training and testing points of the equation.</span>
+
+<span class=sd>        :param dest_dir: the destination directory</span>
+<span class=sd>        :param skip_if_exists: `True` to skip existing files, `False` otherwise</span>
+<span class=sd>        :return: the plotted file</span>
+<span class=sd>        """</span>
+        <span class=n>name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2>_points"</span>
+        <span class=n>dest_folder</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>dest_dir</span><span class=p>)</span>
+        <span class=n>dest_folder</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+        <span class=n>dest_file</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>dest_folder</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>.pdf"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>dest_file</span><span class=o>.</span><span class=n>ensure_file_exists</span><span class=p>()</span> <span class=ow>and</span> <span class=n>skip_if_exists</span><span class=p>:</span>
+            <span class=k>return</span> <span class=n>dest_file</span>
+
+        <span class=n>figure</span> <span class=o>=</span> <span class=n>pu</span><span class=o>.</span><span class=n>create_figure</span><span class=p>()</span>
+        <span class=n>state_dims</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>state_dims</span>
+        <span class=n>state_dim_mod</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>state_dim_mod</span>
+        <span class=n>use_dims</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>state_dims</span> <span class=k>if</span> <span class=n>state_dim_mod</span> <span class=o><=</span> <span class=mi>0</span> \
+            <span class=k>else</span> <span class=n>state_dim_mod</span>
+        <span class=k>if</span> <span class=n>use_dims</span> <span class=o>==</span> <span class=mi>3</span><span class=p>:</span>
+            <span class=n>axes</span> <span class=o>=</span> <span class=n>figure</span><span class=o>.</span><span class=n>add_subplot</span><span class=p>(</span><span class=n>projection</span><span class=o>=</span><span class=s2>"3d"</span><span class=p>)</span>
+            <span class=n>axes</span><span class=o>.</span><span class=n>set_aspect</span><span class=p>(</span><span class=s2>"equal"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>axes</span><span class=p>,</span> <span class=s2>"force_zorder"</span><span class=p>):</span>
+                <span class=n>axes</span><span class=o>.</span><span class=n>force_zorder</span> <span class=o>=</span> <span class=kc>True</span>
+            <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>axes</span><span class=p>,</span> <span class=s2>"set_zlabel"</span><span class=p>):</span>
+                <span class=n>axes</span><span class=o>.</span><span class=n>set_zlabel</span><span class=p>(</span><span class=s2>"z"</span><span class=p>)</span>
+
+            <span class=k>if</span> <span class=n>state_dims</span> <span class=o>==</span> <span class=mi>3</span><span class=p>:</span>
+                <span class=n>axes</span><span class=o>.</span><span class=n>scatter</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>[:,</span> <span class=mi>0</span><span class=p>],</span>
+                             <span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>[:,</span> <span class=mi>1</span><span class=p>],</span>
+                             <span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>[:,</span> <span class=mi>2</span><span class=p>],</span>
+                             <span class=n>color</span><span class=o>=</span><span class=n>_TRAINING_COLOR</span><span class=p>,</span> <span class=n>marker</span><span class=o>=</span><span class=s2>"x"</span><span class=p>,</span>
+                             <span class=n>zorder</span><span class=o>=</span><span class=mi>1</span><span class=p>)</span>
+                <span class=n>axes</span><span class=o>.</span><span class=n>scatter</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>[:,</span> <span class=mi>0</span><span class=p>],</span>
+                             <span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>[:,</span> <span class=mi>1</span><span class=p>],</span>
+                             <span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>[:,</span> <span class=mi>2</span><span class=p>],</span>
+                             <span class=n>color</span><span class=o>=</span><span class=n>_TEST_COLOR</span><span class=p>,</span> <span class=n>marker</span><span class=o>=</span><span class=s2>"o"</span><span class=p>,</span> <span class=n>zorder</span><span class=o>=</span><span class=mi>2</span><span class=p>)</span>
+                <span class=n>axes</span><span class=o>.</span><span class=n>scatter</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>color</span><span class=o>=</span><span class=s2>"black"</span><span class=p>,</span> <span class=n>marker</span><span class=o>=</span><span class=s2>"+"</span><span class=p>,</span> <span class=n>zorder</span><span class=o>=</span><span class=mi>3</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>NotImplementedError</span>
+
+            <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>axes</span><span class=p>,</span> <span class=s2>"set_zlim"</span><span class=p>):</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>axes</span><span class=p>,</span> <span class=s2>"get_zlim"</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Axes is invalid, does not have "</span>
+                                     <span class=s2>"'get_zlim' but 'set_zlim'."</span><span class=p>)</span>
+                <span class=n>zlim</span> <span class=o>=</span> <span class=n>axes</span><span class=o>.</span><span class=n>get_zlim</span><span class=p>()</span>  <span class=c1># type: ignore</span>
+                <span class=n>axes</span><span class=o>.</span><span class=n>set_zlim</span><span class=p>(</span><span class=mf>1.1</span> <span class=o>*</span> <span class=n>zlim</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=mf>1.1</span> <span class=o>*</span> <span class=n>zlim</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+        <span class=k>elif</span> <span class=n>use_dims</span> <span class=o>==</span> <span class=mi>2</span><span class=p>:</span>
+            <span class=n>axes</span> <span class=o>=</span> <span class=n>pu</span><span class=o>.</span><span class=n>get_axes</span><span class=p>(</span><span class=n>figure</span><span class=p>)</span>
+            <span class=n>axes</span><span class=o>.</span><span class=n>set_aspect</span><span class=p>(</span><span class=s2>"equal"</span><span class=p>)</span>
+            <span class=n>axes</span><span class=o>.</span><span class=n>grid</span><span class=p>(</span><span class=kc>True</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>state_dims</span> <span class=o>==</span> <span class=mi>2</span><span class=p>:</span>
+                <span class=n>axes</span><span class=o>.</span><span class=n>scatter</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>[:,</span> <span class=mi>0</span><span class=p>],</span>
+                             <span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>[:,</span> <span class=mi>1</span><span class=p>],</span>
+                             <span class=n>color</span><span class=o>=</span><span class=n>_TRAINING_COLOR</span><span class=p>,</span> <span class=n>marker</span><span class=o>=</span><span class=s2>"x"</span><span class=p>,</span>
+                             <span class=n>zorder</span><span class=o>=</span><span class=mi>1</span><span class=p>)</span>
+                <span class=n>axes</span><span class=o>.</span><span class=n>scatter</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>[:,</span> <span class=mi>0</span><span class=p>],</span>
+                             <span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>[:,</span> <span class=mi>1</span><span class=p>],</span>
+                             <span class=n>color</span><span class=o>=</span><span class=n>_TEST_COLOR</span><span class=p>,</span> <span class=n>marker</span><span class=o>=</span><span class=s2>"o"</span><span class=p>,</span> <span class=n>zorder</span><span class=o>=</span><span class=mi>2</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>markers</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>list</span><span class=p>(</span><span class=s2>"xvo^+&LTs>"</span><span class=p>)</span>
+                <span class=n>colors</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=n>_TRAINING_COLOR</span><span class=p>,</span> <span class=n>_TEST_COLOR</span><span class=p>]</span>
+                <span class=n>zorder</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span>
+                <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>data</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>([</span><span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>,</span>
+                                          <span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>]):</span>
+                    <span class=n>color</span> <span class=o>=</span> <span class=n>colors</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+                    <span class=k>for</span> <span class=n>row</span> <span class=ow>in</span> <span class=n>data</span><span class=p>:</span>
+                        <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>row</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>state_dims</span><span class=p>:</span><span class=n>state_dim_mod</span><span class=p>]</span>
+                        <span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>row</span><span class=p>[</span><span class=mi>1</span><span class=p>:</span><span class=n>state_dims</span><span class=p>:</span><span class=n>state_dim_mod</span><span class=p>]</span>
+                        <span class=n>zorder</span> <span class=o>+=</span> <span class=mi>1</span>
+                        <span class=n>axes</span><span class=o>.</span><span class=n>plot</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>y</span><span class=p>,</span> <span class=n>color</span><span class=o>=</span><span class=n>color</span><span class=p>,</span> <span class=n>zorder</span><span class=o>=</span><span class=n>zorder</span><span class=p>)</span>
+                        <span class=k>for</span> <span class=n>k</span><span class=p>,</span> <span class=n>xx</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>x</span><span class=p>):</span>
+                            <span class=n>zorder</span> <span class=o>+=</span> <span class=mi>1</span>
+                            <span class=n>axes</span><span class=o>.</span><span class=n>scatter</span><span class=p>(</span><span class=n>xx</span><span class=p>,</span> <span class=n>y</span><span class=p>[</span><span class=n>k</span><span class=p>],</span> <span class=n>color</span><span class=o>=</span><span class=n>color</span><span class=p>,</span>
+                                         <span class=n>zorder</span><span class=o>=</span><span class=n>zorder</span><span class=p>,</span>
+                                         <span class=n>marker</span><span class=o>=</span><span class=n>markers</span><span class=p>[</span><span class=n>k</span> <span class=o>%</span> <span class=nb>len</span><span class=p>(</span><span class=n>markers</span><span class=p>)])</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"invalid dimensions </span><span class=si>{</span><span class=n>state_dims</span><span class=si>}</span><span class=s2> "</span>
+                             <span class=sa>f</span><span class=s2>"with modulus </span><span class=si>{</span><span class=n>state_dim_mod</span><span class=si>}</span><span class=s2> for </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>xlim</span> <span class=o>=</span> <span class=n>axes</span><span class=o>.</span><span class=n>get_xlim</span><span class=p>()</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_xlim</span><span class=p>(</span><span class=mf>1.1</span> <span class=o>*</span> <span class=n>xlim</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=mf>1.1</span> <span class=o>*</span> <span class=n>xlim</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+        <span class=n>ylim</span> <span class=o>=</span> <span class=n>axes</span><span class=o>.</span><span class=n>get_ylim</span><span class=p>()</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_ylim</span><span class=p>(</span><span class=mf>1.1</span> <span class=o>*</span> <span class=n>ylim</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=mf>1.1</span> <span class=o>*</span> <span class=n>ylim</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_title</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2> system</span><span class=se>\n</span><span class=s2>training points ("</span>
+                       <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_TRAINING_COLOR</span><span class=si>}</span><span class=s2>), test points (</span><span class=si>{</span><span class=n>_TEST_COLOR</span><span class=si>}</span><span class=s2>)"</span><span class=p>)</span>
+
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_xlabel</span><span class=p>(</span><span class=s2>"x"</span><span class=p>)</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_ylabel</span><span class=p>(</span><span class=s2>"y"</span><span class=p>)</span>
+        <span class=n>res</span> <span class=o>=</span> <span class=n>pu</span><span class=o>.</span><span class=n>save_figure</span><span class=p>(</span><span class=n>figure</span><span class=p>,</span> <span class=n>name</span><span class=p>,</span> <span class=n>dest_folder</span><span class=p>,</span> <span class=s2>"pdf"</span><span class=p>)[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=k>if</span> <span class=n>res</span> <span class=o>!=</span> <span class=n>dest_file</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Wrong destination file </span><span class=si>{</span><span class=n>res</span><span class=si>!r}</span><span class=s2>!=</span><span class=si>{</span><span class=n>dest_file</span><span class=si>!r}</span><span class=s2>?"</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>dest_file</span></div>
+
+
+<div class=viewcode-block id=System.describe_system>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.system.System.describe_system>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>describe_system</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>title</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>controller</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>T</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>],</span>
+            <span class=n>parameters</span><span class=p>:</span> <span class=n>T</span><span class=p>,</span> <span class=n>base_name</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+            <span class=n>skip_if_exists</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span><span class=p>)</span> \
+            <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Path</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Describe the performance of a given system of system.</span>
+
+<span class=sd>        :param title: the title</span>
+<span class=sd>        :param controller: the controller to simulate</span>
+<span class=sd>        :param parameters: the controller parameters</span>
+<span class=sd>        :param base_name: the base name of the file to produce</span>
+<span class=sd>        :param dest_dir: the destination directory</span>
+<span class=sd>        :param skip_if_exists: if the file already exists</span>
+<span class=sd>        :returns: the paths of the generated files</span>
+<span class=sd>        """</span>
+        <span class=n>dest</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>dest_dir</span><span class=p>)</span>
+        <span class=n>dest</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+
+        <span class=n>the_title</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2> system"</span>
+        <span class=k>if</span> <span class=n>title</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>the_title</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>the_title</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>title</span><span class=si>}</span><span class=s2>"</span>
+
+        <span class=n>file_1</span> <span class=o>=</span> <span class=n>dest</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>base_name</span><span class=si>}</span><span class=s2>_plot.pdf"</span><span class=p>)</span>
+        <span class=n>file_2</span> <span class=o>=</span> <span class=n>dest</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>base_name</span><span class=si>}</span><span class=s2>_results.csv"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>file_1</span><span class=o>.</span><span class=n>ensure_file_exists</span><span class=p>()</span> <span class=ow>and</span> <span class=n>file_2</span><span class=o>.</span><span class=n>ensure_file_exists</span><span class=p>()</span> \
+                <span class=ow>and</span> <span class=n>skip_if_exists</span><span class=p>:</span>
+            <span class=k>return</span> <span class=n>file_1</span><span class=p>,</span> <span class=n>file_2</span>
+
+        <span class=k>with</span> <span class=n>ResultsPlot</span><span class=p>(</span><span class=n>dest_file</span><span class=o>=</span><span class=n>file_1</span><span class=p>,</span> <span class=n>sup_title</span><span class=o>=</span><span class=n>the_title</span><span class=p>,</span>
+                         <span class=n>state_dims</span><span class=o>=</span><span class=bp>self</span><span class=o>.</span><span class=n>state_dims</span><span class=p>,</span>
+                         <span class=n>plot_indices</span><span class=o>=</span><span class=bp>self</span><span class=o>.</span><span class=n>plot_examples</span><span class=p>,</span>
+                         <span class=n>state_dim_mod</span><span class=o>=</span><span class=bp>self</span><span class=o>.</span><span class=n>state_dim_mod</span><span class=p>)</span> <span class=k>as</span> <span class=n>plt</span><span class=p>,</span> \
+                <span class=n>ResultsLog</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>state_dims</span><span class=p>,</span> <span class=n>file_2</span><span class=p>)</span> <span class=k>as</span> <span class=n>log</span><span class=p>:</span>
+            <span class=n>multi_run_ode</span><span class=p>(</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>test_starting_states</span><span class=p>,</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>training_starting_states</span><span class=p>,</span>
+                <span class=p>(</span><span class=n>plt</span><span class=o>.</span><span class=n>collector</span><span class=p>,</span> <span class=n>log</span><span class=o>.</span><span class=n>collector</span><span class=p>),</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>equations</span><span class=p>,</span>
+                <span class=n>controller</span><span class=p>,</span> <span class=n>parameters</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>control_dims</span><span class=p>,</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>test_steps</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>test_time</span><span class=p>,</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>training_steps</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>training_time</span><span class=p>,</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>state_dims_in_j</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>gamma</span><span class=p>)</span>
+
+        <span class=k>return</span> <span class=n>file_1</span><span class=p>,</span> <span class=n>file_2</span></div>
+
+
+<div class=viewcode-block id=System.describe_system_without_control>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.system.System.describe_system_without_control>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>describe_system_without_control</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+                                        <span class=n>skip_if_exists</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> \
+            <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Path</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Describe the performance of a given system of system.</span>
+
+<span class=sd>        :param dest_dir: the destination directory</span>
+<span class=sd>        :param skip_if_exists: if the file already exists</span>
+<span class=sd>        :returns: the paths of the generated files</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>describe_system</span><span class=p>(</span><span class=s2>"without control"</span><span class=p>,</span> <span class=n>_dummy_ctrl</span><span class=p>,</span> <span class=mf>0.0</span><span class=p>,</span>
+                                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2>_without_control"</span><span class=p>,</span> <span class=n>dest_dir</span><span class=p>,</span>
+                                    <span class=n>skip_if_exists</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.66 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.system</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

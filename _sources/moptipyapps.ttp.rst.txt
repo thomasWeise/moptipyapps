@@ -1,0 +1,66 @@
+moptipyapps.ttp package
+=======================
+
+.. automodule:: moptipyapps.ttp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.ttp.robinx
+
+Submodules
+----------
+
+moptipyapps.ttp.errors module
+-----------------------------
+
+.. automodule:: moptipyapps.ttp.errors
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.ttp.game\_encoding module
+-------------------------------------
+
+.. automodule:: moptipyapps.ttp.game_encoding
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.ttp.game\_plan module
+---------------------------------
+
+.. automodule:: moptipyapps.ttp.game_plan
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.ttp.game\_plan\_space module
+----------------------------------------
+
+.. automodule:: moptipyapps.ttp.game_plan_space
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.ttp.instance module
+-------------------------------
+
+.. automodule:: moptipyapps.ttp.instance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+moptipyapps.ttp.plan\_length module
+-----------------------------------
+
+.. automodule:: moptipyapps.ttp.plan_length
+   :members:
+   :undoc-members:
+   :show-inheritance:

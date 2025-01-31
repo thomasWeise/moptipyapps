@@ -1,0 +1,205 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.starting_points — moptipyapps 0.8.66 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=b4e221b3"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/starting_points.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.66 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.starting_points</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.starting_points</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Synthesize some interesting starting points.</span>
+
+<span class=sd>Here we have some basic functionality to synthesize starting points, i.e.,</span>
+<span class=sd>training cases, for the dynamic systems control task.</span>
+<span class=sd>The points synthesized here by function</span>
+<span class=sd>:func:`make_interesting_starting_points` try to fulfill two goals:</span>
+
+<span class=sd>1. the points should be as far away from each other as possible in the state</span>
+<span class=sd>   space,</span>
+<span class=sd>2. there should be points of many different distances from the state space</span>
+<span class=sd>   origin, and</span>
+<span class=sd>3. compared to the coordinates of the other points, the coordinates of the</span>
+<span class=sd>   synthesized points should be sometimes smaller and sometimes larger (where</span>
+<span class=sd>   sometimes should ideally mean "equally often").</span>
+
+<span class=sd>These two goals are slightly contradicting and are achieved by forcing the</span>
+<span class=sd>points to be located on rings of increasing distance from the origin via</span>
+<span class=sd>:func:`interesting_point_transform` while maximizing their mean distance</span>
+<span class=sd>to each other via :func:`interesting_point_objective`.</span>
+<span class=sd>Since :func:`make_interesting_starting_points` is a bit slow, it makes sense</span>
+<span class=sd>to pre-compute the points and then store them as array constants.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.so.vector.cmaes_lib</span><span class=w> </span><span class=kn>import</span> <span class=n>BiPopCMAES</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.execution</span><span class=w> </span><span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.vectorspace</span><span class=w> </span><span class=kn>import</span> <span class=n>VectorSpace</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.console</span><span class=w> </span><span class=kn>import</span> <span class=n>logger</span>
+
+
+<div class=viewcode-block id=interesting_point_transform>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.starting_points.interesting_point_transform>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>interesting_point_transform</span><span class=p>(</span>
+        <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>max_radius</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Transform interesting points.</span>
+
+<span class=sd>    >>> xx = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12.0])</span>
+<span class=sd>    >>> ppp = interesting_point_transform(xx, 10.0, 3)</span>
+<span class=sd>    >>> print(ppp)</span>
+<span class=sd>    [[0.6681531  1.33630621 2.00445931]</span>
+<span class=sd>     [2.27921153 2.84901441 3.41881729]</span>
+<span class=sd>     [3.76928033 4.30774895 4.84621757]</span>
+<span class=sd>     [5.23423923 5.75766315 6.28108707]]</span>
+<span class=sd>    >>> print(xx)</span>
+<span class=sd>    [0.6681531  1.33630621 2.00445931 2.27921153 2.84901441 3.41881729</span>
+<span class=sd>     3.76928033 4.30774895 4.84621757 5.23423923 5.75766315 6.28108707]</span>
+<span class=sd>    >>> print([float(np.sqrt(np.square(pppp).sum())) for pppp in ppp])</span>
+<span class=sd>    [2.5, 5.0, 7.5, 10.0]</span>
+<span class=sd>    >>> ppp = interesting_point_transform(xx, 10.0, 3)</span>
+<span class=sd>    >>> print(ppp)</span>
+<span class=sd>    [[0.6681531  1.33630621 2.00445931]</span>
+<span class=sd>     [2.27921153 2.84901441 3.41881729]</span>
+<span class=sd>     [3.76928033 4.30774895 4.84621757]</span>
+<span class=sd>     [5.23423923 5.75766315 6.28108707]]</span>
+<span class=sd>    >>> print([float(np.sqrt(np.square(pppp).sum())) for pppp in ppp])</span>
+<span class=sd>    [2.5, 5.0, 7.5, 10.0]</span>
+<span class=sd>    >>> ppp = interesting_point_transform(xx, 10.0, 2)</span>
+<span class=sd>    >>> print(ppp)</span>
+<span class=sd>    [[0.74535599 1.49071198]</span>
+<span class=sd>     [2.20132119 2.50305736]</span>
+<span class=sd>     [3.200922   3.8411064 ]</span>
+<span class=sd>     [4.39003072 5.01717796]</span>
+<span class=sd>     [5.66154475 6.11484713]</span>
+<span class=sd>     [6.75724629 7.3715414 ]]</span>
+<span class=sd>    """</span>
+    <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>x</span><span class=p>)</span> <span class=o>//</span> <span class=n>dim</span>
+    <span class=n>p</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>reshape</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=p>(</span><span class=n>n</span><span class=p>,</span> <span class=n>dim</span><span class=p>))</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+        <span class=n>pp</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>p</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=p>:]</span>
+
+        <span class=n>cur_radius</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>square</span><span class=p>(</span><span class=n>pp</span><span class=p>)</span><span class=o>.</span><span class=n>sum</span><span class=p>())</span>
+        <span class=k>if</span> <span class=n>cur_radius</span> <span class=o><=</span> <span class=mf>0.0</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>goal_radius</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>max_radius</span> <span class=o>*</span> <span class=p>((</span><span class=n>i</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>/</span> <span class=n>n</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>goal_radius</span> <span class=o>!=</span> <span class=n>cur_radius</span><span class=p>:</span>
+            <span class=n>first</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+            <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>
+                <span class=n>old_radius</span> <span class=o>=</span> <span class=n>cur_radius</span>
+                <span class=n>pp2</span> <span class=o>=</span> <span class=n>pp</span> <span class=o>*</span> <span class=n>goal_radius</span> <span class=o>/</span> <span class=n>cur_radius</span>
+                <span class=k>if</span> <span class=n>np</span><span class=o>.</span><span class=n>array_equal</span><span class=p>(</span><span class=n>pp2</span><span class=p>,</span> <span class=n>pp</span><span class=p>):</span>
+                    <span class=k>break</span>
+                <span class=n>cur_radius</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>square</span><span class=p>(</span><span class=n>pp2</span><span class=p>)</span><span class=o>.</span><span class=n>sum</span><span class=p>())</span>
+                <span class=k>if</span> <span class=n>cur_radius</span> <span class=o>==</span> <span class=n>goal_radius</span><span class=p>:</span>
+                    <span class=n>pp</span> <span class=o>=</span> <span class=n>pp2</span>
+                    <span class=k>break</span>
+                <span class=k>if</span> <span class=n>first</span><span class=p>:</span>
+                    <span class=n>first</span> <span class=o>=</span> <span class=kc>False</span>
+                <span class=k>elif</span> <span class=n>cur_radius</span> <span class=o>></span> <span class=n>old_radius</span><span class=p>:</span>
+                    <span class=k>break</span>
+                <span class=n>pp</span> <span class=o>=</span> <span class=n>pp2</span>
+        <span class=n>p</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=p>:]</span> <span class=o>=</span> <span class=n>pp</span>
+    <span class=k>return</span> <span class=n>p</span></div>
+
+
+
+<div class=viewcode-block id=interesting_point_objective>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.starting_points.interesting_point_objective>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>interesting_point_objective</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>other</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                                <span class=n>max_radius</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the point diversity.</span>
+
+<span class=sd>    1. the distance between the points</span>
+<span class=sd>    2. the distance to the other points</span>
+<span class=sd>    3. the coordinates in the different dimensions should be equally often</span>
+<span class=sd>       smaller and larger than those of the starting points</span>
+<span class=sd>    """</span>
+    <span class=n>pts</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>interesting_point_transform</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>max_radius</span><span class=p>,</span> <span class=n>dim</span><span class=p>)</span>
+    <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>pts</span><span class=p>)</span>
+    <span class=n>f</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+    <span class=n>score</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+        <span class=n>pt</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>pts</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+        <span class=n>scale</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=p>(((</span><span class=n>i</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>/</span> <span class=n>n</span><span class=p>)</span> <span class=o>**</span> <span class=mi>2</span><span class=p>)</span>  <span class=c1># we know this</span>
+        <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>i</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>n</span><span class=p>):</span>
+            <span class=n>dst</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>square</span><span class=p>(</span><span class=n>pt</span> <span class=o>-</span> <span class=n>pts</span><span class=p>[</span><span class=n>j</span><span class=p>])</span><span class=o>.</span><span class=n>sum</span><span class=p>())</span>
+            <span class=n>f</span> <span class=o>+=</span> <span class=n>scale</span> <span class=o>/</span> <span class=n>dst</span> <span class=k>if</span> <span class=n>dst</span> <span class=o>></span> <span class=mf>0.0</span> <span class=k>else</span> <span class=mf>1e10</span>
+        <span class=k>for</span> <span class=n>oth</span> <span class=ow>in</span> <span class=n>other</span><span class=p>:</span>
+            <span class=n>dst</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>square</span><span class=p>(</span><span class=n>pt</span> <span class=o>-</span> <span class=n>oth</span><span class=p>)</span><span class=o>.</span><span class=n>sum</span><span class=p>())</span>
+            <span class=n>f</span> <span class=o>+=</span> <span class=n>scale</span> <span class=o>/</span> <span class=n>dst</span> <span class=k>if</span> <span class=n>dst</span> <span class=o>></span> <span class=mf>0.0</span> <span class=k>else</span> <span class=mf>1e10</span>
+            <span class=k>for</span> <span class=n>k</span><span class=p>,</span> <span class=n>val</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>pt</span><span class=p>):</span>
+                <span class=n>score</span> <span class=o>+=</span> <span class=o>-</span><span class=mi>1</span> <span class=k>if</span> <span class=n>val</span> <span class=o><</span> <span class=n>oth</span><span class=p>[</span><span class=n>k</span><span class=p>]</span> <span class=k>else</span> <span class=mi>1</span>
+
+    <span class=k>return</span> <span class=n>f</span> <span class=o>*</span> <span class=n>np</span><span class=o>.</span><span class=n>log1p</span><span class=p>(</span><span class=nb>abs</span><span class=p>(</span><span class=n>score</span><span class=p>))</span></div>
+
+
+
+<div class=viewcode-block id=make_interesting_starting_points>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.starting_points.make_interesting_starting_points>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>make_interesting_starting_points</span><span class=p>(</span>
+        <span class=n>n</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>other</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>float</span><span class=p>]],</span>
+        <span class=n>log</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create some reasonably diverse starting points.</span>
+
+<span class=sd>    :param n: the number of starting points</span>
+<span class=sd>    :param other: the other points</span>
+<span class=sd>    :param log: write log output</span>
+<span class=sd>    :return: the starting points</span>
+
+<span class=sd>    >>> p = make_interesting_starting_points(</span>
+<span class=sd>    ...     3, np.array([[1.0, 2.0], [3.0, 2.9]]), False)</span>
+<span class=sd>    >>> print(",".join(";".join(f"{x:.5f}" for x in row) for row in p))</span>
+<span class=sd>    1.77767;0.33029,1.10482;3.44328,3.18515;-4.39064</span>
+
+<span class=sd>    >>> p = make_interesting_starting_points(</span>
+<span class=sd>    ...     3, np.array([[1.0, 2.0, 7.0], [3.0, 2.9, 1.1]]), False)</span>
+<span class=sd>    >>> print(",".join(";".join(f"{x:.5f}" for x in row) for row in p))</span>
+<span class=sd>    1.51392;-2.66567;0.86153,3.26154;-5.07757;2.03484,3.75627;5.88214;6.52310</span>
+<span class=sd>    """</span>
+    <span class=n>other_points</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span><span class=n>other</span><span class=p>)</span>
+    <span class=n>dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>other_points</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span>
+    <span class=n>max_fes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>2048</span> <span class=o>+</span> <span class=nb>int</span><span class=p>(</span><span class=mi>40</span> <span class=o>*</span> <span class=p>(</span><span class=n>n</span> <span class=o>**</span> <span class=p>(</span><span class=n>dim</span> <span class=o>/</span> <span class=mf>1.7</span><span class=p>)))</span>
+
+    <span class=n>max_radius</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>square</span><span class=p>(</span><span class=n>pt</span><span class=p>)</span><span class=o>.</span><span class=n>sum</span><span class=p>())</span>
+                            <span class=k>for</span> <span class=n>pt</span> <span class=ow>in</span> <span class=n>other_points</span><span class=p>)</span>
+    <span class=n>max_radius</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>max_radius</span> <span class=o>**</span> <span class=mf>1.1</span><span class=p>,</span> <span class=n>max_radius</span> <span class=o>**</span> <span class=mf>0.6</span><span class=p>,</span>
+                     <span class=n>max_radius</span> <span class=o>*</span> <span class=mf>1.3</span><span class=p>)</span>
+
+    <span class=n>max_dim</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>max</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>abs</span><span class=p>(</span>
+        <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span><span class=n>other_points</span><span class=p>)</span><span class=o>.</span><span class=n>flatten</span><span class=p>()))</span>
+    <span class=n>max_dim</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>max_dim</span> <span class=o>**</span> <span class=mf>1.2</span><span class=p>,</span> <span class=n>max_dim</span> <span class=o>**</span> <span class=p>(</span><span class=mf>1.0</span> <span class=o>/</span> <span class=mf>1.2</span><span class=p>),</span>
+                  <span class=n>max_dim</span> <span class=o>**</span> <span class=mf>2.5</span><span class=p>,</span> <span class=n>max_radius</span> <span class=o>*</span> <span class=mf>1.2</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=n>log</span><span class=p>:</span>
+        <span class=n>logger</span><span class=p>(</span>
+            <span class=sa>f</span><span class=s2>"now determining </span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2> hopefully diverse samples of dimension "</span>
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>dim</span><span class=si>}</span><span class=s2> using </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>other_points</span><span class=p>)</span><span class=si>}</span><span class=s2> other points, "</span>
+            <span class=sa>f</span><span class=s2>"max_radius=</span><span class=si>{</span><span class=n>max_radius</span><span class=si>}</span><span class=s2>, and max_dim=</span><span class=si>{</span><span class=n>max_dim</span><span class=si>}</span><span class=s2> for "</span>
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>max_fes</span><span class=si>}</span><span class=s2> FEs."</span><span class=p>)</span>
+
+    <span class=n>space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>VectorSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>VectorSpace</span><span class=p>(</span><span class=n>dim</span> <span class=o>*</span> <span class=n>n</span><span class=p>,</span> <span class=o>-</span><span class=n>max_dim</span><span class=p>,</span> <span class=n>max_dim</span><span class=p>)</span>
+    <span class=n>best</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>
+
+    <span class=k>class</span><span class=w> </span><span class=nc>__Obj</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+        <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+            <span class=k>nonlocal</span> <span class=n>other_points</span>
+            <span class=k>nonlocal</span> <span class=n>max_radius</span>
+            <span class=k>nonlocal</span> <span class=n>dim</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>evaluate</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span>  <span class=c1># type: ignore</span>
+                <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=nb>float</span><span class=p>],</span>
+                <span class=k>lambda</span> <span class=n>x</span><span class=p>,</span> <span class=n>o</span><span class=o>=</span><span class=n>other_points</span><span class=p>,</span> <span class=n>mr</span><span class=o>=</span><span class=n>max_radius</span><span class=p>,</span> <span class=n>dd</span><span class=o>=</span><span class=n>dim</span><span class=p>:</span>
+                <span class=n>interesting_point_objective</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>o</span><span class=p>,</span> <span class=n>mr</span><span class=p>,</span> <span class=n>dd</span><span class=p>))</span>
+
+    <span class=k>with</span> <span class=n>Execution</span><span class=p>()</span><span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>space</span><span class=p>)</span><span class=o>.</span><span class=n>set_rand_seed</span><span class=p>(</span><span class=mi>1</span><span class=p>)</span>\
+            <span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>BiPopCMAES</span><span class=p>(</span><span class=n>space</span><span class=p>))</span>\
+            <span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=n>max_fes</span><span class=p>)</span>\
+            <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>__Obj</span><span class=p>())</span><span class=o>.</span><span class=n>execute</span><span class=p>()</span> <span class=k>as</span> <span class=n>process</span><span class=p>:</span>
+        <span class=n>f</span> <span class=o>=</span> <span class=n>process</span><span class=o>.</span><span class=n>get_best_f</span><span class=p>()</span>
+        <span class=n>process</span><span class=o>.</span><span class=n>get_copy_of_best_x</span><span class=p>(</span><span class=n>best</span><span class=p>)</span>
+        <span class=n>best</span> <span class=o>=</span> <span class=n>interesting_point_transform</span><span class=p>(</span><span class=n>best</span><span class=p>,</span> <span class=n>max_radius</span><span class=p>,</span> <span class=n>dim</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>log</span><span class=p>:</span>
+            <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"generated </span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2> points with objective </span><span class=si>{</span><span class=n>f</span><span class=si>}</span><span class=s2>:</span><span class=se>\n</span><span class=si>{</span><span class=n>best</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>best</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.66 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.starting_points</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>
