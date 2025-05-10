@@ -1,0 +1,34 @@
+moptipyapps.dynamic\_control.systems package
+============================================
+
+.. automodule:: moptipyapps.dynamic_control.systems
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.dynamic\_control.systems.lorenz module
+--------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.systems.lorenz
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.dynamic\_control.systems.stuart\_landau module
+----------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.systems.stuart_landau
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.dynamic\_control.systems.three\_coupled\_oscillators module
+-----------------------------------------------------------------------
+
+.. automodule:: moptipyapps.dynamic_control.systems.three_coupled_oscillators
+   :members:
+   :show-inheritance:
+   :undoc-members:
