@@ -63,7 +63,7 @@ class OrderingSpace(Permutations):
         text: list[str] = []
 
         text.extend(super().to_str(x).split("\n"))
-        text.append("")  # noqa: PIE799
+        text.append("")  # noqa
 
         row: list[str] = [_ZERO_BASED_INDEX, _SUGGESTED_X_IN_0_1]
         row.extend(self.instance.tag_titles)
