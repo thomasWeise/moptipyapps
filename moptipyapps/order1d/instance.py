@@ -107,8 +107,8 @@ class Instance(QAPInstance):
                 f = flows[i, j]
                 if f > horizon:
                     continue
-                flow_matrix[i, j] = int(round(
-                    multiplier * ((max_val - f + 1) ** flow_power)))
+                flow_matrix[i, j] = round(
+                    multiplier * ((max_val - f + 1) ** flow_power))
 
         # construct a name if necessary
         if name is None:

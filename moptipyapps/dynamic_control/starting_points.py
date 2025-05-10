@@ -174,9 +174,6 @@ def make_interesting_starting_points(
 
     class __Obj(Objective):
         def __init__(self):
-            nonlocal other_points
-            nonlocal max_radius
-            nonlocal dim
             self.evaluate = cast(  # type: ignore
                 Callable[[np.ndarray], float],
                 lambda x, o=other_points, mr=max_radius, dd=dim:

@@ -32,4 +32,4 @@ def test_errors() -> None:
     random: rnd.Generator = rnd.default_rng()
 
     for s in Instance.list_resources():
-        __check_for_instance(Problem(s, random.integers(0, 10) / 9))
+        __check_for_instance(Problem(s, int(random.integers(0, 10)) / 9))

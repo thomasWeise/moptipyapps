@@ -435,9 +435,9 @@ def __lb_avg_denormalize(
     :return: de-normalized average
     """
     return (with_rotation, algo, group, max(
-        min_result, int(round(try_int_mul(sum(Instance.from_resource(
+        min_result, round(try_int_mul(sum(Instance.from_resource(
             ins).lower_bound_bins for ins in GROUPS_TO_INSTANCES[group]),
-            value)))))
+            value))))
 
 
 #: the related works with rotation averaged
@@ -954,8 +954,8 @@ def make_comparison_table_data(
                     if not all(list.__len__(xxx) == ll for xxx in gisd):
                         raise ValueError(
                             f"Inconsistent run numbers in {g!r} for {algo!r}.")
-                    ag[g] = int(round(sum(cast(Iterable, (
-                        try_int(avg(v)) for v in gisd)))))
+                    ag[g] = round(sum(cast(Iterable, (
+                        try_int(avg(v)) for v in gisd))))
                 elif len(gisd) > 0:
                     raise ValueError(f"Incomplete group {g!r} for {algo!r}.")
 

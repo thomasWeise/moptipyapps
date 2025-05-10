@@ -238,7 +238,7 @@ class ResultsPlot(AbstractContextManager):
         #: the plot indices
         self.__plot_indices: Final[Collection[int]] = plot_indices
 
-        srt: Final[int] = max(3, int(round(1 + sqrt(total_plots))))
+        srt: Final[int] = max(3, round(1 + sqrt(total_plots)))
         args: Final[dict[str, Any]] = {
             "items": total_plots,
             "max_items_per_plot": 1,
