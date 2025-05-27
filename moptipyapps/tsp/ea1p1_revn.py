@@ -17,7 +17,7 @@ operator in the paper [1].
 
 The original version of this code has been contributed by Mr. Tianyu LIANG
 (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of
-Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School
+Applied Optimization (应用优化研究所) of the School
 of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei
 University (合肥大学) in Hefei, Anhui, China (中国安徽省合肥市) under the
 supervision of Prof. Dr. Thomas Weise (汤卫思教授).

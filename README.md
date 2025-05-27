@@ -95,7 +95,7 @@ The objective function would be some measure consistent with the goal of minimiz
 - [apply a randomized local search to one 2D bin packing instance](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_rls_py.html)
 - [measure the runtime of the different encodings for the 2D bin packing problem](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_timing_py.html)
 
-Important work on this code has been contributed by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
+Important work on this code has been contributed by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student at the Institute of Applied Optimization (应用优化研究所) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
 
 
 ### 3.2. The Traveling Salesperson Problem (TSP)
@@ -117,7 +117,7 @@ We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/softw
 - [apply a randomized local search to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_rls_py.html)
 - [apply a some FFA-based algorithms to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_special_algorithms_py.html)
 
-Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所, http://iao.hfuu.edu.cn) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
+Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 
 The Traveling Tournament Problem ([TTP](#34-the-traveling-tournament-problem-ttp)) is related to the TTP.
 

@@ -22,7 +22,7 @@
 
 # `moptipy` provides the basic optimization infrastructure and the spaces and
 # tools that we use for optimization.
-moptipy == 0.9.145
+moptipy == 0.9.148
 
 # the common tools package
 pycommons == 0.8.65
