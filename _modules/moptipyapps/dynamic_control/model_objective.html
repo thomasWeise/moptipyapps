@@ -1,0 +1,206 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.model_objective — moptipyapps 0.8.68 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=f8800668"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/model_objective.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.68 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.model_objective</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.model_objective</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An objective function that can be used to synthesize system models.</span>
+
+<span class=sd>We consider the dynamic system to be a function `D(s, c) = ds/dt`, where</span>
+
+<span class=sd>- `s` is the state vector (e.g., two-dimensional for the Stuart-Landau system,</span>
+<span class=sd>  see :mod:`~moptipyapps.dynamic_control.systems.stuart_landau`, and</span>
+<span class=sd>  three-dimensional for the Lorenz system, see</span>
+<span class=sd>  :mod:`~moptipyapps.dynamic_control.systems.lorenz`),</span>
+<span class=sd>- `c` is the control vector (one-dimensional in both cases), and</span>
+<span class=sd>- `ds/dt` is the state differential (again two respectively three-dimensional).</span>
+
+<span class=sd>The :class:`~moptipyapps.dynamic_control.objective.FigureOfMerit` objective</span>
+<span class=sd>function allows us to collect tuples of `(s,c)` and `ds/dt` vectors. So all we</span>
+<span class=sd>need to do is to train a model `M` that receives as input a vector `x=(s,c)`</span>
+<span class=sd>(where `(s,c)` be the concatenation of `s` and `c`) and fill as output a vector</span>
+<span class=sd>`ds/dt`.</span>
+
+<span class=sd>The objective function in this module minimizes the root mean square error</span>
+<span class=sd>over the model-computed `ds/dt` vectors and the actual `ds/dt` vectors.</span>
+<span class=sd>The model objective function is used by the</span>
+<span class=sd>:mod:`~moptipyapps.dynamic_control.surrogate_optimizer` algorithm.</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>DEFAULT_FLOAT</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.dynamic_control.controller</span><span class=w> </span><span class=kn>import</span> <span class=n>Controller</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.dynamic_control.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>FigureOfMerit</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>_evaluate</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>pin</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>pout</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+              <span class=n>temp_1</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>temp_2</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+              <span class=n>eq</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>])</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the RMSE differences between expected and actual model output.</span>
+
+<span class=sd>    :param x: the model parameterization</span>
+<span class=sd>    :param pin: the input vectors</span>
+<span class=sd>    :param pout: the expected output vectors, flattened</span>
+<span class=sd>    :param temp_1: the long temporary array to receive the result values</span>
+<span class=sd>    :param temp_2: the temporary array to receive the state output</span>
+<span class=sd>    :param eq: the equations</span>
+<span class=sd>    :return: the mean of the `log(x+1)` of the squared differences `x`</span>
+
+<span class=sd>    >>> vx = np.array([0.5, 0.2], float)</span>
+<span class=sd>    >>> vpin = np.array([[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]], float)</span>
+<span class=sd>    >>> vpout = np.array([[10, 5], [14, 9], [18, 8]], float)</span>
+<span class=sd>    >>> vtemp_1 = np.empty(3, float)</span>
+<span class=sd>    >>> vtemp_2 = np.empty(2, float)</span>
+<span class=sd>    >>> @numba.njit(cache=False, inline="always", fastmath=True)</span>
+<span class=sd>    ... def _func(lstate: np.ndarray, _: float, lx: np.ndarray,</span>
+<span class=sd>    ...           lout: np.ndarray) -> None:</span>
+<span class=sd>    ...     lout[:] = (lstate[0:2] * lx[0]) - lx[1] - lstate[-1]</span>
+<span class=sd>    >>> _evaluate(vx, vpin, vpout, vtemp_1, vtemp_2, _func)</span>
+<span class=sd>    22.680823177337874</span>
+<span class=sd>    >>> y_1_1 = ((0 * 0.5) - 0.2 - 3) - 10</span>
+<span class=sd>    >>> y_1_2 = ((1 * 0.5) - 0.2 - 3) - 5</span>
+<span class=sd>    >>> r_1 = y_1_1 ** 2 + y_1_2 ** 2</span>
+<span class=sd>    >>> y_2_1 = ((4 * 0.5) - 0.2 - 7) - 14</span>
+<span class=sd>    >>> y_2_2 = ((5 * 0.5) - 0.2 - 7) - 9</span>
+<span class=sd>    >>> r_2 = y_2_1 ** 2 + y_2_2 ** 2</span>
+<span class=sd>    >>> y_3_1 = ((8 * 0.5) - 0.2 - 11) - 18</span>
+<span class=sd>    >>> y_3_2 = ((9 * 0.5) - 0.2 - 11) - 8</span>
+<span class=sd>    >>> r_3 = y_3_1 ** 2 + y_3_2 ** 2</span>
+<span class=sd>    >>> float(np.sqrt(np.array([r_1, r_2, r_3])).mean())</span>
+<span class=sd>    22.680823177337874</span>
+<span class=sd>    """</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>row</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>pin</span><span class=p>):</span>  <span class=c1># iterate over all row=(s, c) tuples</span>
+        <span class=n>eq</span><span class=p>(</span><span class=n>row</span><span class=p>,</span> <span class=mf>0.0</span><span class=p>,</span> <span class=n>x</span><span class=p>,</span> <span class=n>temp_2</span><span class=p>)</span>  <span class=c1># store the equation results</span>
+        <span class=n>temp_1</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>square</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>subtract</span><span class=p>(</span><span class=n>temp_2</span><span class=p>,</span> <span class=n>pout</span><span class=p>[</span><span class=n>i</span><span class=p>],</span> <span class=n>temp_2</span><span class=p>),</span>
+                              <span class=n>temp_2</span><span class=p>)</span><span class=o>.</span><span class=n>sum</span><span class=p>()</span>
+    <span class=k>return</span> <span class=n>np</span><span class=o>.</span><span class=n>sqrt</span><span class=p>(</span><span class=n>temp_1</span><span class=p>,</span> <span class=n>temp_1</span><span class=p>)</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+
+
+<div class=viewcode-block id=ModelObjective>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.model_objective.ModelObjective>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>ModelObjective</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    The objective for modeling.</span>
+
+<span class=sd>    This objective function works on sequences of tuples `(s, c)` of the</span>
+<span class=sd>    system state `s` and controller output `c` as well as the corresponding</span>
+<span class=sd>    `ds/dt` differentials. The goal is to train a model `M(s, c, q)` that will</span>
+<span class=sd>    compute the `ds/dt` values reasonably accurately. The model is</span>
+<span class=sd>    parameterized with some vector `q`, think of `M` being, e.g., an</span>
+<span class=sd>    artificial neural network and `q` being its weight vector. To find good</span>
+<span class=sd>    values of `q`, this objective here computes the squared differences</span>
+<span class=sd>    between the values `M(s, c, q)` and the expected outputs `ds/dt`.</span>
+
+<span class=sd>    These squared differences are then either averaged directly or the</span>
+<span class=sd>    `expm1(mean(logp1(...))))` hack of the</span>
+<span class=sd>    :class:`~moptipyapps.dynamic_control.objective.FigureOfMeritLE` is used to</span>
+<span class=sd>    alleviate the impact of large differentials, depending on which "real"</span>
+<span class=sd>    (controller-synthesis) objective is passed into the constructor).</span>
+
+<span class=sd>    The tuples `(s, c)` and `ds/dt` are pulled from the real objective with</span>
+<span class=sd>    the method :meth:`~moptipyapps.dynamic_control.model_objective.\</span>
+<span class=sd>ModelObjective.begin`. The `ds/dt` rows are flattened for performance reasons.</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>real</span><span class=p>:</span> <span class=n>FigureOfMerit</span><span class=p>,</span>
+                 <span class=n>model</span><span class=p>:</span> <span class=n>Controller</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a model objective compatible to the given figure of merit.</span>
+
+<span class=sd>        :param real: the objective used for the real optimization problem</span>
+<span class=sd>        :param model: the model</span>
+<span class=sd>        """</span>
+        <span class=c1>#: the equations of the model</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                                    <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=n>model</span><span class=o>.</span><span class=n>controller</span>
+        <span class=c1>#: the result</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__temp_1</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the input</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__in</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the output</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__out</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the differentials getter</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__get_differentials</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=nb>tuple</span><span class=p>[</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]]]</span> <span class=o>=</span> <span class=n>real</span><span class=o>.</span><span class=n>get_differentials</span>
+        <span class=c1>#: the temporary array</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__temp_2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span>
+            <span class=n>real</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>system</span><span class=o>.</span><span class=n>state_dims</span><span class=p>,</span> <span class=n>DEFAULT_FLOAT</span><span class=p>)</span>
+        <span class=c1>#: the real figure of merit name</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__real_name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>str</span><span class=p>(</span><span class=n>real</span><span class=p>)</span>
+
+<div class=viewcode-block id=ModelObjective.begin>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.model_objective.ModelObjective.begin>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>begin</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Begin a model optimization run.</span>
+
+<span class=sd>        This function pulls the training data from the actual</span>
+<span class=sd>        controller-synthesis objective function, which is an instance of</span>
+<span class=sd>        :class:`~moptipyapps.dynamic_control.objective.FigureOfMerit`, via the</span>
+<span class=sd>        method :meth:`~moptipyapps.dynamic_control.objective.FigureOfMerit.\</span>
+<span class=sd>get_differentials` and allocates internal data structures accordingly.</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__in</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__out</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__get_differentials</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__temp_1</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__out</span><span class=p>),</span> <span class=bp>self</span><span class=o>.</span><span class=n>__out</span><span class=o>.</span><span class=n>dtype</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=ModelObjective.evaluate>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.model_objective.ModelObjective.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Evaluate a model parameterization.</span>
+
+<span class=sd>        :param x: the model parameterization</span>
+<span class=sd>        :return: the objective value</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>_evaluate</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__in</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__out</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__temp_1</span><span class=p>,</span>
+                         <span class=bp>self</span><span class=o>.</span><span class=n>__temp_2</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__equations</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=ModelObjective.end>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.model_objective.ModelObjective.end>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>end</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""End a model optimization run and free the associated memory."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__temp_1</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__in</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__out</span> <span class=o>=</span> <span class=kc>None</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this objective.</span>
+
+<span class=sd>        :return: the name of this objective</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"modelRMSE"</span>
+
+<div class=viewcode-block id=ModelObjective.lower_bound>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.model_objective.ModelObjective.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of the model objective, which is `0`.</span>
+
+<span class=sd>        :returns: 0.0</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mf>0.0</span></div>
+
+
+<div class=viewcode-block id=ModelObjective.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.model_objective.ModelObjective.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"figureOfMeritName"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__real_name</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"nSamples"</span><span class=p>,</span>
+                         <span class=mi>0</span> <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__in</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__in</span><span class=p>))</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.68 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.model_objective</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

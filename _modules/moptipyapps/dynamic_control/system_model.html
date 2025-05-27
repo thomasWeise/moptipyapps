@@ -1,0 +1,121 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.system_model — moptipyapps 0.8.68 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=f8800668"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/system_model.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.68 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.system_model</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.system_model</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An extended dynamic control problem `Instance` with a model for the dynamics.</span>
+
+<span class=sd>An :class:`~moptipyapps.dynamic_control.instance.Instance` is a combination of</span>
+
+<span class=sd>- a set of differential equations</span>
+<span class=sd>  (:mod:`~moptipyapps.dynamic_control.system`) that govern the change</span>
+<span class=sd>  `D=ds/dt` of the state `s` of a dynamic system (based on its current</span>
+<span class=sd>  state `s` and the controller output `c(s)`), i.e., `ds/dt=D(s,c(s))` and</span>
+<span class=sd>- a blueprint `c(s, p)` of the controller `c(s)`</span>
+<span class=sd>  (:mod:`~moptipyapps.dynamic_control.controller`).</span>
+
+<span class=sd>The blueprint of the controller is basically a function that can be</span>
+<span class=sd>parameterized, so it is actually a function `c(s, p)` and the goal of</span>
+<span class=sd>optimization is to parameterize it in such a way that the figure of merit,</span>
+<span class=sd>i.e., the objective value (:mod:`~moptipyapps.dynamic_control.objective`)</span>
+<span class=sd>of the system (usually the sum of squared state values and squared controller</span>
+<span class=sd>outputs) is minimized. Parameterization means finding good values `p` such</span>
+<span class=sd>that the above goal is reached. In other words, we want to synthesize a</span>
+<span class=sd>controller (by finding good values of `p`) in such a way that the state</span>
+<span class=sd>equations drive the system into a stable state, usually ideally the origin of</span>
+<span class=sd>the coordinate system.</span>
+
+<span class=sd>Now here this :class:`~moptipyapps.dynamic_control.instance.Instance` is</span>
+<span class=sd>extended to a :class:`~moptipyapps.dynamic_control.system_model.SystemModel`</span>
+<span class=sd>by adding a parameterized model `M(s, c(s), q)` to the mix. The idea is to</span>
+<span class=sd>develop the parameterization `q` of the model `M` that can replace the actual</span>
+<span class=sd>system equations `D`. Such a model receives as input the current system state</span>
+<span class=sd>vector `s` and the controller output `c(s)` for the state vector `s`. It will</span>
+<span class=sd>return the differential `D` of the system state, i.e., `ds/dt`. In other</span>
+<span class=sd>words, a properly constructed model can replace the `equations` parameter in</span>
+<span class=sd>the ODE integrator :func:`~moptipyapps.dynamic_control.ode.run_ode`. The</span>
+<span class=sd>input used for training is provided by</span>
+<span class=sd>:func:`~moptipyapps.dynamic_control.ode.diff_from_ode`.</span>
+
+<span class=sd>What we do here is to re-use the same function models as used in controllers</span>
+<span class=sd>(:mod:`~moptipyapps.dynamic_control.controller`) and learn their</span>
+<span class=sd>parameterizations from the observed data. If successful, we can  wrap</span>
+<span class=sd>everything together into a `Callable` and plug it into the system instead of</span>
+<span class=sd>the original equations.</span>
+
+<span class=sd>The thing that :class:`SystemModel` offers is thus a blueprint of the model</span>
+<span class=sd>`M`. Obviously, we can conceive many different such blueprints. We could have</span>
+<span class=sd>a linear model, a quadratic model, or maybe neural network (in which case, we</span>
+<span class=sd>need to decide about the number of layers and layer sizes). So an instance of</span>
+<span class=sd>this surrogate model based approach has an equation system, a controller</span>
+<span class=sd>blueprint, and a model blueprint.</span>
+
+<span class=sd>An example implementation of the concept of synthesizing models for a dynamic</span>
+<span class=sd>system in order to synthesize controllers is given as the</span>
+<span class=sd>:mod:`~moptipyapps.dynamic_control.surrogate_optimizer` algorithm.</span>
+<span class=sd>Examples for different dynamic systems controllers (which we here also use to</span>
+<span class=sd>model the systems themselves) are given in package</span>
+<span class=sd>:mod:`~moptipyapps.dynamic_control.controllers`.</span>
+
+<span class=sd>The starting points of the work here were conversations with Prof. Dr. Bernd</span>
+<span class=sd>NOACK and Guy Yoslan CORNEJO MACEDA of the Harbin Institute of Technology in</span>
+<span class=sd>Shenzhen, China (哈尔滨工业大学(深圳)).</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.dynamic_control.controller</span><span class=w> </span><span class=kn>import</span> <span class=n>Controller</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.dynamic_control.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.dynamic_control.system</span><span class=w> </span><span class=kn>import</span> <span class=n>System</span>
+
+
+<div class=viewcode-block id=SystemModel>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.system_model.SystemModel>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>SystemModel</span><span class=p>(</span><span class=n>Instance</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A dynamic system control `Instance` with a system model blueprint."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>system</span><span class=p>:</span> <span class=n>System</span><span class=p>,</span> <span class=n>controller</span><span class=p>:</span> <span class=n>Controller</span><span class=p>,</span>
+                 <span class=n>model</span><span class=p>:</span> <span class=n>Controller</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the system model.</span>
+
+<span class=sd>        :param system: the system that we want to model</span>
+<span class=sd>        :param controller: the controller that we want to use</span>
+<span class=sd>        :param model: a system model blueprint (also in the shape of a</span>
+<span class=sd>            controller)</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>model</span><span class=p>,</span> <span class=n>Controller</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>model</span><span class=p>,</span> <span class=s2>"model"</span><span class=p>,</span> <span class=n>Controller</span><span class=p>)</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>system</span><span class=p>,</span> <span class=n>controller</span><span class=p>,</span> <span class=n>model</span><span class=o>.</span><span class=n>name</span><span class=p>)</span>
+        <span class=n>in_dims</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>system</span><span class=o>.</span><span class=n>state_dims</span> <span class=o>+</span> <span class=n>controller</span><span class=o>.</span><span class=n>control_dims</span>
+        <span class=k>if</span> <span class=n>model</span><span class=o>.</span><span class=n>state_dims</span> <span class=o>!=</span> <span class=n>in_dims</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"model.state_dims=</span><span class=si>{</span><span class=n>model</span><span class=o>.</span><span class=n>state_dims</span><span class=si>}</span><span class=s2>, but system.state_dims"</span>
+                <span class=sa>f</span><span class=s2>"=</span><span class=si>{</span><span class=n>system</span><span class=o>.</span><span class=n>state_dims</span><span class=si>}</span><span class=s2> and controller.control_dims="</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>controller</span><span class=o>.</span><span class=n>control_dims</span><span class=si>}</span><span class=s2>, so we expected </span><span class=si>{</span><span class=n>in_dims</span><span class=si>}</span><span class=s2> for "</span>
+                <span class=sa>f</span><span class=s2>"controller </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>controller</span><span class=p>)</span><span class=si>!r}</span><span class=s2>, system </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>system</span><span class=p>)</span><span class=si>!r}</span><span class=s2>, and"</span>
+                <span class=sa>f</span><span class=s2>" model </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>model</span><span class=p>)</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>model</span><span class=o>.</span><span class=n>control_dims</span> <span class=o>!=</span> <span class=n>system</span><span class=o>.</span><span class=n>state_dims</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"model.control_dims=</span><span class=si>{</span><span class=n>model</span><span class=o>.</span><span class=n>control_dims</span><span class=si>}</span><span class=s2> must be the same as"</span>
+                <span class=sa>f</span><span class=s2>" system.state_dims=</span><span class=si>{</span><span class=n>system</span><span class=o>.</span><span class=n>state_dims</span><span class=si>}</span><span class=s2>, but is not, for "</span>
+                <span class=sa>f</span><span class=s2>"controller </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>controller</span><span class=p>)</span><span class=si>!r}</span><span class=s2>, system </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>system</span><span class=p>)</span><span class=si>!r}</span><span class=s2>, and"</span>
+                <span class=sa>f</span><span class=s2>" model </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>model</span><span class=p>)</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=c1>#: the model blueprint that can be trained to hopefully replace the</span>
+        <span class=c1>#: :attr:`~moptipyapps.dynamic_control.instance.Instance.system` in the</span>
+        <span class=c1>#: ODE integration / system simulation procedure</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>model</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Controller</span><span class=p>]</span> <span class=o>=</span> <span class=n>model</span>
+
+<div class=viewcode-block id=SystemModel.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.dynamic_control.html#moptipyapps.dynamic_control.system_model.SystemModel.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"model"</span><span class=p>)</span> <span class=k>as</span> <span class=n>scope</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>model</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>scope</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.68 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.system_model</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

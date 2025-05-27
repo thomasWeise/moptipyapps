@@ -1,0 +1,121 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.dynamic_control.controllers.codegen — moptipyapps 0.8.68 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=f8800668"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/dynamic_control/controllers/codegen.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.68 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.controllers.codegen</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.dynamic_control.controllers.codegen</h1><div class=highlight><pre>
+<span></span><span class=sd>"""A simple code generator."""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>io</span><span class=w> </span><span class=kn>import</span> <span class=n>StringIO</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+
+<div class=viewcode-block id=CodeGenerator>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.controllers.html#moptipyapps.dynamic_control.controllers.codegen.CodeGenerator>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>CodeGenerator</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""A simple code generator."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>args</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>""</span><span class=p>,</span> <span class=n>retval</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>"None"</span><span class=p>,</span>
+                 <span class=n>fastmath</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the code generator.</span>
+
+<span class=sd>        :param args: the command line arguments</span>
+<span class=sd>        :param retval: the return type</span>
+<span class=sd>        :param fastmath: do we use numba fast math?</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>args</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>args</span><span class=p>,</span> <span class=s2>"args"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>retval</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>retval</span><span class=p>,</span> <span class=s2>"retval"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>fastmath</span><span class=p>,</span> <span class=nb>bool</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>fastmath</span><span class=p>,</span> <span class=s2>"fastmath"</span><span class=p>,</span> <span class=nb>bool</span><span class=p>)</span>
+
+        <span class=n>io</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>StringIO</span><span class=p>]</span> <span class=o>=</span> <span class=n>StringIO</span><span class=p>()</span>
+        <span class=n>wrt</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=n>io</span><span class=o>.</span><span class=n>write</span>
+
+        <span class=c1>#: the callable for writing</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__write</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=n>wrt</span>
+        <span class=n>wrt</span><span class=p>(</span><span class=s2>"@numba.njit(cache=False, inline='always', fastmath"</span>
+            <span class=sa>f</span><span class=s2>"=</span><span class=si>{</span><span class=n>fastmath</span><span class=si>}</span><span class=s2>, boundscheck=False)</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>wrt</span><span class=p>(</span><span class=sa>f</span><span class=s2>"def ____func(</span><span class=si>{</span><span class=n>args</span><span class=si>}</span><span class=s2>) -> </span><span class=si>{</span><span class=n>retval</span><span class=si>}</span><span class=s2>:</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=c1>#: the result callable</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__res</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=n>io</span><span class=o>.</span><span class=n>getvalue</span>
+        <span class=c1>#: the current indent</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__indent</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=c1>#: are we at the start of a line?</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__start</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+
+<div class=viewcode-block id=CodeGenerator.write>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.controllers.html#moptipyapps.dynamic_control.controllers.codegen.CodeGenerator.write>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>write</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>text</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Write some code.</span>
+
+<span class=sd>        :param text: the code text</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__start</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__write</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__indent</span> <span class=o>*</span> <span class=s2>"    "</span><span class=p>)</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__start</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__write</span><span class=p>(</span><span class=n>text</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=CodeGenerator.indent>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.controllers.html#moptipyapps.dynamic_control.controllers.codegen.CodeGenerator.indent>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>indent</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Increase the indent."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__indent</span> <span class=o>+=</span> <span class=mi>1</span></div>
+
+
+<div class=viewcode-block id=CodeGenerator.unindent>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.controllers.html#moptipyapps.dynamic_control.controllers.codegen.CodeGenerator.unindent>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>unindent</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Increase the indent."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__indent</span> <span class=o>-=</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__indent</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"indent becomes 0, not allowed"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=CodeGenerator.writeln>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.controllers.html#moptipyapps.dynamic_control.controllers.codegen.CodeGenerator.writeln>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>writeln</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>text</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>""</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        End a line.</span>
+
+<span class=sd>        :param text: the text to be written</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>text</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>endline</span><span class=p>()</span></div>
+
+
+<div class=viewcode-block id=CodeGenerator.endline>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.controllers.html#moptipyapps.dynamic_control.controllers.codegen.CodeGenerator.endline>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>endline</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""End a line."""</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=bp>self</span><span class=o>.</span><span class=n>__start</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__write</span><span class=p>(</span><span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__start</span> <span class=o>=</span> <span class=kc>True</span></div>
+
+
+<div class=viewcode-block id=CodeGenerator.build>
+<a class=viewcode-back href=../../../../moptipyapps.dynamic_control.controllers.html#moptipyapps.dynamic_control.controllers.codegen.CodeGenerator.build>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>build</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>Callable</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compile the generated code.</span>
+
+<span class=sd>        :returns: the generated function</span>
+<span class=sd>        """</span>
+        <span class=n>loca</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Any</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{}</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>endline</span><span class=p>()</span>
+        <span class=n>code</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__res</span><span class=p>()</span>
+        <span class=n>globs</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Any</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{</span><span class=s2>"numba"</span><span class=p>:</span> <span class=n>numba</span><span class=p>,</span> <span class=s2>"np"</span><span class=p>:</span> <span class=n>np</span><span class=p>,</span>
+                                        <span class=s2>"Final"</span><span class=p>:</span> <span class=n>Final</span><span class=p>}</span>
+        <span class=c1># pylint: disable=W0122</span>
+        <span class=n>exec</span><span class=p>(</span><span class=n>code</span><span class=p>,</span> <span class=n>globs</span><span class=p>,</span> <span class=n>loca</span><span class=p>)</span>  <span class=c1># nosec # nosemgrep # noqa</span>
+        <span class=n>res</span> <span class=o>=</span> <span class=n>loca</span><span class=p>[</span><span class=s2>"____func"</span><span class=p>]</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>res</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>res</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"compiled </span><span class=si>{</span><span class=n>code</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>res</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.68 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.dynamic_control.controllers.codegen</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>
