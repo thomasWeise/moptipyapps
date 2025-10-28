@@ -92,7 +92,7 @@ def tour_length(instance: np.ndarray, x: np.ndarray) -> int:
     result: int = 0
     last: int = x[-1]
     for cur in x:
-        result = result + instance[last, cur]
+        result += instance[last, cur]
         last = cur
     return result
 

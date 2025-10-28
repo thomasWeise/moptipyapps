@@ -42,7 +42,7 @@ def __make_instances(random: Generator) -> list[Callable[[], SystemModel]]:
                             orig_system.plot_examples)
             system.equations = orig_system.equations  # type: ignore
             return SystemModel(system, inst.controller, inst.model)
-        res.append(cast(Callable[[], SystemModel], __make))
+        res.append(cast("Callable[[], SystemModel]", __make))
     return res
 
 
@@ -65,7 +65,8 @@ def __cmaes(instance: SystemModel) -> Execution:
             fancy_logs=False)).set_max_time_millis(1_000_000)
 
 
-def test_experiment_surrogate(random: Generator = default_rng()) -> None:
+def test_experiment_surrogate(
+        random: Generator = default_rng()) -> None:  # noqa: PT028
     """
     Run the surrogate experiment.
 

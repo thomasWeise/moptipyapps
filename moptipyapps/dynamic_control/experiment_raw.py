@@ -54,7 +54,7 @@ def make_instances() -> Iterable[Callable[[], Instance]]:
         controllers.extend(predefined(system))
         controllers.extend(peaks(system))
         res.extend(cast(
-            Callable[[], Instance], lambda _s=system, _c=controller:
+            "Callable[[], Instance]", lambda _s=system, _c=controller:
             Instance(_s, _c)) for controller in controllers)
     return res
 
@@ -90,11 +90,11 @@ def on_completion(instance: Any, log_file: Path, process: Process) -> None:
     :param log_file: the log file
     :param process: the process
     """
-    inst: Final[Instance] = cast(Instance, instance)
+    inst: Final[Instance] = cast("Instance", instance)
     dest_dir: Final[Path] = directory_path(dirname(log_file))
     base_name: str = basename(log_file)
     base_name = base_name[:base_name.rindex(".")]
-    result: np.ndarray = cast(np.ndarray, process.create())
+    result: np.ndarray = cast("np.ndarray", process.create())
     process.get_copy_of_best_x(result)
     j: Final[float] = process.get_best_f()
     inst.describe_parameterization(f"F = {j}", result, base_name, dest_dir)

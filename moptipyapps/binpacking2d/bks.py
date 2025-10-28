@@ -12,7 +12,7 @@ from pycommons.ds.immutable_map import immutable_mapping
 from pycommons.io.path import UTF8
 from pycommons.math.int_math import try_int, try_int_mul
 from pycommons.strings.chars import WHITESPACE
-from pycommons.strings.tools import replace_regex
+from pycommons.strings.string_tools import replace_regex
 from pycommons.types import check_int_range
 
 from moptipyapps.binpacking2d.instance import Instance
@@ -57,7 +57,7 @@ def __load_references() -> Mapping[str, str]:
                     if key in found:
                         raise ValueError(f"Duplicate key {key!r}.")
             elif mode == 1:
-                if str.strip(line) in ("}", "},"):
+                if str.strip(line) in {"}", "},"}:
                     mode = 0
                     current_lines.append("}")
                     found[key] = str.strip("\n".join(current_lines))
@@ -422,7 +422,7 @@ INSTANCES_TO_GROUPS: Final[Mapping[str, Element]] = \
 
 def __lb_avg_denormalize(
         with_rotation: bool, algo: Element, group: Element,
-        value: int | float, min_result: int = -1_000_000) -> tuple[
+        value: "int | float", min_result: int = -1_000_000) -> tuple[
         bool, Element, Element, int]:
     """
     De-normalize using the maximum of the Dell'Amico and geometric bound.
@@ -937,7 +937,7 @@ def make_comparison_table_data(
                 for inst in gis:
                     if inst not in inst_dict:
                         ok = False
-                    gisd.append(cast(list[int | float], inst_dict[inst]))
+                    gisd.append(cast("list[int | float]", inst_dict[inst]))
                 if ok:
                     if list.__len__(gisd) <= 0:
                         raise ValueError(f"Empty group {g!r} for {algo!r}?")
@@ -954,7 +954,7 @@ def make_comparison_table_data(
                     if not all(list.__len__(xxx) == ll for xxx in gisd):
                         raise ValueError(
                             f"Inconsistent run numbers in {g!r} for {algo!r}.")
-                    ag[g] = round(sum(cast(Iterable, (
+                    ag[g] = round(sum(cast("Iterable", (
                         try_int(avg(v)) for v in gisd))))
                 elif len(gisd) > 0:
                     raise ValueError(f"Incomplete group {g!r} for {algo!r}.")

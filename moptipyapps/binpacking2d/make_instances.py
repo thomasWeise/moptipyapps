@@ -168,7 +168,7 @@ def join_instances_to_compact(
 
 
 def make_2dpacklib_resource(
-        dest_file: str | None = None,
+        dest_file: "str | None" = None,
         source_urls: Iterable[str] = __BASE_URLS,
         normalizer: Callable[[str], str] = __normalize_2dpacklib_inst_name)\
         -> tuple[Path, Iterable[str]]:

@@ -199,6 +199,9 @@ supervision of Prof. Dr. Thomas Weise (汤卫思教授).
 """
 
 from math import acos, cos, isfinite, sqrt
+from string import digits
+
+# pylint: disable=W0611
 from typing import Any, Callable, Final, Iterable, TextIO, cast
 
 import moptipy.utils.nputils as npu
@@ -467,7 +470,8 @@ def __coord_to_rad(x: int | float) -> float:
     :param x: the coordinate
     """
     degrees: int = int(x)
-    return (3.141592 * (degrees + (5.0 * (x - degrees)) / 3.0)) / 180.0
+    return (3.141592 * (degrees + (5.0 * (  # noqa: FURB152
+        x - degrees)) / 3.0)) / 180.0
 
 
 def __dist_loglat(a: list[int | float], b: list[int | float]) -> int:
@@ -539,19 +543,19 @@ def _matrix_from_node_coord_section(
     dist_fun = None
     coord_dim: int | None = None
     if (edge_weight_type == __EWT_EUC_2D) \
-            and (node_coord_type in (None, __NODE_COORD_TYPE_2D)):
+            and (node_coord_type in {None, __NODE_COORD_TYPE_2D}):
         coord_dim = 2
         dist_fun = __dist_2deuc
     elif (edge_weight_type == __EWT_GEO) \
-            and (node_coord_type in (None, __NODE_COORD_TYPE_2D)):
+            and (node_coord_type in {None, __NODE_COORD_TYPE_2D}):
         coord_dim = 2
         dist_fun = __dist_loglat
     elif (edge_weight_type == __EWT_ATT) \
-            and (node_coord_type in (None, __NODE_COORD_TYPE_2D)):
+            and (node_coord_type in {None, __NODE_COORD_TYPE_2D}):
         coord_dim = 2
         dist_fun = __dist_att
     elif (edge_weight_type == __EWT_CEIL2D) \
-            and (node_coord_type in (None, __NODE_COORD_TYPE_2D)):
+            and (node_coord_type in {None, __NODE_COORD_TYPE_2D}):
         coord_dim = 2
         dist_fun = __dist_2dceil
 
@@ -622,9 +626,9 @@ def _matrix_from_edge_weights(
             j: int = 0
             for v in ints:
                 res[j, i] = res[i, j] = v
-                i = i + 1
+                i += 1
                 if i >= n_cities:
-                    j = j + 1
+                    j += 1
                     i = j + 1
             return res
         if edge_weight_format == __EWF_LOWER_DIAG_ROW:
@@ -636,9 +640,9 @@ def _matrix_from_edge_weights(
             for v in ints:
                 if i != j:
                     res[j, i] = res[i, j] = v
-                i = i + 1
+                i += 1
                 if i > j:
-                    j = j + 1
+                    j += 1
                     i = 0
             return res
         if edge_weight_format == __EWF_UPPER_DIAG_ROW:
@@ -650,9 +654,9 @@ def _matrix_from_edge_weights(
             for v in ints:
                 if i != j:
                     res[j, i] = res[i, j] = v
-                i = i + 1
+                i += 1
                 if i >= n_cities:
-                    j = j + 1
+                    j += 1
                     i = j
             return res
     raise ValueError(
@@ -815,7 +819,7 @@ def ncities_from_tsplib_name(name: str) -> int:
     if name == "ry48p":
         return 48
     idx: int = len(name)
-    while name[idx - 1] in "0123456789":
+    while name[idx - 1] in digits:
         idx -= 1
     scale: Final[int] = int(name[idx:])
     if name.startswith("ftv"):
@@ -894,8 +898,8 @@ class Instance(Component, np.ndarray):
             if farthest_neighbor <= 0:
                 raise ValueError(f"farthest neighbor distance of node {i} is"
                                  f" {farthest_neighbor}?")
-            upper_bound = upper_bound + farthest_neighbor
-            lower_bound_2 = lower_bound_2 + nearest_neighbor
+            upper_bound += farthest_neighbor
+            lower_bound_2 += nearest_neighbor
 
         tour_length_lower_bound = max(
             tour_length_lower_bound, check_int_range(
@@ -985,7 +989,7 @@ symmetric: T@dtype: i@END_I'
         with file.open_for_read() as stream:
             try:
                 return _from_stream(
-                    cast(TextIO, stream), lower_bound_getter)
+                    cast("TextIO", stream), lower_bound_getter)
             except (TypeError, ValueError) as err:
                 raise ValueError(f"error when parsing file {file!r}") from err
 
@@ -1005,7 +1009,7 @@ symmetric: T@dtype: i@END_I'
         container: Final = Instance.from_resource
         inst_attr: Final[str] = f"__inst_{name}"
         if hasattr(container, inst_attr):  # instance loaded?
-            return cast(Instance, getattr(container, inst_attr))
+            return cast("Instance", getattr(container, inst_attr))
 
         is_symmetric: Final[bool] = name not in _ASYMMETRIC_INSTANCES
         suffix: Final[str] = ".tsp" if is_symmetric else ".atsp"

@@ -65,7 +65,7 @@ def make_instances() -> Iterable[Callable[[], SystemModel]]:
             make_ann(sd, ctrl_dims, [sd, sd]),
             make_ann(sd, ctrl_dims, [sdp2, sdp2])]
         res.extend(cast(
-            Callable[[], SystemModel],
+            "Callable[[], SystemModel]",
             lambda _s=system, _c=controller, _m=make_ann(
                 sd + system.control_dims, sd, ann_model): SystemModel(
                 _s, _c, _m)) for ann_model in [[sd, sd, sd], [
@@ -143,11 +143,11 @@ def on_completion(instance: Any, log_file: Path, process: Process) -> None:
     :param log_file: the log file
     :param process: the process
     """
-    inst: Final[SystemModel] = cast(SystemModel, instance)
+    inst: Final[SystemModel] = cast("SystemModel", instance)
     dest_dir: Final[Path] = directory_path(dirname(log_file))
     base_name: str = basename(log_file)
     base_name = base_name[:base_name.rindex(".")]
-    result: np.ndarray = cast(np.ndarray, process.create())
+    result: np.ndarray = cast("np.ndarray", process.create())
     process.get_copy_of_best_x(result)
     j: Final[float] = process.get_best_f()
     inst.describe_parameterization(f"F = {j}", result, base_name, dest_dir)
@@ -174,7 +174,8 @@ def run(base_dir: str, n_runs: int = 64) -> None:
         raw_names.add(name)
         raw.system.describe_system_without_control(use_dir, True)
         raw.system.plot_points(use_dir, True)
-        keep_instances.append(cast(Callable[[], Instance], lambda _i=raw: _i))
+        keep_instances.append(cast("Callable[[], Instance]",
+                                   lambda _i=raw: _i))
 
     run_experiment(
         base_dir=use_dir,
@@ -201,7 +202,7 @@ def run(base_dir: str, n_runs: int = 64) -> None:
             MAX_FES - warmup_fes))))
 
         setups.append(cast(
-            Callable[[Any], Execution],
+            "Callable[[Any], Execution]",
             lambda i, __w=warmup_fes, __t=training_fes, __o=on_model_fes:
             cmaes_surrogate(i, __w, __t, __o, True)))
 

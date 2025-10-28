@@ -287,7 +287,7 @@ def map_games_2(x: np.ndarray, y: np.ndarray) -> None:
      [  7   8 -10  -6  -9   4  -1  -2   5   3]
      [ -9   7  -4   3  -8 -10  -2   5   1   6]
      [  6  -5  -7  10   2  -1   3   9  -8  -4]]
-    >>> dest.shape[0] * dest.shape[1] - np.count_nonzero(dest)
+    >>> int(dest.shape[0] * dest.shape[1] - np.count_nonzero(dest))
     0
     >>> from moptipyapps.ttp.game_encoding import re_encode
     >>> re_encode(perm, dest)

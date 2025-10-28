@@ -108,7 +108,7 @@ class TSPEA1p1revn(Algorithm):
         random: Final[Generator] = process.get_random()
         # set up the fast calls
         register: Final[Callable[[np.ndarray, int], int]] =\
-            cast(Callable[[np.ndarray, int], int], process.register)
+            cast("Callable[[np.ndarray, int], int]", process.register)
         should_terminate: Final[Callable[[], bool]] = process.should_terminate
         ri: Final[Callable[[int], int]] = random.integers
 
@@ -118,7 +118,7 @@ class TSPEA1p1revn(Algorithm):
         x[:] = range(n)  # fill array with 0..n
         random.shuffle(x)  # randomly generate an initial solution
 
-        y: int = cast(int, process.evaluate(x))  # get length of first tour
+        y: int = cast("int", process.evaluate(x))  # get length of first tour
         nm1: Final[int] = n - 1  # need n-1 in the loop for the random numbers
         nm2: Final[int] = n - 2  # we need this to check the move indices
         while not should_terminate():

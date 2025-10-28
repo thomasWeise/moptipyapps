@@ -369,7 +369,7 @@ def _decode(x: np.ndarray, y: np.ndarray, instance: np.ndarray,
 
 # If the object is not fully inside the current bin, we move to a new bin.
         if (y[i, IDX_RIGHT_X] > bin_width) or (y[i, IDX_TOP_Y] > bin_height):
-            bin_id = bin_id + 1  # step to the next bin
+            bin_id += 1  # step to the next bin
             bin_start = i  # set the starting index of the bin
             y[i, IDX_LEFT_X] = 0  # the object goes to the left end of the bin
             y[i, IDX_BOTTOM_Y] = 0  # the object goes to the bottom of the bin

@@ -102,18 +102,18 @@ def __make_ea(objective: Callable[[Instance], Objective],
               encoding: Callable[[Instance], Encoding])\
         -> Callable[[Any], Execution]:
     """Make the EA execution creator."""
-    return cast(Callable[[Any], Execution],
+    return cast("Callable[[Any], Execution]",
                 lambda inst, __ob=objective, __en=encoding:
-                __ea(cast(Instance, inst), __ob, __en))
+                __ea(cast("Instance", inst), __ob, __en))
 
 
 def __make_fea(objective: Callable[[Instance], Objective],
                encoding: Callable[[Instance], Encoding])\
         -> Callable[[Any], Execution]:
     """Make the FEA execution creator."""
-    return cast(Callable[[Any], Execution],
+    return cast("Callable[[Any], Execution]",
                 lambda inst, __ob=objective, __en=encoding:
-                __fea(cast(Instance, inst), __ob, __en))
+                __fea(cast("Instance", inst), __ob, __en))
 
 
 def __evaluate(results: Path, evaluation: Path) -> None:

@@ -372,7 +372,7 @@ class Instance(TSPInstance):
                     raise ValueError(
                         f"team name must not contain space, but {nn} does.")
 
-        obj: Final[Instance] = cast(Instance, super().__new__(
+        obj: Final[Instance] = cast("Instance", super().__new__(
             cls, name, tour_length_lower_bound, matrix, rounds * n))
 
         if (obj.shape[0] != n) or (obj.shape[1] != n) or (obj.n_cities != n):
@@ -455,7 +455,7 @@ gamePlanDtype: b@END_I'
         return 0, ((2 * int(self.max())) + 1) * n * days
 
     @staticmethod
-    def from_file(path: str, lower_bound_getter: Callable[[
+    def from_file(path: str, lower_bound_getter: Callable[[  # noqa: ARG004
             str], int] | None = None) -> "Instance":
         """
         Read a TTP instance from a `robinX` formatted XML file.
@@ -472,13 +472,13 @@ gamePlanDtype: b@END_I'
         file: Final[Path] = file_path(path)
         with file.open_for_read() as stream:
             try:
-                return _from_stream(cast(TextIO, stream))
+                return _from_stream(cast("TextIO", stream))
             except (TypeError, ValueError) as err:
                 raise ValueError(f"error when parsing file {file!r}") from err
 
     @staticmethod
     def list_resources(symmetric: bool = True,
-                       asymmetric: bool = True) -> tuple[str, ...]:
+                       asymmetric: bool = True) -> tuple[str, ...]:  # noqa
         """
         Get a tuple of all the TTP instances available as resource.
 
@@ -536,7 +536,7 @@ gamePlanDtype: b@END_I'
         container: Final = Instance.from_resource
         inst_attr: Final[str] = f"__inst_{name}"
         if hasattr(container, inst_attr):  # instance loaded?
-            return cast(Instance, getattr(container, inst_attr))
+            return cast("Instance", getattr(container, inst_attr))
 
         with open_resource_stream(f"{name}.xml") as stream:
             inst: Final[Instance] = _from_stream(stream)

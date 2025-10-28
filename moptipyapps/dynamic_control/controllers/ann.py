@@ -49,7 +49,7 @@ def make_ann(state_dims: int, control_dims: int, layers: list[int]) \
     description = "_".join(map(str, ([state_dims, control_dims, *layers])))
     description = f"__cache_{description}"
     if hasattr(make_ann, description):
-        return cast(Controller, getattr(make_ann, description))
+        return cast("Controller", getattr(make_ann, description))
 
     code: Final[CodeGenerator] = CodeGenerator(
         "state: np.ndarray, _: float, params: np.ndarray, out: np.ndarray")

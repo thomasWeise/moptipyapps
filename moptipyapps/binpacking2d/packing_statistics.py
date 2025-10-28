@@ -155,7 +155,7 @@ class PackingStatistics(EvaluationDataElement):
                         f"it is required that {lll}<=f<={uuu}, but got "
                         f"{lower}, {value}, and {upper}.")
         bins: Final[SampleStatistics | None] = cast(
-            SampleStatistics, objectives[BIN_COUNT_NAME]) \
+            "SampleStatistics", objectives[BIN_COUNT_NAME]) \
             if BIN_COUNT_NAME in objectives else None
         for name2, value2 in bin_bounds.items():
             if not isinstance(name2, str):

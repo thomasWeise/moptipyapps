@@ -2,7 +2,7 @@
 from time import monotonic_ns
 from typing import Final
 
-from moptipyapps.qap.instance import _BKS, _BOUNDS, Instance
+from moptipyapps.qap.instance import _BKS, _BOUNDS, Instance  # noqa: PLC2701
 
 
 def __check_resource_instance(name: str) -> None:
@@ -23,8 +23,8 @@ def __check_resource_instance(name: str) -> None:
     assert str.__len__(opt[0]) > 0
     assert isinstance(opt[1], int)
     assert lb <= opt[1] <= ub
-    assert (opt[0] in ("LB", "OPT")) == (lb == opt[1])
-    assert (opt[0] not in ("LB", "OPT")) == (opt[1] > lb)
+    assert (opt[0] in {"LB", "OPT"}) == (lb == opt[1])
+    assert (opt[0] not in {"LB", "OPT"}) == (opt[1] > lb)
 
 
 def test_resource_instances() -> None:

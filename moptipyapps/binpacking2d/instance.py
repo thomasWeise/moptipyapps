@@ -304,7 +304,7 @@ def __divide_based_on_size(instances: Iterable[str],
 
 
 def _make_instance_groups(instances: Iterable[str]) \
-        -> tuple[tuple[str, str | None, tuple[str, ...]], ...]:
+        -> "tuple[tuple[str, str | None, tuple[str, ...]], ...]":
     """
     Make the standard instance groups from an instance name list.
 
@@ -462,13 +462,13 @@ def __lb_q(bin_width: int, bin_height: int, q: int, j_js: list[int]) -> int:
     sum_s3_l: int = sum(j_js[i] for i in s3_minus_s3d)
     b1 = sum_s3_l // bin_width
     if (b1 * bin_width) < sum_s3_l:
-        b1 = b1 + 1
+        b1 += 1
 
     len_s3: int = len(s3_minus_s3d)
     div: int = bin_width // ((bin_height // 2) + 1)
     b2 = len_s3 // div
     if (b2 * div) < len_s3:
-        b2 = b2 + 1
+        b2 += 1
 
     l_tilde: Final[int] = len(s2) + max(b1, b2)  # Equation 6.
     bound: int = len(s1) + l_tilde
@@ -481,8 +481,8 @@ def __lb_q(bin_width: int, bin_height: int, q: int, j_js: list[int]) -> int:
     if denom > 0:
         b = denom // bin_size
         if (b * bin_size) < denom:
-            b = b + 1
-        bound = bound + b
+            b += 1
+        bound += b
 
     return bound
 
@@ -874,7 +874,7 @@ class Instance(Component, np.ndarray):
                 _make_instance_groups(Instance.list_resources())
             setattr(obj, attr, gs)
             return gs
-        return cast(tuple[tuple[str, str | None, tuple[str, ...]], ...],
+        return cast("tuple[tuple[str, str | None, tuple[str, ...]], ...]",
                     getattr(obj, attr))
 
     @staticmethod
@@ -900,12 +900,12 @@ class Instance(Component, np.ndarray):
         container: Final = Instance.from_resource
         inst_attr: Final[str] = f"__inst_{name}"
         if hasattr(container, inst_attr):  # instance loaded?
-            return cast(Instance, getattr(container, inst_attr))
+            return cast("Instance", getattr(container, inst_attr))
         text_attr: Final[str] = f"__text_{INSTANCES_RESOURCE}"
         text: list[str]
         total_attr: Final[str] = "__total_insts"
         if hasattr(container, text_attr):  # ok, we got the text already
-            text = cast(list[str], getattr(container, text_attr))
+            text = cast("list[str]", getattr(container, text_attr))
         else:  # the first time we load the text
             with resources.files(__package__).joinpath(
                     INSTANCES_RESOURCE).open("r", encoding=UTF8) as stream:
@@ -926,7 +926,7 @@ class Instance(Component, np.ndarray):
                 instance = Instance.from_compact_str(line)
                 setattr(container, inst_attr, instance)
                 got: int = getattr(container, total_attr)
-                got = got + 1
+                got += 1
                 if got >= len(_INSTANCES):  # got all instances, can del text
                     delattr(container, total_attr)
                     delattr(container, text_attr)

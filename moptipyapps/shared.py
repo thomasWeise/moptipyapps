@@ -38,7 +38,7 @@ def moptipyapps_argparser(file: str, description: str,
 
 
 def motipyapps_footer_bottom_comments(
-        _: Any, additional: str | None = None) -> Iterable[str]:
+        _: Any, additional: "str | None" = None) -> Iterable[str]:
     """
     Print the standard csv footer for moptipyapps.
 

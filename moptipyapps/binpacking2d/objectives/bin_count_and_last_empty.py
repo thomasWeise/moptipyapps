@@ -64,7 +64,7 @@ def bin_count_and_last_empty(y: np.ndarray) -> int:
             current_size = 1  # then there is 1 object in it for now
             current_bin = bin_idx  # and we remember it
         elif bin_idx == current_bin:  # did item go into the current last bin?
-            current_size = current_size + 1  # then increase size
+            current_size += 1  # then increase size
     return (n_items * (current_bin - 1)) + current_size  # return objective
 
 

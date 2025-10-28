@@ -300,7 +300,7 @@ class Instance(QAPInstance):
             raise type_error(tag_titles, "tag_titles", Iterable)
 
         # build a distance matrix and purge all zero-distance elements
-        datal: list[T] = cast(list[T], data) \
+        datal: list[T] = cast("list[T]", data) \
             if isinstance(data, list) else list(data)
         mappings: list[tuple[T, int]] = []
         distances: list[list[int | float]] = []

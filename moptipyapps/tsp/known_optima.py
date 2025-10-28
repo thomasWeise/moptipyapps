@@ -63,7 +63,7 @@ def _from_stream(stream: TextIO) -> np.ndarray:
         if line == "TOUR_SECTION":
             in_tour = True
             continue
-        if line in ("-1", "EOF"):
+        if line in {"-1", "EOF"}:
             break
         if in_tour:
             for node_str in line.rsplit():
@@ -90,7 +90,7 @@ def opt_tour_from_file(path: str) -> np.ndarray:
     file: Final[Path] = file_path(path)
     with file.open_for_read() as stream:
         try:
-            return _from_stream(cast(TextIO, stream))
+            return _from_stream(cast("TextIO", stream))
         except (TypeError, ValueError) as err:
             raise ValueError(f"error when parsing file {file!r}") from err
 

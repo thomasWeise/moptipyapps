@@ -421,7 +421,7 @@ def map_games(x: np.ndarray, y: np.ndarray) -> None:
      [  7  -8 -10  -6  -9   4  -1   2   5   3]
      [ -9  -4  -7   2  -8 -10   3   5   1   6]
      [  6   7   0  10   0  -1  -2   9  -8  -4]]
-    >>> dest.shape[0] * dest.shape[1] - np.count_nonzero(dest)
+    >>> int(dest.shape[0] * dest.shape[1] - np.count_nonzero(dest))
     8
     >>> perm = np.array([21,32,53,63,73,3,20,55,77,88,8,11,40,60,74,19,27,51,
     ...     58,89,16,38,45,66,87,17,36,47,69,75,0,24,31,41,80,6,22,30,61,82,

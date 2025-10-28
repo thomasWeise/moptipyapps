@@ -35,7 +35,7 @@ def __make_instances() -> list[Callable[[], Instance]]:
                             orig_system.training_starting_states,
                             10, 10.0, 32, 10.0, orig_system.plot_examples)
             return Instance(system, inst.controller)
-        res.append(cast(Callable[[], Instance], __make))
+        res.append(cast("Callable[[], Instance]", __make))
     return res
 
 
@@ -53,7 +53,8 @@ def __cmaes(instance: Instance) -> Execution:
     return res
 
 
-def test_experiment_raw(random: Generator = default_rng()) -> None:
+def test_experiment_raw(
+        random: Generator = default_rng()) -> None:  # noqa: PT028
     """
     Run the experiment.
 

@@ -55,7 +55,7 @@ def binpacking_instances_for_tests(
     while len(insts) < 16:
         insts.add(insn.pop(ri(len(insn))))
     use_insts: list[str] = list(insts)
-    random.shuffle(cast(list, use_insts))
+    random.shuffle(cast("list", use_insts))
     return use_insts
 
 

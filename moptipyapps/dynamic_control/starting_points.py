@@ -22,7 +22,7 @@ Since :func:`make_interesting_starting_points` is a bit slow, it makes sense
 to pre-compute the points and then store them as array constants.
 """
 
-from typing import Callable, Final, Iterable, cast
+from typing import Callable, Final, Iterable, cast  # pylint: disable=W0611
 
 import numba  # type: ignore
 import numpy as np
@@ -175,7 +175,7 @@ def make_interesting_starting_points(
     class __Obj(Objective):
         def __init__(self):
             self.evaluate = cast(  # type: ignore
-                Callable[[np.ndarray], float],
+                "Callable[[np.ndarray], float]",
                 lambda x, o=other_points, mr=max_radius, dd=dim:
                 interesting_point_objective(x, o, mr, dd))
 

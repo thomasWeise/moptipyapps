@@ -71,8 +71,7 @@ class OrderingSpace(Permutations):
 
         for tag, i in tags:
             row.clear()
-            row.append(str(x[i]))
-            row.append(float_to_str(x[i] / n))
+            row.extend((str(x[i]), float_to_str(x[i] / n)))
             row.extend(tag)
             text.append(f"{CSV_SEPARATOR.join(row)}")
         return "\n".join(text)

@@ -1,7 +1,7 @@
 """Compare the runtime of encodings on several problem instances."""
 from statistics import mean, median
 from timeit import timeit
-from typing import Any, Callable, cast
+from typing import Any, Callable, cast  # pylint: disable=W0611
 
 import numpy as np
 from moptipy.utils.nputils import rand_generator
@@ -56,7 +56,7 @@ for inst_name in INSTANCES:
     benchmarks = []
     for encoding in encodings:
         def __f(_x=all_x_data, _y=y,
-                _e=cast(Callable[[Any, Any], Any],
+                _e=cast("Callable[[Any, Any], Any]",
                         encoding(instance).decode)) -> None:
             for __x in _x:
                 _e(__x, _y)

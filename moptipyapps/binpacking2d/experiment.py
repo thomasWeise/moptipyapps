@@ -101,7 +101,7 @@ def run(base_dir: str, n_runs: int = 23) -> None:
         inst for inst in Instance.list_resources()
         if inst.startswith(("b", "a"))]
     inst_creators: list[Callable[[], Instance]] = [cast(
-        Callable[[], Instance], lambda __s=_s: Instance.from_resource(__s))
+        "Callable[[], Instance]", lambda __s=_s: Instance.from_resource(__s))
         for _s in instances]
     namer: Final[Instance] = Instance.from_resource(instances[0])
 
@@ -116,10 +116,12 @@ def run(base_dir: str, n_runs: int = 23) -> None:
                 base_dir=encoding_dir,
                 instances=inst_creators,
                 setups=[
-                    cast(Callable, lambda ins, _e=encoding, _o=objective: rls(
-                        ins, _e, _o)),
-                    cast(Callable, lambda ins, _e=encoding, _o=objective: fea(
-                        ins, _e, _o))],
+                    cast("Callable",
+                         lambda ins, _e=encoding, _o=objective: rls(
+                             ins, _e, _o)),
+                    cast("Callable",
+                         lambda ins, _e=encoding, _o=objective: fea(
+                             ins, _e, _o))],
                 n_runs=n_runs,
                 perform_warmup=True,
                 perform_pre_warmup=True)

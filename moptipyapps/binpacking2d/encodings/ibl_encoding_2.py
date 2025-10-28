@@ -432,7 +432,7 @@ def _decode(x: np.ndarray, y: np.ndarray, instance: np.ndarray,
         if not_found:  # we did not find a spot in any of the bins
             bin_starts[bin_id] = i  # set the starting index of the new bin
             bin_ends[bin_id] = i + 1  # set the end index of the new bin
-            bin_id = bin_id + 1  # step to the next bin
+            bin_id += 1  # step to the next bin
             y[i, IDX_LEFT_X] = 0  # the object goes to the left end of the bin
             y[i, IDX_BOTTOM_Y] = 0  # the object goes to the bottom of the bin
             y[i, IDX_RIGHT_X] = w  # so its right end is its width

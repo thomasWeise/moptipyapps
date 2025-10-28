@@ -49,6 +49,7 @@ above example.
 """
 
 import argparse
+from operator import itemgetter
 from os import listdir
 from os.path import basename, dirname, isdir, isfile, join
 from re import Pattern
@@ -221,7 +222,7 @@ def run(source: str, dest: str, max_fes: int, fitness_limit: int,
         plot_data = np.array(
             sorted([(result[idx], int(tags[2])) for tags, idx in
                     instance.tags if tags[0] == file],
-                   key=lambda a: (a[1], a[0])), dtype=int)
+                   key=itemgetter(1, 0)), dtype=int)
         axes.plot(plot_data[:, 0], plot_data[:, 1], color=colors[i],
                   marker=markers[i % len(markers)])
     axes.set_xticks([])

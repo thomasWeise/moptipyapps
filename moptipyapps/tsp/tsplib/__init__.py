@@ -34,5 +34,5 @@ def open_resource_stream(file_name: str) -> TextIO:
     :param file_name: the file name of the resource
     :return: the stream
     """
-    return cast(TextIO, resources.files(__package__).joinpath(
+    return cast("TextIO", resources.files(__package__).joinpath(
         file_name).open("r", encoding=UTF8))

@@ -254,8 +254,8 @@ class ResultsPlot(AbstractContextManager):
         #: the figure
         self.__figure: Figure | None = figure
         #: the plots
-        self.__subplots: None | tuple[tuple[
-            Axes | Figure, int, int, int, int, int], ...] = plots
+        self.__subplots: tuple[tuple[
+            Axes | Figure, int, int, int, int, int], ...] | None = plots
         #: the current plot
         self.__cur_plot: int = 0
         #: the z-order

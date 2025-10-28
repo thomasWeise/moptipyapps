@@ -62,7 +62,7 @@ def make_instances() -> Iterable[Callable[[], Instance]]:
 
     :return: the instances to be used in the TTP experiment.
     """
-    return (cast(Callable[[], Instance], lambda j=i: Instance.from_resource(
+    return (cast("Callable[[], Instance]", lambda j=i: Instance.from_resource(
         f"circ{j}")) for i in range(4, 42, 2))
 
 

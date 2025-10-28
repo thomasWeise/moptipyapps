@@ -141,8 +141,8 @@ class _PackingParser(LogParser[Packing]):
         if self.__instance is None:
             raise ValueError(f"Section {SECTION_SETUP} missing or empty!")
         # pylint: disable=C0415,R0401
-        from moptipyapps.binpacking2d.packing_space import (
-            PackingSpace,  # pylint: disable=C0415,R0401
+        from moptipyapps.binpacking2d.packing_space import (  # noqa: PLC0415
+            PackingSpace,  # pylint: disable=C0415,R0401  # noqa: PLC0415
         )
         return PackingSpace(self.__instance).from_str(self.__packing_str)
 

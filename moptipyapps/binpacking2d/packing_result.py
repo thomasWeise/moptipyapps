@@ -213,7 +213,7 @@ class PackingResult(EvaluationDataElement):
                     f"it is required that {lll}<=f<={uuu}, but got "
                     f"{lower}, {value}, and {upper}.")
 
-        bins: Final[int | None] = cast(int, objectives[BIN_COUNT_NAME]) \
+        bins: Final[int | None] = cast("int", objectives[BIN_COUNT_NAME]) \
             if BIN_COUNT_NAME in objectives else None
         for name, value in bin_bounds.items():
             if not isinstance(name, str):

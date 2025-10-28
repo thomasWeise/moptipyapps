@@ -69,7 +69,7 @@ def run(base_dir: str) -> None:
     use_dir.ensure_dir_exists()
 
     inst_creators: list[Callable[[], Instance]] = [cast(
-        Callable[[], Instance], lambda __s=_s, __t=_t: Problem(__s, __t))
+        "Callable[[], Instance]", lambda __s=_s, __t=_t: Problem(__s, __t))
         for _s in __USE_INSTANCES for _t in (0.25, 0.125)]
 
     run_experiment(
