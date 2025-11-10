@@ -36,9 +36,6 @@ numba == 0.62.1
 # matplotlib is used to create plots in the evaluation procedures.
 matplotlib == 3.10.7
 
-# scipy is used, e.g., for integrating systems of differential equations.
-scipy == 1.16.2
-
 # urllib3 and certifi are used to build instance data from internet resources.
 # They are also used to check the URLs in the README.md as part of the build
 # process, we check all the URLs in the README.md file..

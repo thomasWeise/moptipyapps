@@ -1,0 +1,2 @@
+# scipy is used, e.g., for integrating systems of differential equations.
+scipy == 1.16.2

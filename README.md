@@ -11,9 +11,8 @@
 - [Applications](#3-applications)
   - [Two-Dimensional Bin Packing Problem](#31-two-dimensional-bin-packing-problem)
   - [Traveling Salesperson Problem (TSP)](#32-the-traveling-salesperson-problem-tsp)
-  - [Dynamic Controller Synthesis](#33-dynamic-controller-synthesis)
-  - [Traveling Tournament Problem (TTP)](#34-the-traveling-tournament-problem-ttp)
-  - [Quadratic Assignment Problem (QAP)](#35-the-quadratic-assignment-problem-qap)
+  - [Traveling Tournament Problem (TTP)](#33-the-traveling-tournament-problem-ttp)
+  - [Quadratic Assignment Problem (QAP)](#34-the-quadratic-assignment-problem-qap)
   - [One-Dimensional Ordering](#36-one-dimensional-ordering)
 - [Unit Tests and Static Analysis](#4-unit-tests-and-static-analysis)
 - [License](#5-license)
@@ -122,33 +121,7 @@ Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇)
 The Traveling Tournament Problem ([TTP](#34-the-traveling-tournament-problem-ttp)) is related to the TTP.
 
 
-### 3.3. Dynamic Controller Synthesis
-Another interesting example for optimization is the synthesis of [active controllers for dynamic systems](https://thomasweise.github.io/moptipyapps/moptipyapps.dynamic_control.html).
-Dynamic systems have a state that changes over time based on some laws.
-These laws may be expressed as ordinary differential equations, for example.
-The classical [Stuart-Landau system](https://thomasweise.github.io/moptipyapps/moptipyapps.dynamic_control.systems.html#module-moptipyapps.dynamic_control.systems.stuart_landau), for instance, represents an object whose coordinates on a two-dimensional plane change as follows:
-
-```
-sigma = 0.1 - x² - y²
-dx/dt = sigma * x - y
-dy/dt = sigma * y + x
-```
-
-Regardless on which `(x, y)` the object initially starts, it tends to move to a circular rotation path centered around the origin with radius `sqrt(0.1)`.
-Now we try to create a controller `ctrl` for such a system that moves the object from this periodic circular path into a fixed and stable location.
-The controller `ctrl` receives the current state, i.e., the object location, as input and can influence the system as follows:
-
-```
-sigma = 0.1 - x² - y²
-c = ctrl(x, y)
-dx/dt = sigma * x - y
-dy/dt = sigma * y + x + c
-```
-
-What we try to find is the controller which can bring move object to the origin `(0, 0)` as quickly as possible while expending the least amount of force, i.e., having the smallest aggregated `c` values over time.
-
-
-### 3.4. The Traveling Tournament Problem (TTP)
+### 3.3. The Traveling Tournament Problem (TTP)
 In the package [`moptipyapps.ttp`](https://thomasweise.github.io/moptipyapps/moptipyapps.ttp.html#module-moptipyapps.ttp), we provide a set of classes and tools to explore the *Traveling Tournament Problem (TTP)*.
 In a TTP, we have an even number of `n` teams.
 Each team plays a tournament against every other team.
@@ -169,7 +142,7 @@ The goal is to find a feasible game schedule where the overall travel distances 
 - [tackle the TTP in a multi-objective manner](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_mo_py.html)
 
 
-### 3.5. The Quadratic Assignment Problem (QAP)
+### 3.4. The Quadratic Assignment Problem (QAP)
 In the package [`moptipyapps.qap`](https://thomasweise.github.io/moptipyapps/moptipyapps.qap.html#module-moptipyapps.qap), we implement some utilities to play with the Quadratic Assignment Problem (QAP).
 The QAP is one of the very classical problems from Operations Research.
 Imagine you are planning the layout for a factory.
@@ -189,7 +162,7 @@ To this end, solutions can be represented as permutations of facilities determin
 - [run a QAP experiment with RLS and random sampling](https://thomasweise.github.io/moptipyapps/examples/qap_example_experiment_rls_rs_py.html)
 
 
-### 3.6. One-Dimensional Ordering
+### 3.5. One-Dimensional Ordering
 In the package [`moptipyapps.order1d`](https://thomasweise.github.io/moptipyapps/moptipyapps.order1d.html#module-moptipyapps.order1d), we implement what I would like to call the "one-dimensional ordering problem".
 Imagine that you have `n` objects and you only know the distances between them.
 You want to arrange these objects on one axis, e.g., along the horizontal (`x`) axis, i.e., in a one-dimensional space.
