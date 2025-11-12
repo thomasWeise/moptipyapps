@@ -149,7 +149,15 @@ True
 from dataclasses import dataclass
 from itertools import batched
 from string import ascii_letters, digits
-from typing import Callable, Final, Generator, Iterable, Mapping, cast
+from typing import (
+    Callable,
+    Final,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+    cast,
+)
 
 import numba  # type: ignore
 from moptipy.api.component import Component
@@ -183,7 +191,7 @@ _DEMAND_DEADLINE: Final[int] = 5
 
 
 @dataclass(order=True, frozen=True)
-class Demand:
+class Demand(Iterable[int]):
     """The record for demands."""
 
     #: the release time, i.e., when the demand enters the system
@@ -229,6 +237,27 @@ class Demand:
             return self.deadline
         raise IndexError(
             f"index {item} out of bounds [0,{_DEMAND_DEADLINE}].")
+
+    def __iter__(self) -> Iterator[int]:
+        """
+        Iterate over the values in this demand.
+
+        :return: the demand iterable
+        """
+        yield self.demand_id  # _DEMAND_ID
+        yield self.customer_id  # _DEMAND_CUSTOMER
+        yield self.product_id  # _DEMAND_PRODUCT:
+        yield self.amount  # _DEMAND_AMOUNT:
+        yield self.release_time  # _DEMAND_TIME
+        yield self.deadline  # _DEMAND_DEADLINE
+
+    def __len__(self) -> int:
+        """
+        Get the length of the demand record.
+
+        :returns `6`: always
+        """
+        return 6
 
 
 def __to_tuple(source: Iterable[int],
@@ -312,7 +341,7 @@ def __to_nested_tuples(source: Iterable,
     ins: int = 0
     for i, row in enumerate(source):
         use_row: tuple = inner(row, pool, empty_ok)
-        ins += tuple.__len__(use_row)
+        ins += len(use_row)
         for j in range(i):
             if dest[j] == use_row:
                 use_row = dest[j]
@@ -435,6 +464,28 @@ def _make_routes(
     return dest
 
 
+def __to_demand(
+        source: Iterable[int], pool: dict, _) -> Demand:
+    """
+    Convert an integer source to a tuple or a demand.
+
+    :param source: the source
+    :param pool: the pool
+    :return: the Demand
+    """
+    if isinstance(source, Demand):
+        return cast("Demand", source)
+    tup: tuple[int, ...] = __to_tuple(source, pool, False)
+    dl: int = tuple.__len__(tup)
+    if dl != 6:
+        raise ValueError(f"Expected 6 values, got {dl}.")
+    return Demand(
+        demand_id=tup[_DEMAND_ID], customer_id=tup[_DEMAND_CUSTOMER],
+        product_id=tup[_DEMAND_PRODUCT], amount=tup[_DEMAND_AMOUNT],
+        release_time=tup[_DEMAND_TIME],
+        deadline=tup[_DEMAND_DEADLINE])
+
+
 def _make_demands(n_products: int, n_customers: int, n_demands: int,
                   source: Iterable[Iterable[int]], pool: dict) \
         -> tuple[Demand, ...]:
@@ -466,21 +517,20 @@ product_id=1, amount=4))
     check_int_range(n_products, "n_products", 1, _MAX_DIM)
     check_int_range(n_customers, "n_customers", 1, _MAX_DIM)
     check_int_range(n_demands, "n_demands", 1, _MAX_DIM)
-    temp: tuple[tuple[int, ...], ...] = __to_tuples(source, pool, False)
 
+    temp: tuple[Demand, ...] = __to_nested_tuples(
+        source, pool, False, __to_demand)
     n_dem: int = tuple.__len__(temp)
     if n_dem != n_demands:
         raise ValueError(f"Expected {n_demands} demands, got {n_dem}?")
+
     used_ids: set[int] = set()
     min_id: int = 1000 * _MAX_DIM
     max_id: int = -1000 * _MAX_DIM
     dest: list[Demand] = []
-    for i, demand in enumerate(temp):
-        dl: int = tuple.__len__(demand)
-        if dl != 6:
-            raise ValueError(f"Expected 6 values in each demand, got {dl}.")
 
-        d_id: int = demand[_DEMAND_ID]
+    for i, demand in enumerate(temp):
+        d_id: int = demand.demand_id
         if not (0 <= d_id < n_demands):
             raise ValueError(f"demand[{i}].id = {d_id}")
         if d_id in used_ids:
@@ -489,28 +539,28 @@ product_id=1, amount=4))
         min_id = min(min_id, d_id)
         max_id = max(max_id, d_id)
 
-        c_id: int = demand[_DEMAND_CUSTOMER]
+        c_id: int = demand.customer_id
         if not (0 <= c_id < n_customers):
             raise ValueError(f"demand[{i}].customer = {c_id}, "
                              f"but n_customers={n_customers}")
 
-        p_id: int = demand[_DEMAND_PRODUCT]
+        p_id: int = demand.product_id
         if not (0 <= p_id < n_products):
             raise ValueError(f"demand[{i}].product = {p_id}, "
                              f"but n_products={n_products}")
 
-        amount: int = demand[_DEMAND_AMOUNT]
+        amount: int = demand.amount
         if not (0 < amount < _MAX_DIM):
             raise ValueError(f"demand[{i}].amount = {amount}.")
 
-        release_time: int = demand[_DEMAND_TIME]
+        release_time: int = demand.release_time
         if not (0 < release_time < _MAX_DIM):
             raise ValueError(f"demand[{i}].release_time = {release_time}.")
 
-        deadline: int = demand[_DEMAND_DEADLINE]
+        deadline: int = demand.deadline
         if not (release_time <= deadline < _MAX_DIM):
             raise ValueError(f"demand[{i}].deadline = {deadline}.")
-        dest.append(Demand(release_time, deadline, d_id, c_id, p_id, amount))
+        dest.append(demand)
 
     sl: int = set.__len__(used_ids)
     if sl != n_demands:
@@ -701,7 +751,8 @@ class Instance(Component):
         :param routes: for each product, the sequence of machines that it has
             to pass
         :param demands: a sequences of demands of the form (
-            customer_id, product_id, product_amount, release_time)
+            customer_id, product_id, product_amount, release_time) OR a
+            sequence of :class:`Demand` records.
         :param warehous_at_t0: the amount of products in the warehouse at time
             0 for each product
         :param machine_product_unit_times: for each machine and each product
@@ -907,8 +958,9 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
            f"system at time unit {fd.release_time} and the customer expects "
            f"the product to be ready at time unit {fd.demand_id}.")
     for demand in srt:
-        row: str = CSV_SEPARATOR.join(map(str, map(demand.__getitem__, range(
-            _DEMAND_ID + 1, _DEMAND_DEADLINE + 1))))
+        it = iter(demand)
+        next(it)  # pylint: disable=R1708
+        row: str = CSV_SEPARATOR.join(map(str, it))
         yield (f"{KEY_DEMAND}{KEY_IDX_START}{demand.demand_id}{KEY_IDX_END}"
                f"{KEY_VALUE_SEPARATOR}"
                f"{row}")
@@ -1344,31 +1396,43 @@ def compute_finish_time(start_time: int, amount: int,
     246.66666666666666
     """
     time_mod: Final[int] = production_times[-1]
-    total: Final[int] = len(production_times) // 2
+    low_end: Final[int] = len(production_times)
+    total: Final[int] = low_end // 2
 
+    # First, we need to find the segment in the production cycle
+    # where the production begins. We use a binary search for that.
     remaining: int | float = amount
+    seg_start: int = start_time % time_mod
+    low: int = 0
+    high: int = total
+    while low < high:
+        mid: int = ((low + high) // 2)
+        th: int = production_times[mid * 2 + 1]
+        if th <= seg_start:
+            low = mid + 1
+        else:
+            high = mid - 1
+    low *= 2
+    max_time: int = production_times[low + 1]
+    if max_time <= seg_start:
+        low += 2
+
+    # Now we can cycle through the production cycle until the product has
+    # been produced.
     while True:
-        seg_start: int = start_time % time_mod
-        low: int = 0
-        high: int = total
-        while low < high:
-            mid: int = ((low + high) // 2)
-            th: int = production_times[mid * 2 + 1]
-            if th <= seg_start:
-                low = mid + 1
-            else:
-                high = mid - 1
-        low *= 2
-        max_time: int = production_times[low + 1]
-        if max_time <= seg_start:
-            low += 2
-            max_time = production_times[low + 1]
+        max_time = production_times[low + 1]
         unit_time: int = production_times[low]
         seg_end = seg_start + (unit_time * remaining)
         if seg_end <= max_time:
             return __round_time(start_time + seg_end - seg_start)
-        max_time -= seg_start
-        start_time += max_time
-        remaining -= (max_time / unit_time)
+        duration = max_time - seg_start
+        start_time += duration
+        remaining -= (duration / unit_time)
         if remaining <= 0:
             return __round_time(start_time)
+        low += 2
+        if low >= low_end:
+            low = 0
+            seg_start = 0
+            continue
+        seg_start = max_time
