@@ -177,17 +177,17 @@ _MAX_DIM: Final[int] = 1_000_000
 _INNER_MAX_DIM: Final[int] = min(366 * 24 * 3600 * _MAX_DIM, 2 ** 31 - 1)
 
 #: the index of the demand ID
-_DEMAND_ID: Final[int] = 0
+DEMAND_ID: Final[int] = 0
 #: the index of the customer ID
-_DEMAND_CUSTOMER: Final[int] = 1
+DEMAND_CUSTOMER: Final[int] = 1
 #: the index of the product ID
-_DEMAND_PRODUCT: Final[int] = 2
+DEMAND_PRODUCT: Final[int] = 2
 #: the index of the demanded amount
-_DEMAND_AMOUNT: Final[int] = 3
+DEMAND_AMOUNT: Final[int] = 3
 #: the index of the demand release time
-_DEMAND_TIME: Final[int] = 4
+DEMAND_TIME: Final[int] = 4
 #: the index of the demand deadline
-_DEMAND_DEADLINE: Final[int] = 5
+DEMAND_DEADLINE: Final[int] = 5
 
 
 @dataclass(order=True, frozen=True)
@@ -223,20 +223,20 @@ class Demand(Iterable[int]):
         :param item: the index
         :return: the demand value at that index
         """
-        if item == _DEMAND_ID:
+        if item == DEMAND_ID:
             return self.demand_id
-        if item == _DEMAND_CUSTOMER:
+        if item == DEMAND_CUSTOMER:
             return self.customer_id
-        if item == _DEMAND_PRODUCT:
+        if item == DEMAND_PRODUCT:
             return self.product_id
-        if item == _DEMAND_AMOUNT:
+        if item == DEMAND_AMOUNT:
             return self.amount
-        if item == _DEMAND_TIME:
+        if item == DEMAND_TIME:
             return self.release_time
-        if item == _DEMAND_DEADLINE:
+        if item == DEMAND_DEADLINE:
             return self.deadline
         raise IndexError(
-            f"index {item} out of bounds [0,{_DEMAND_DEADLINE}].")
+            f"index {item} out of bounds [0,{DEMAND_DEADLINE}].")
 
     def __iter__(self) -> Iterator[int]:
         """
@@ -244,12 +244,12 @@ class Demand(Iterable[int]):
 
         :return: the demand iterable
         """
-        yield self.demand_id  # _DEMAND_ID
-        yield self.customer_id  # _DEMAND_CUSTOMER
-        yield self.product_id  # _DEMAND_PRODUCT:
-        yield self.amount  # _DEMAND_AMOUNT:
-        yield self.release_time  # _DEMAND_TIME
-        yield self.deadline  # _DEMAND_DEADLINE
+        yield self.demand_id  # DEMAND_ID
+        yield self.customer_id  # DEMAND_CUSTOMER
+        yield self.product_id  # DEMAND_PRODUCT:
+        yield self.amount  # DEMAND_AMOUNT:
+        yield self.release_time  # DEMAND_TIME
+        yield self.deadline  # DEMAND_DEADLINE
 
     def __len__(self) -> int:
         """
@@ -480,10 +480,10 @@ def __to_demand(
     if dl != 6:
         raise ValueError(f"Expected 6 values, got {dl}.")
     return Demand(
-        demand_id=tup[_DEMAND_ID], customer_id=tup[_DEMAND_CUSTOMER],
-        product_id=tup[_DEMAND_PRODUCT], amount=tup[_DEMAND_AMOUNT],
-        release_time=tup[_DEMAND_TIME],
-        deadline=tup[_DEMAND_DEADLINE])
+        demand_id=tup[DEMAND_ID], customer_id=tup[DEMAND_CUSTOMER],
+        product_id=tup[DEMAND_PRODUCT], amount=tup[DEMAND_AMOUNT],
+        release_time=tup[DEMAND_TIME],
+        deadline=tup[DEMAND_DEADLINE])
 
 
 def _make_demands(n_products: int, n_customers: int, n_demands: int,

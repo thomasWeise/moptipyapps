@@ -63,11 +63,11 @@ Choice(ch=(2, 20, 3000, Gamma(k=2, scale=8)))
 
 from dataclasses import dataclass
 from math import isfinite
-from typing import Callable, Final
+from typing import Callable, Final, cast
 
 from numpy.random import Generator
 from pycommons.math.int_math import try_int
-from pycommons.types import check_int_range
+from pycommons.types import check_int_range, type_error
 
 #: the maximum number of trials during a sampling process
 _MAX_TRIALS: int = 1_000_000
@@ -84,6 +84,34 @@ class IntDistribution:
         :return: the integer
         """
         raise NotImplementedError
+
+    def simplify(self) -> "IntDistribution":
+        """
+        Try to simplify this distribution.
+
+        :returns: a simplified version of this distribution
+        """
+        if not isinstance(self, IntDistribution):
+            raise type_error(self, "self", IntDistribution)
+        return self
+
+
+def distribution(d: int | IntDistribution) -> IntDistribution:
+    """
+    Get the distribution from the parameter.
+
+    :param d: the integer value or distribution
+    :return: the canonicalized distribution
+    """
+    if isinstance(d, int):
+        return Const(d)
+    if isinstance(d, IntDistribution):
+        old_d: IntDistribution | None = None
+        while old_d is not d:
+            old_d = d
+            d = d.simplify()
+        return d
+    raise type_error(d, "d", (IntDistribution, int))
 
 
 @dataclass(order=True, frozen=True)
@@ -184,6 +212,16 @@ class Uniform(IntDistribution):
         """
         return int(random.integers(self.low, self.high + 1))
 
+    def simplify(self) -> "IntDistribution":
+        """
+        Try to simplify this distribution.
+
+        :returns: a simplified version of this distribution
+        """
+        if self.high == (self.low + 1):
+            return Const(self.low)
+        return self
+
 
 @dataclass(order=True, frozen=True)
 class Choice(IntDistribution):
@@ -214,7 +252,18 @@ class Choice(IntDistribution):
 
 @dataclass(order=True, frozen=True)
 class AtLeast(IntDistribution):
-    """A distribution that is lower-bounded."""
+    """
+    A distribution that is lower-bounded.
+
+    >>> AtLeast(5, Const(7))
+    AtLeast(lb=5, d=Const(v=7))
+
+    >>> AtLeast(5, AtLeast(8, Const(17)))
+    AtLeast(lb=8, d=Const(v=17))
+
+    >>> AtLeast(8, AtLeast(5, Const(17)))
+    AtLeast(lb=8, d=Const(v=17))
+    """
 
     #: the inclusive lower bound
     lb: int
@@ -226,6 +275,33 @@ class AtLeast(IntDistribution):
         if not (isinstance(self.lb, int) and isinstance(
                 self.d, IntDistribution)):
             raise TypeError(f"Invalid types {self}.")
+        dd: Final[IntDistribution] = self.d
+        if isinstance(dd, Const):
+            if cast("Const", dd).v < self.lb:
+                raise ValueError(f"Invalid distribution {self!r}.")
+        elif isinstance(dd, AtLeast):
+            dlb: AtLeast = cast("AtLeast", dd)
+            object.__setattr__(self, "lb", max(self.lb, dlb.lb))
+            object.__setattr__(self, "d", dlb.d)
+        if isinstance(dd, In):
+            idd: In = cast("In", dd)
+            ulb: int = max(idd.lb, self.lb)
+            if ulb >= idd.ub:
+                raise ValueError(f"Invalid distribution {self!r}.")
+
+    def simplify(self) -> "IntDistribution":
+        """
+        Try to simplify this distribution.
+
+        :returns: a simplified version of this distribution
+        """
+        dd: Final[IntDistribution] = self.d
+        if isinstance(dd, Const):
+            return dd
+        if isinstance(dd, In):
+            idd: In = cast("In", dd)
+            return In(max(idd.lb, self.lb), idd.ub, idd.d).simplify()
+        return self
 
     def sample(self, random: Generator) -> int:
         """
@@ -245,7 +321,18 @@ class AtLeast(IntDistribution):
 
 @dataclass(order=True, frozen=True)
 class In(IntDistribution):
-    """A distribution that is lower and upper-bounded."""
+    """
+    A distribution that is lower and upper-bounded.
+
+    >>> In(1, 10, Const(6))
+    In(lb=1, ub=10, d=Const(v=6))
+
+    >>> In(1, 10, In(5, 12, Const(6)))
+    In(lb=5, ub=10, d=Const(v=6))
+
+    >>> In(1, 10, AtLeast(6, Const(6)))
+    In(lb=6, ub=10, d=Const(v=6))
+    """
 
     #: the inclusive lower bound
     lb: int
@@ -261,6 +348,29 @@ class In(IntDistribution):
             raise TypeError(f"Invalid types {self}.")
         if self.ub <= self.lb:
             raise ValueError(f"Invalid range {self}.")
+        dd: IntDistribution = self.d
+        lb: Final[int] = self.lb
+        ub: Final[int] = self.ub
+        if isinstance(dd, In):
+            idd: In = cast("In", dd)
+            ulb: int = max(idd.lb, lb)
+            uub: int = min(idd.ub, ub)
+            if ulb >= uub:
+                raise ValueError(f"Invalid distribution {self!r}.")
+            object.__setattr__(self, "lb", ulb)
+            object.__setattr__(self, "ub", uub)
+            dd = idd.d
+            object.__setattr__(self, "d", dd)
+        elif isinstance(dd, AtLeast):
+            ldd: AtLeast = cast("AtLeast", dd)
+            ulb = max(ldd.lb, lb)
+            if ulb >= ub:
+                raise ValueError(f"Invalid distribution {self!r}.")
+            object.__setattr__(self, "lb", ulb)
+            dd = ldd.d
+            object.__setattr__(self, "d", dd)
+        if isinstance(dd, Const) and not (lb <= cast("Const", dd).v <= ub):
+            raise ValueError(f"Invalid distribution {self!r}.")
 
     def sample(self, random: Generator) -> int:
         """
@@ -278,10 +388,32 @@ class In(IntDistribution):
                 return v
         raise ValueError(f"Failed to sample from {self!r}.")
 
+    def simplify(self) -> IntDistribution:
+        """
+        Simplify this distribution.
+
+        :return: the simplified distribution
+        """
+        return Const(self.lb) if self.lb >= (self.ub + 1) else self
+
 
 @dataclass(order=True, frozen=True)
 class Sum(IntDistribution):
-    """The sum of several distributions."""
+    """
+    The sum of several distributions.
+
+    >>> Sum((Const(1), Const(2))).simplify()
+    Const(v=3)
+
+    >>> Sum((Const(1), Normal(2, 3))).simplify()
+    Sum(ds=(Const(v=1), Normal(mu=2, sd=3)))
+
+    >>> Sum((Const(0), Normal(2, 3))).simplify()
+    Normal(mu=2, sd=3)
+
+    >>> Sum((Const(0), Normal(2, 3), Const(5))).simplify()
+    Sum(ds=(Normal(mu=2, sd=3), Const(v=5)))
+    """
 
     #: the distributions to sum over
     ds: tuple[IntDistribution, ...]
@@ -299,6 +431,40 @@ class Sum(IntDistribution):
         if is_wrong:
             raise ValueError(f"Invalid parameters {self}.")
 
+    def simplify(self) -> IntDistribution:
+        """
+        Simplify this distribution.
+
+        :return: the simplified distribution
+        """
+        count: Final[int] = tuple.__len__(self.ds)
+        if count <= 1:
+            return self.ds[0]
+        const_sum: int = 0
+        all_const: bool = True
+        needed: list[IntDistribution] = []
+        recreate: bool = False
+        for d in self.ds:
+            new_d = d.simplify()
+            recreate = recreate or (new_d != d)
+            if isinstance(new_d, Const):
+                const_sum += cast("Const", new_d).v
+            else:
+                needed.append(new_d)
+                all_const = False
+        if all_const:
+            return Const(const_sum)
+
+        nl: int = list.__len__(needed)
+        if recreate or (nl < (count - 1)) or (
+                (nl < count) and (const_sum == 0)):
+            if const_sum != 0:
+                needed.append(Const(const_sum))
+            if list.__len__(needed) <= 1:
+                return needed[0]
+            return Sum(tuple(needed))
+        return self
+
     def sample(self, random: Generator) -> int:
         """
         Sample from the sum distribution.
@@ -309,4 +475,91 @@ class Sum(IntDistribution):
         total: int = 0
         for d in self.ds:
             total += d.sample(random)
+        return total
+
+
+@dataclass(order=True, frozen=True)
+class Mul(IntDistribution):
+    """
+    The multiplication of several distributions.
+
+    >>> Mul((Const(1), Const(2))).simplify()
+    Const(v=2)
+
+    >>> Mul((Const(2), Normal(2, 3))).simplify()
+    Mul(ds=(Const(v=2), Normal(mu=2, sd=3)))
+
+    >>> Mul((Const(1), Normal(2, 3))).simplify()
+    Normal(mu=2, sd=3)
+
+    >>> Mul((Const(1), Normal(2, 3), Const(5))).simplify()
+    Mul(ds=(Normal(mu=2, sd=3), Const(v=5)))
+
+    >>> Mul((Const(1), Normal(2, 3), Const(0))).simplify()
+    Const(v=0)
+    """
+
+    #: the distributions to sum over
+    ds: tuple[IntDistribution, ...]
+
+    def __post_init__(self) -> None:
+        """Perform some basic sanity checks and cleanup."""
+        is_wrong: bool = False
+        if tuple.__len__(self.ds) <= 0:
+            is_wrong = True
+        else:
+            for d in self.ds:
+                if not isinstance(d, IntDistribution):
+                    is_wrong = True
+                    break
+        if is_wrong:
+            raise ValueError(f"Invalid parameters {self}.")
+
+    def simplify(self) -> IntDistribution:
+        """
+        Simplify this distribution.
+
+        :return: the simplified distribution
+        """
+        count: Final[int] = tuple.__len__(self.ds)
+        if count <= 1:
+            return self.ds[0]
+        all_const: bool = True
+        const_prod: int = 1
+        needed: list[IntDistribution] = []
+        recreate: bool = False
+        for d in self.ds:
+            new_d = d.simplify()
+            recreate = recreate or (d != new_d)
+            if isinstance(new_d, Const):
+                cd = cast("Const", new_d)
+                if cd.v == 0:
+                    return cd
+                const_prod *= cd.v
+            else:
+                all_const = False
+                needed.append(new_d)
+
+        if all_const:
+            return Const(const_prod)
+        nl: int = list.__len__(needed)
+        if recreate or (nl < (count - 1)) or ((nl < count) and (
+                const_prod == 1)):
+            if const_prod != 1:
+                needed.append(Const(const_prod))
+            if list.__len__(needed) <= 1:
+                return needed[0]
+            return Mul(tuple(needed))
+        return self
+
+    def sample(self, random: Generator) -> int:
+        """
+        Sample from the sum distribution.
+
+        :param random: the random number generator
+        :return: the result
+        """
+        total: int = 1
+        for d in self.ds:
+            total *= d.sample(random)
         return total
