@@ -1,0 +1,648 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.utils.sampling — moptipyapps 0.8.70 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=bfdce523"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/utils/sampling.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.70 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.utils.sampling</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.utils.sampling</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Some utilities for random sampling.</span>
+
+<span class=sd>The goal that we follow with class :class:`IntDistribution` is to have</span>
+<span class=sd>clearly defined integer-producing random distributions. We want to be</span>
+<span class=sd>able to say exactly how to generate some random numbers.</span>
+
+<span class=sd>>>> from moptipy.utils.nputils import rand_generator</span>
+<span class=sd>>>> rnd = rand_generator(0)</span>
+
+<span class=sd>>>> nd = Normal(1, 2)</span>
+<span class=sd>>>> nd</span>
+<span class=sd>Normal(mu=1, sd=2)</span>
+<span class=sd>>>> [nd.sample(rnd) for _ in range(20)]</span>
+<span class=sd>[1, 1, 2, 1, 0, 2, 4, 3, 0, -2, 0, 1, -4, 1, -1, 0, 0, 0, 2, 3]</span>
+
+<span class=sd>>>> lb = AtLeast(2, nd)</span>
+<span class=sd>>>> lb</span>
+<span class=sd>AtLeast(lb=2, d=Normal(mu=1, sd=2))</span>
+
+<span class=sd>>>> [lb.sample(rnd) for _ in range(20)]</span>
+<span class=sd>[4, 2, 3, 2, 2, 3, 4, 4, 4, 3, 2, 4, 5, 5, 4, 2, 2, 2, 2, 2]</span>
+
+<span class=sd>>>> u = Uniform(10, 17)</span>
+<span class=sd>>>> u</span>
+<span class=sd>Uniform(low=10, high=17)</span>
+<span class=sd>>>> [u.sample(rnd) for _ in range(10)]</span>
+<span class=sd>[15, 11, 16, 10, 14, 13, 17, 11, 17, 10]</span>
+
+<span class=sd>>>> s = Sum((u, nd, ))</span>
+<span class=sd>>>> s</span>
+<span class=sd>Sum(ds=(Uniform(low=10, high=17), Normal(mu=1, sd=2)))</span>
+
+<span class=sd>>>> [s.sample(rnd) for _ in range(10)]</span>
+<span class=sd>[16, 14, 21, 13, 16, 12, 13, 18, 12, 20]</span>
+
+<span class=sd>>>> g = Gamma(2, 8)</span>
+<span class=sd>>>> g</span>
+<span class=sd>Gamma(k=2, scale=8)</span>
+<span class=sd>>>> [g.sample(rnd) for _ in range(10)]</span>
+<span class=sd>[14, 15, 10, 4, 20, 7, 11, 9, 16, 15]</span>
+
+<span class=sd>>>> b = In(5, 10, g)</span>
+<span class=sd>>>> b</span>
+<span class=sd>In(lb=5, ub=10, d=Gamma(k=2, scale=8))</span>
+<span class=sd>>>> [b.sample(rnd) for _ in range(10)]</span>
+<span class=sd>[7, 8, 8, 5, 7, 6, 9, 9, 9, 9]</span>
+
+<span class=sd>>>> s2 = Sum((Const(10), nd, ))</span>
+<span class=sd>>>> s2</span>
+<span class=sd>Sum(ds=(Const(v=10), Normal(mu=1, sd=2)))</span>
+
+<span class=sd>>>> [s2.sample(rnd) for _ in range(10)]</span>
+<span class=sd>[10, 10, 8, 12, 13, 10, 11, 8, 10, 14]</span>
+
+<span class=sd>>>> ch = Choice((2, 20, 3000, g))</span>
+<span class=sd>>>> ch</span>
+<span class=sd>Choice(ch=(2, 20, 3000, Gamma(k=2, scale=8)))</span>
+
+<span class=sd>>>> [ch.sample(rnd) for _ in range(10)]</span>
+<span class=sd>[20, 20, 7, 11, 20, 2, 3000, 2, 2, 2]</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>dataclasses</span><span class=w> </span><span class=kn>import</span> <span class=n>dataclass</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>isfinite</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>numpy.random</span><span class=w> </span><span class=kn>import</span> <span class=n>Generator</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.int_math</span><span class=w> </span><span class=kn>import</span> <span class=n>try_int</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=c1>#: the maximum number of trials during a sampling process</span>
+<span class=n>_MAX_TRIALS</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1_000_000</span>
+
+
+<div class=viewcode-block id=IntDistribution>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.IntDistribution>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>IntDistribution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""A base class for integer distributions."""</span>
+
+<div class=viewcode-block id=IntDistribution.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.IntDistribution.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample an integer from a random number generator.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the integer</span>
+<span class=sd>        """</span>
+        <span class=k>raise</span> <span class=ne>NotImplementedError</span></div>
+
+
+<div class=viewcode-block id=IntDistribution.simplify>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.IntDistribution.simplify>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>simplify</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"IntDistribution"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Try to simplify this distribution.</span>
+
+<span class=sd>        :returns: a simplified version of this distribution</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"self"</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>)</span>
+        <span class=k>return</span> <span class=bp>self</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=distribution>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.distribution>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>distribution</span><span class=p>(</span><span class=n>d</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span><span class=p>)</span> <span class=o>-></span> <span class=n>IntDistribution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get the distribution from the parameter.</span>
+
+<span class=sd>    :param d: the integer value or distribution</span>
+<span class=sd>    :return: the canonicalized distribution</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>d</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+        <span class=k>return</span> <span class=n>Const</span><span class=p>(</span><span class=n>d</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>d</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>):</span>
+        <span class=n>old_d</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=k>while</span> <span class=n>old_d</span> <span class=ow>is</span> <span class=ow>not</span> <span class=n>d</span><span class=p>:</span>
+            <span class=n>old_d</span> <span class=o>=</span> <span class=n>d</span>
+            <span class=n>d</span> <span class=o>=</span> <span class=n>d</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=k>return</span> <span class=n>d</span>
+    <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>d</span><span class=p>,</span> <span class=s2>"d"</span><span class=p>,</span> <span class=p>(</span><span class=n>IntDistribution</span><span class=p>,</span> <span class=nb>int</span><span class=p>))</span></div>
+
+
+
+<div class=viewcode-block id=Const>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Const>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Const</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A constant value."""</span>
+
+    <span class=n>v</span><span class=p>:</span> <span class=nb>int</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>v</span><span class=p>,</span> <span class=s2>"v"</span><span class=p>,</span> <span class=o>-</span><span class=mi>1_000_000_000_000</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+
+<div class=viewcode-block id=Const.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Const.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample the constant integer.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the integer</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>v</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=Normal>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Normal>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Normal</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A class representing a normal distribution."""</span>
+
+    <span class=c1>#: the expected value and center of the distribution</span>
+    <span class=n>mu</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span>
+    <span class=c1>#: the standard deviation of the distribution</span>
+    <span class=n>sd</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>isfinite</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>mu</span><span class=p>)</span> <span class=ow>and</span> <span class=n>isfinite</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>sd</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>sd</span> <span class=o>></span> <span class=mi>0</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid parameters </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"mu"</span><span class=p>,</span> <span class=n>try_int</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>mu</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"sd"</span><span class=p>,</span> <span class=n>try_int</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>sd</span><span class=p>))</span>
+
+<div class=viewcode-block id=Normal.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Normal.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample from the normal distribution.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=nb>round</span><span class=p>(</span><span class=n>random</span><span class=o>.</span><span class=n>normal</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>mu</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>sd</span><span class=p>))</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=Gamma>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Gamma>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Gamma</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A class representing a Gamma distribution."""</span>
+
+    <span class=c1>#: the shape parameter</span>
+    <span class=n>k</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span>
+    <span class=c1>#: the scale parameter</span>
+    <span class=n>scale</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>isfinite</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>k</span><span class=p>)</span> <span class=ow>and</span> <span class=n>isfinite</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>k</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>k</span> <span class=o>></span> <span class=mi>0</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>scale</span> <span class=o>></span> <span class=mi>0</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid parameters </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"k"</span><span class=p>,</span> <span class=n>try_int</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>k</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"scale"</span><span class=p>,</span> <span class=n>try_int</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>scale</span><span class=p>))</span>
+
+<div class=viewcode-block id=Gamma.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Gamma.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample from the Gamma distribution.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=nb>round</span><span class=p>(</span><span class=n>random</span><span class=o>.</span><span class=n>gamma</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>k</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>scale</span><span class=p>))</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=Uniform>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Uniform>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Uniform</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A class representing a uniform distribution."""</span>
+
+    <span class=c1>#: the lowest permitted value</span>
+    <span class=n>low</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the highest permitted value</span>
+    <span class=n>high</span><span class=p>:</span> <span class=nb>int</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=nb>isinstance</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>low</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span> <span class=ow>and</span> <span class=nb>isinstance</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>high</span><span class=p>,</span> <span class=nb>int</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>TypeError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid types </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>high</span> <span class=o><=</span> <span class=bp>self</span><span class=o>.</span><span class=n>low</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid parameters </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+<div class=viewcode-block id=Uniform.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Uniform.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample from the uniform distribution.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=n>random</span><span class=o>.</span><span class=n>integers</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>low</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>high</span> <span class=o>+</span> <span class=mi>1</span><span class=p>))</span></div>
+
+
+<div class=viewcode-block id=Uniform.simplify>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Uniform.simplify>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>simplify</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"IntDistribution"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Try to simplify this distribution.</span>
+
+<span class=sd>        :returns: a simplified version of this distribution</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>high</span> <span class=o>==</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>low</span> <span class=o>+</span> <span class=mi>1</span><span class=p>):</span>
+            <span class=k>return</span> <span class=n>Const</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>low</span><span class=p>)</span>
+        <span class=k>return</span> <span class=bp>self</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=Choice>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Choice>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Choice</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A class representing a uniform choice."""</span>
+
+    <span class=c1>#: the choices</span>
+    <span class=n>ch</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ch</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>TypeError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid types </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>v</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>ch</span><span class=p>:</span>
+            <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>v</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>):</span>
+                <span class=k>continue</span>
+            <span class=n>check_int_range</span><span class=p>(</span><span class=n>v</span><span class=p>,</span> <span class=s2>"v"</span><span class=p>,</span> <span class=o>-</span><span class=mi>1_000_000_000_000</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+
+<div class=viewcode-block id=Choice.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Choice.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample from the uniform distribution.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=n>res</span><span class=p>:</span> <span class=n>Final</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>ch</span><span class=p>[</span><span class=n>random</span><span class=o>.</span><span class=n>integers</span><span class=p>(</span><span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ch</span><span class=p>))]</span>
+        <span class=k>return</span> <span class=n>res</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>random</span><span class=p>)</span> <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>res</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>)</span> <span class=k>else</span> <span class=n>res</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=AtLeast>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.AtLeast>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>AtLeast</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    A distribution that is lower-bounded.</span>
+
+<span class=sd>    >>> AtLeast(5, Const(7))</span>
+<span class=sd>    AtLeast(lb=5, d=Const(v=7))</span>
+
+<span class=sd>    >>> AtLeast(5, AtLeast(8, Const(17)))</span>
+<span class=sd>    AtLeast(lb=8, d=Const(v=17))</span>
+
+<span class=sd>    >>> AtLeast(8, AtLeast(5, Const(17)))</span>
+<span class=sd>    AtLeast(lb=8, d=Const(v=17))</span>
+<span class=sd>    """</span>
+
+    <span class=c1>#: the inclusive lower bound</span>
+    <span class=n>lb</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the inner distribution to sample from</span>
+    <span class=n>d</span><span class=p>:</span> <span class=n>IntDistribution</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=nb>isinstance</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>lb</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span> <span class=ow>and</span> <span class=nb>isinstance</span><span class=p>(</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>d</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>TypeError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid types </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>dd</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>d</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dd</span><span class=p>,</span> <span class=n>Const</span><span class=p>):</span>
+            <span class=k>if</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Const"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span><span class=o>.</span><span class=n>v</span> <span class=o><</span> <span class=bp>self</span><span class=o>.</span><span class=n>lb</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid distribution </span><span class=si>{</span><span class=bp>self</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dd</span><span class=p>,</span> <span class=n>AtLeast</span><span class=p>):</span>
+            <span class=n>dlb</span><span class=p>:</span> <span class=n>AtLeast</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"AtLeast"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span>
+            <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"lb"</span><span class=p>,</span> <span class=nb>max</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>lb</span><span class=p>,</span> <span class=n>dlb</span><span class=o>.</span><span class=n>lb</span><span class=p>))</span>
+            <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"d"</span><span class=p>,</span> <span class=n>dlb</span><span class=o>.</span><span class=n>d</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dd</span><span class=p>,</span> <span class=n>In</span><span class=p>):</span>
+            <span class=n>idd</span><span class=p>:</span> <span class=n>In</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"In"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span>
+            <span class=n>ulb</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>idd</span><span class=o>.</span><span class=n>lb</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>lb</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>ulb</span> <span class=o>>=</span> <span class=n>idd</span><span class=o>.</span><span class=n>ub</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid distribution </span><span class=si>{</span><span class=bp>self</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+<div class=viewcode-block id=AtLeast.simplify>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.AtLeast.simplify>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>simplify</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"IntDistribution"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Try to simplify this distribution.</span>
+
+<span class=sd>        :returns: a simplified version of this distribution</span>
+<span class=sd>        """</span>
+        <span class=n>dd</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>d</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dd</span><span class=p>,</span> <span class=n>Const</span><span class=p>):</span>
+            <span class=k>return</span> <span class=n>dd</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dd</span><span class=p>,</span> <span class=n>In</span><span class=p>):</span>
+            <span class=n>idd</span><span class=p>:</span> <span class=n>In</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"In"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span>
+            <span class=k>return</span> <span class=n>In</span><span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=n>idd</span><span class=o>.</span><span class=n>lb</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>lb</span><span class=p>),</span> <span class=n>idd</span><span class=o>.</span><span class=n>ub</span><span class=p>,</span> <span class=n>idd</span><span class=o>.</span><span class=n>d</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=k>return</span> <span class=bp>self</span></div>
+
+
+<div class=viewcode-block id=AtLeast.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.AtLeast.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample from the lower-bounded distribution.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=n>s</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Generator</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>d</span><span class=o>.</span><span class=n>sample</span>
+        <span class=n>lb</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>lb</span>
+        <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>_MAX_TRIALS</span><span class=p>):</span>
+            <span class=n>v</span> <span class=o>=</span> <span class=n>s</span><span class=p>(</span><span class=n>random</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>lb</span> <span class=o><=</span> <span class=n>v</span><span class=p>:</span>
+                <span class=k>return</span> <span class=n>v</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Failed to sample from </span><span class=si>{</span><span class=bp>self</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=In>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.In>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>In</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    A distribution that is lower and upper-bounded.</span>
+
+<span class=sd>    >>> In(1, 10, Const(6))</span>
+<span class=sd>    In(lb=1, ub=10, d=Const(v=6))</span>
+
+<span class=sd>    >>> In(1, 10, In(5, 12, Const(6)))</span>
+<span class=sd>    In(lb=5, ub=10, d=Const(v=6))</span>
+
+<span class=sd>    >>> In(1, 10, AtLeast(6, Const(6)))</span>
+<span class=sd>    In(lb=6, ub=10, d=Const(v=6))</span>
+<span class=sd>    """</span>
+
+    <span class=c1>#: the inclusive lower bound</span>
+    <span class=n>lb</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the exclusive upper bound</span>
+    <span class=n>ub</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the inner distribution to sample from</span>
+    <span class=n>d</span><span class=p>:</span> <span class=n>IntDistribution</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=nb>isinstance</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>lb</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span> <span class=ow>and</span> <span class=nb>isinstance</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ub</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span>
+                <span class=ow>and</span> <span class=nb>isinstance</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>d</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>TypeError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid types </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>ub</span> <span class=o><=</span> <span class=bp>self</span><span class=o>.</span><span class=n>lb</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid range </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>dd</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>d</span>
+        <span class=n>lb</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>lb</span>
+        <span class=n>ub</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>ub</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dd</span><span class=p>,</span> <span class=n>In</span><span class=p>):</span>
+            <span class=n>idd</span><span class=p>:</span> <span class=n>In</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"In"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span>
+            <span class=n>ulb</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>idd</span><span class=o>.</span><span class=n>lb</span><span class=p>,</span> <span class=n>lb</span><span class=p>)</span>
+            <span class=n>uub</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>idd</span><span class=o>.</span><span class=n>ub</span><span class=p>,</span> <span class=n>ub</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>ulb</span> <span class=o>>=</span> <span class=n>uub</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid distribution </span><span class=si>{</span><span class=bp>self</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"lb"</span><span class=p>,</span> <span class=n>ulb</span><span class=p>)</span>
+            <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"ub"</span><span class=p>,</span> <span class=n>uub</span><span class=p>)</span>
+            <span class=n>dd</span> <span class=o>=</span> <span class=n>idd</span><span class=o>.</span><span class=n>d</span>
+            <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"d"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dd</span><span class=p>,</span> <span class=n>AtLeast</span><span class=p>):</span>
+            <span class=n>ldd</span><span class=p>:</span> <span class=n>AtLeast</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"AtLeast"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span>
+            <span class=n>ulb</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>ldd</span><span class=o>.</span><span class=n>lb</span><span class=p>,</span> <span class=n>lb</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>ulb</span> <span class=o>>=</span> <span class=n>ub</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid distribution </span><span class=si>{</span><span class=bp>self</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"lb"</span><span class=p>,</span> <span class=n>ulb</span><span class=p>)</span>
+            <span class=n>dd</span> <span class=o>=</span> <span class=n>ldd</span><span class=o>.</span><span class=n>d</span>
+            <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"d"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dd</span><span class=p>,</span> <span class=n>Const</span><span class=p>)</span> <span class=ow>and</span> <span class=ow>not</span> <span class=p>(</span><span class=n>lb</span> <span class=o><=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Const"</span><span class=p>,</span> <span class=n>dd</span><span class=p>)</span><span class=o>.</span><span class=n>v</span> <span class=o><=</span> <span class=n>ub</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid distribution </span><span class=si>{</span><span class=bp>self</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+<div class=viewcode-block id=In.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.In.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample from the lower-bounded distribution.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=n>s</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Generator</span><span class=p>],</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>d</span><span class=o>.</span><span class=n>sample</span>
+        <span class=n>lb</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>lb</span>
+        <span class=n>ub</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>ub</span>
+        <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>_MAX_TRIALS</span><span class=p>):</span>
+            <span class=n>v</span> <span class=o>=</span> <span class=n>s</span><span class=p>(</span><span class=n>random</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>lb</span> <span class=o><=</span> <span class=n>v</span> <span class=o><=</span> <span class=n>ub</span><span class=p>:</span>
+                <span class=k>return</span> <span class=n>v</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Failed to sample from </span><span class=si>{</span><span class=bp>self</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=In.simplify>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.In.simplify>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>simplify</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>IntDistribution</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Simplify this distribution.</span>
+
+<span class=sd>        :return: the simplified distribution</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>Const</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>lb</span><span class=p>)</span> <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>lb</span> <span class=o>>=</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ub</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=k>else</span> <span class=bp>self</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=Sum>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Sum>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Sum</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    The sum of several distributions.</span>
+
+<span class=sd>    >>> Sum((Const(1), Const(2))).simplify()</span>
+<span class=sd>    Const(v=3)</span>
+
+<span class=sd>    >>> Sum((Const(1), Normal(2, 3))).simplify()</span>
+<span class=sd>    Sum(ds=(Const(v=1), Normal(mu=2, sd=3)))</span>
+
+<span class=sd>    >>> Sum((Const(0), Normal(2, 3))).simplify()</span>
+<span class=sd>    Normal(mu=2, sd=3)</span>
+
+<span class=sd>    >>> Sum((Const(0), Normal(2, 3), Const(5))).simplify()</span>
+<span class=sd>    Sum(ds=(Normal(mu=2, sd=3), Const(v=5)))</span>
+<span class=sd>    """</span>
+
+    <span class=c1>#: the distributions to sum over</span>
+    <span class=n>ds</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=n>is_wrong</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>is_wrong</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>:</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>d</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>):</span>
+                    <span class=n>is_wrong</span> <span class=o>=</span> <span class=kc>True</span>
+                    <span class=k>break</span>
+        <span class=k>if</span> <span class=n>is_wrong</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid parameters </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+<div class=viewcode-block id=Sum.simplify>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Sum.simplify>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>simplify</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>IntDistribution</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Simplify this distribution.</span>
+
+<span class=sd>        :return: the simplified distribution</span>
+<span class=sd>        """</span>
+        <span class=n>count</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>count</span> <span class=o><=</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=n>const_sum</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>all_const</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=n>needed</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>recreate</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>:</span>
+            <span class=n>new_d</span> <span class=o>=</span> <span class=n>d</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+            <span class=n>recreate</span> <span class=o>=</span> <span class=n>recreate</span> <span class=ow>or</span> <span class=p>(</span><span class=n>new_d</span> <span class=o>!=</span> <span class=n>d</span><span class=p>)</span>
+            <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>new_d</span><span class=p>,</span> <span class=n>Const</span><span class=p>):</span>
+                <span class=n>const_sum</span> <span class=o>+=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Const"</span><span class=p>,</span> <span class=n>new_d</span><span class=p>)</span><span class=o>.</span><span class=n>v</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>needed</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>new_d</span><span class=p>)</span>
+                <span class=n>all_const</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>if</span> <span class=n>all_const</span><span class=p>:</span>
+            <span class=k>return</span> <span class=n>Const</span><span class=p>(</span><span class=n>const_sum</span><span class=p>)</span>
+
+        <span class=n>nl</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>needed</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>recreate</span> <span class=ow>or</span> <span class=p>(</span><span class=n>nl</span> <span class=o><</span> <span class=p>(</span><span class=n>count</span> <span class=o>-</span> <span class=mi>1</span><span class=p>))</span> <span class=ow>or</span> <span class=p>(</span>
+                <span class=p>(</span><span class=n>nl</span> <span class=o><</span> <span class=n>count</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>const_sum</span> <span class=o>==</span> <span class=mi>0</span><span class=p>)):</span>
+            <span class=k>if</span> <span class=n>const_sum</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=n>needed</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>Const</span><span class=p>(</span><span class=n>const_sum</span><span class=p>))</span>
+            <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>needed</span><span class=p>)</span> <span class=o><=</span> <span class=mi>1</span><span class=p>:</span>
+                <span class=k>return</span> <span class=n>needed</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+            <span class=k>return</span> <span class=n>Sum</span><span class=p>(</span><span class=nb>tuple</span><span class=p>(</span><span class=n>needed</span><span class=p>))</span>
+        <span class=k>return</span> <span class=bp>self</span></div>
+
+
+<div class=viewcode-block id=Sum.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Sum.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample from the sum distribution.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=n>total</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>:</span>
+            <span class=n>total</span> <span class=o>+=</span> <span class=n>d</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>random</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>total</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=Mul>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Mul>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Mul</span><span class=p>(</span><span class=n>IntDistribution</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    The multiplication of several distributions.</span>
+
+<span class=sd>    >>> Mul((Const(1), Const(2))).simplify()</span>
+<span class=sd>    Const(v=2)</span>
+
+<span class=sd>    >>> Mul((Const(2), Normal(2, 3))).simplify()</span>
+<span class=sd>    Mul(ds=(Const(v=2), Normal(mu=2, sd=3)))</span>
+
+<span class=sd>    >>> Mul((Const(1), Normal(2, 3))).simplify()</span>
+<span class=sd>    Normal(mu=2, sd=3)</span>
+
+<span class=sd>    >>> Mul((Const(1), Normal(2, 3), Const(5))).simplify()</span>
+<span class=sd>    Mul(ds=(Normal(mu=2, sd=3), Const(v=5)))</span>
+
+<span class=sd>    >>> Mul((Const(1), Normal(2, 3), Const(0))).simplify()</span>
+<span class=sd>    Const(v=0)</span>
+<span class=sd>    """</span>
+
+    <span class=c1>#: the distributions to sum over</span>
+    <span class=n>ds</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks and cleanup."""</span>
+        <span class=n>is_wrong</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>is_wrong</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>:</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>d</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>):</span>
+                    <span class=n>is_wrong</span> <span class=o>=</span> <span class=kc>True</span>
+                    <span class=k>break</span>
+        <span class=k>if</span> <span class=n>is_wrong</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid parameters </span><span class=si>{</span><span class=bp>self</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+<div class=viewcode-block id=Mul.simplify>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Mul.simplify>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>simplify</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>IntDistribution</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Simplify this distribution.</span>
+
+<span class=sd>        :return: the simplified distribution</span>
+<span class=sd>        """</span>
+        <span class=n>count</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>count</span> <span class=o><=</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=n>all_const</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=n>const_prod</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=n>needed</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>recreate</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>:</span>
+            <span class=n>new_d</span> <span class=o>=</span> <span class=n>d</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+            <span class=n>recreate</span> <span class=o>=</span> <span class=n>recreate</span> <span class=ow>or</span> <span class=p>(</span><span class=n>d</span> <span class=o>!=</span> <span class=n>new_d</span><span class=p>)</span>
+            <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>new_d</span><span class=p>,</span> <span class=n>Const</span><span class=p>):</span>
+                <span class=n>cd</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Const"</span><span class=p>,</span> <span class=n>new_d</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>cd</span><span class=o>.</span><span class=n>v</span> <span class=o>==</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>return</span> <span class=n>cd</span>
+                <span class=n>const_prod</span> <span class=o>*=</span> <span class=n>cd</span><span class=o>.</span><span class=n>v</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>all_const</span> <span class=o>=</span> <span class=kc>False</span>
+                <span class=n>needed</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>new_d</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>all_const</span><span class=p>:</span>
+            <span class=k>return</span> <span class=n>Const</span><span class=p>(</span><span class=n>const_prod</span><span class=p>)</span>
+        <span class=n>nl</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>needed</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>recreate</span> <span class=ow>or</span> <span class=p>(</span><span class=n>nl</span> <span class=o><</span> <span class=p>(</span><span class=n>count</span> <span class=o>-</span> <span class=mi>1</span><span class=p>))</span> <span class=ow>or</span> <span class=p>((</span><span class=n>nl</span> <span class=o><</span> <span class=n>count</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span>
+                <span class=n>const_prod</span> <span class=o>==</span> <span class=mi>1</span><span class=p>)):</span>
+            <span class=k>if</span> <span class=n>const_prod</span> <span class=o>!=</span> <span class=mi>1</span><span class=p>:</span>
+                <span class=n>needed</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>Const</span><span class=p>(</span><span class=n>const_prod</span><span class=p>))</span>
+            <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>needed</span><span class=p>)</span> <span class=o><=</span> <span class=mi>1</span><span class=p>:</span>
+                <span class=k>return</span> <span class=n>needed</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+            <span class=k>return</span> <span class=n>Mul</span><span class=p>(</span><span class=nb>tuple</span><span class=p>(</span><span class=n>needed</span><span class=p>))</span>
+        <span class=k>return</span> <span class=bp>self</span></div>
+
+
+<div class=viewcode-block id=Mul.sample>
+<a class=viewcode-back href=../../../moptipyapps.utils.html#moptipyapps.utils.sampling.Mul.sample>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>sample</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Sample from the sum distribution.</span>
+
+<span class=sd>        :param random: the random number generator</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=n>total</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>ds</span><span class=p>:</span>
+            <span class=n>total</span> <span class=o>*=</span> <span class=n>d</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>random</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>total</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.70 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.utils.sampling</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

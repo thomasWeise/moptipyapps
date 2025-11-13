@@ -1,0 +1,1455 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.instance — moptipyapps 0.8.70 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=bfdce523"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/instance.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.70 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.instance</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.instance</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A production scheduling instance.</span>
+
+<span class=sd>Production instances have names :attr:`Instance.name`.</span>
+
+<span class=sd>Notice that production times are used in a cycling fashion.</span>
+<span class=sd>The time when a certain product is finished can be computed via</span>
+<span class=sd>:func:`~compute_finish_time` in an efficient way.</span>
+
+<span class=sd>>>> name = "my_instance"</span>
+
+<span class=sd>The number of products be 3.</span>
+<span class=sd>>>> n_products = 3</span>
+
+<span class=sd>The number of customers be 5.</span>
+<span class=sd>>>> n_customers = 5</span>
+
+<span class=sd>The number of machines be 4.</span>
+<span class=sd>>>> n_machines = 4</span>
+
+<span class=sd>There will be 6 customer demands.</span>
+<span class=sd>>>> n_demands = 6</span>
+
+<span class=sd>Each product may take a different route through different machines.</span>
+<span class=sd>>>> route_p0 = [0, 3, 2]</span>
+<span class=sd>>>> route_p1 = [0, 2, 1, 3]</span>
+<span class=sd>>>> route_p2 = [1, 2, 3]</span>
+<span class=sd>>>> routes = [route_p0, route_p1, route_p2]</span>
+
+<span class=sd>Each demand is a tuple of demand_id, customer_id, product_id, amount,</span>
+<span class=sd>release time, and deadline.</span>
+<span class=sd>>>> d0 = [0, 0, 1, 20, 1240,  3000]</span>
+<span class=sd>>>> d1 = [1, 1, 0, 10, 2300,  4000]</span>
+<span class=sd>>>> d2 = [2, 2, 2,  7, 8300, 11000]</span>
+<span class=sd>>>> d3 = [3, 3, 1, 12, 7300,  9000]</span>
+<span class=sd>>>> d4 = [4, 4, 2, 23, 5410, 16720]</span>
+<span class=sd>>>> d5 = [5, 3, 0, 19, 4234, 27080]</span>
+<span class=sd>>>> demands = [d0, d1, d2, d3, d4, d5]</span>
+
+<span class=sd>There is a fixed amount of each product in the warehouse at time step 0.</span>
+<span class=sd>>>> warehous_at_t0 = [10, 0, 6]</span>
+
+<span class=sd>Each machine requires a certain working time for each unit of each product.</span>
+<span class=sd>This production time may vary over time.</span>
+<span class=sd>For example, maybe machine 0 needs 10 time units for 1 unit of product 0 from</span>
+<span class=sd>time step 0 to time step 19, then 11 time units from time step 20 to 39, then</span>
+<span class=sd>8 time units from time step 40 to 59.</span>
+<span class=sd>These times are cyclic, meaning that at time step 60 to 79, it will again need</span>
+<span class=sd>10 time units, and so on.</span>
+<span class=sd>Of course, production times are only specified for machines that a product is</span>
+<span class=sd>actually routed through.</span>
+<span class=sd>>>> m0_p0 = [10, 20, 11, 40,  8, 60]</span>
+<span class=sd>>>> m0_p1 = [12, 20,  7, 40, 11, 70]</span>
+<span class=sd>>>> m0_p2 = []</span>
+<span class=sd>>>> m1_p0 = []</span>
+<span class=sd>>>> m1_p1 = [20, 50, 30, 120,  7, 200]</span>
+<span class=sd>>>> m1_p2 = [21, 50, 29, 130,  8, 190]</span>
+<span class=sd>>>> m2_p0 = [ 8, 20,  9, 60]</span>
+<span class=sd>>>> m2_p1 = [10, 90]</span>
+<span class=sd>>>> m2_p2 = [12, 70,  30, 120]</span>
+<span class=sd>>>> m3_p0 = [70, 200,  3, 220]</span>
+<span class=sd>>>> m3_p1 = [60, 220,  5, 260]</span>
+<span class=sd>>>> m3_p2 = [30, 210, 10, 300]</span>
+<span class=sd>>>> machine_product_unit_times = [[m0_p0, m0_p1, m0_p2],</span>
+<span class=sd>...                               [m1_p0, m1_p1, m1_p2],</span>
+<span class=sd>...                               [m2_p0, m2_p1, m2_p2],</span>
+<span class=sd>...                               [m3_p0, m3_p1, m3_p2]]</span>
+
+<span class=sd>We can (but do not need to) provide additional information as key-value pairs.</span>
+<span class=sd>>>> infos = {"source": "manually created",</span>
+<span class=sd>...          "creation_date": "2025-11-09"}</span>
+
+<span class=sd>From all of this data, we can create the instance.</span>
+<span class=sd>>>> instance = Instance(name, n_products, n_customers, n_machines, n_demands,</span>
+<span class=sd>...                     routes, demands, warehous_at_t0,</span>
+<span class=sd>...                     machine_product_unit_times, infos)</span>
+<span class=sd>>>> instance.name</span>
+<span class=sd>'my_instance'</span>
+
+<span class=sd>>>> instance.n_customers</span>
+<span class=sd>5</span>
+
+<span class=sd>>>> instance.n_machines</span>
+<span class=sd>4</span>
+
+<span class=sd>>>> instance.n_demands</span>
+<span class=sd>6</span>
+
+<span class=sd>>>> instance.n_products</span>
+<span class=sd>3</span>
+
+<span class=sd>>>> instance.routes</span>
+<span class=sd>((0, 3, 2), (0, 2, 1, 3), (1, 2, 3))</span>
+
+<span class=sd>>>> instance.demands</span>
+<span class=sd>(Demand(release_time=1240, deadline=3000, demand_id=0, customer_id=0, \</span>
+<span class=sd>product_id=1, amount=20), Demand(release_time=2300, deadline=4000, \</span>
+<span class=sd>demand_id=1, customer_id=1, product_id=0, amount=10), \</span>
+<span class=sd>Demand(release_time=4234, deadline=27080, demand_id=5, customer_id=3, \</span>
+<span class=sd>product_id=0, amount=19), Demand(release_time=5410, deadline=16720, \</span>
+<span class=sd>demand_id=4, customer_id=4, product_id=2, amount=23), \</span>
+<span class=sd>Demand(release_time=7300, deadline=9000, demand_id=3, customer_id=3, \</span>
+<span class=sd>product_id=1, amount=12), Demand(release_time=8300, deadline=11000, \</span>
+<span class=sd>demand_id=2, customer_id=2, product_id=2, amount=7))</span>
+
+<span class=sd>>>> instance.warehous_at_t0</span>
+<span class=sd>(10, 0, 6)</span>
+
+<span class=sd>>>> instance.machine_product_unit_times</span>
+<span class=sd>(((10, 20, 11, 40, 8, 60), (12, 20, 7, 40, 11, 70), ()),\</span>
+<span class=sd> ((), (20, 50, 30, 120, 7, 200), (21, 50, 29, 130, 8, 190)),\</span>
+<span class=sd> ((8, 20, 9, 60), (10, 90), (12, 70, 30, 120)),\</span>
+<span class=sd> ((70, 200, 3, 220), (60, 220, 5, 260), (30, 210, 10, 300)))</span>
+
+<span class=sd>>>> dict(instance.infos)</span>
+<span class=sd>{'source': 'manually created', 'creation_date': '2025-11-09'}</span>
+
+<span class=sd>We can serialize instances to a stream of strings and also load them back</span>
+<span class=sd>from a stream of strings.</span>
+<span class=sd>Here, we store `instance` to a stream.</span>
+<span class=sd>We then load the independent instance `i2` from that stream.</span>
+<span class=sd>>>> i2 = from_stream(to_stream(instance))</span>
+<span class=sd>>>> i2 is instance</span>
+<span class=sd>False</span>
+
+<span class=sd>You can see that the loaded instance has the same data as the stored one.</span>
+<span class=sd>>>> i2.name == instance.name</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.n_customers == instance.n_customers</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.n_machines == instance.n_machines</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.n_demands == instance.n_demands</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.n_products == instance.n_products</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.routes == instance.routes</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.demands == instance.demands</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.warehous_at_t0 == instance.warehous_at_t0</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.machine_product_unit_times == instance.machine_product_unit_times</span>
+<span class=sd>True</span>
+<span class=sd>>>> i2.infos == instance.infos</span>
+<span class=sd>True</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>dataclasses</span><span class=w> </span><span class=kn>import</span> <span class=n>dataclass</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>itertools</span><span class=w> </span><span class=kn>import</span> <span class=n>batched</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>string</span><span class=w> </span><span class=kn>import</span> <span class=n>ascii_letters</span><span class=p>,</span> <span class=n>digits</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Callable</span><span class=p>,</span>
+    <span class=n>Final</span><span class=p>,</span>
+    <span class=n>Generator</span><span class=p>,</span>
+    <span class=n>Iterable</span><span class=p>,</span>
+    <span class=n>Iterator</span><span class=p>,</span>
+    <span class=n>Mapping</span><span class=p>,</span>
+    <span class=n>cast</span><span class=p>,</span>
+<span class=p>)</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.component</span><span class=w> </span><span class=kn>import</span> <span class=n>Component</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>COMMENT_START</span><span class=p>,</span>
+    <span class=n>KEY_VALUE_SEPARATOR</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.strings</span><span class=w> </span><span class=kn>import</span> <span class=n>sanitize_name</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.ds.immutable_map</span><span class=w> </span><span class=kn>import</span> <span class=n>immutable_mapping</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.csv</span><span class=w> </span><span class=kn>import</span> <span class=n>CSV_SEPARATOR</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>check_to_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=c1>#: The maximum for the number of machines, products, or customers.</span>
+<span class=n>_MAX_DIM</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1_000_000</span>
+
+<span class=c1>#: No value bigger than this is permitted in any tuple anywhere.</span>
+<span class=n>_INNER_MAX_DIM</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=mi>366</span> <span class=o>*</span> <span class=mi>24</span> <span class=o>*</span> <span class=mi>3600</span> <span class=o>*</span> <span class=n>_MAX_DIM</span><span class=p>,</span> <span class=mi>2</span> <span class=o>**</span> <span class=mi>31</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+
+<span class=c1>#: the index of the demand ID</span>
+<span class=n>DEMAND_ID</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>
+<span class=c1>#: the index of the customer ID</span>
+<span class=n>DEMAND_CUSTOMER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1</span>
+<span class=c1>#: the index of the product ID</span>
+<span class=n>DEMAND_PRODUCT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>2</span>
+<span class=c1>#: the index of the demanded amount</span>
+<span class=n>DEMAND_AMOUNT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>3</span>
+<span class=c1>#: the index of the demand release time</span>
+<span class=n>DEMAND_TIME</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>4</span>
+<span class=c1>#: the index of the demand deadline</span>
+<span class=n>DEMAND_DEADLINE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>5</span>
+
+
+<div class=viewcode-block id=Demand>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.instance.Demand>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Demand</span><span class=p>(</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]):</span>
+<span class=w>    </span><span class=sd>"""The record for demands."""</span>
+
+    <span class=c1>#: the release time, i.e., when the demand enters the system</span>
+    <span class=n>release_time</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the deadline, i.e., when the customer expects the result</span>
+    <span class=n>deadline</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the ID of the demand</span>
+    <span class=n>demand_id</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the customer ID</span>
+    <span class=n>customer_id</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the ID of the product</span>
+    <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the amount</span>
+    <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform some basic sanity checks."""</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>release_time</span><span class=p>,</span> <span class=s2>"release_time"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>_INNER_MAX_DIM</span><span class=p>)</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>deadline</span><span class=p>,</span> <span class=s2>"deadline"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>_INNER_MAX_DIM</span><span class=p>)</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>demand_id</span><span class=p>,</span> <span class=s2>"demand_id"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>customer_id</span><span class=p>,</span> <span class=s2>"customer_id"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>product_id</span><span class=p>,</span> <span class=s2>"product_id"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>amount</span><span class=p>,</span> <span class=s2>"amount"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__getitem__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>item</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Access an element of this demand via an index.</span>
+
+<span class=sd>        :param item: the index</span>
+<span class=sd>        :return: the demand value at that index</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=n>item</span> <span class=o>==</span> <span class=n>DEMAND_ID</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>demand_id</span>
+        <span class=k>if</span> <span class=n>item</span> <span class=o>==</span> <span class=n>DEMAND_CUSTOMER</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>customer_id</span>
+        <span class=k>if</span> <span class=n>item</span> <span class=o>==</span> <span class=n>DEMAND_PRODUCT</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>product_id</span>
+        <span class=k>if</span> <span class=n>item</span> <span class=o>==</span> <span class=n>DEMAND_AMOUNT</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>amount</span>
+        <span class=k>if</span> <span class=n>item</span> <span class=o>==</span> <span class=n>DEMAND_TIME</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>release_time</span>
+        <span class=k>if</span> <span class=n>item</span> <span class=o>==</span> <span class=n>DEMAND_DEADLINE</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>deadline</span>
+        <span class=k>raise</span> <span class=ne>IndexError</span><span class=p>(</span>
+            <span class=sa>f</span><span class=s2>"index </span><span class=si>{</span><span class=n>item</span><span class=si>}</span><span class=s2> out of bounds [0,</span><span class=si>{</span><span class=n>DEMAND_DEADLINE</span><span class=si>}</span><span class=s2>]."</span><span class=p>)</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__iter__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterator</span><span class=p>[</span><span class=nb>int</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Iterate over the values in this demand.</span>
+
+<span class=sd>        :return: the demand iterable</span>
+<span class=sd>        """</span>
+        <span class=k>yield</span> <span class=bp>self</span><span class=o>.</span><span class=n>demand_id</span>  <span class=c1># DEMAND_ID</span>
+        <span class=k>yield</span> <span class=bp>self</span><span class=o>.</span><span class=n>customer_id</span>  <span class=c1># DEMAND_CUSTOMER</span>
+        <span class=k>yield</span> <span class=bp>self</span><span class=o>.</span><span class=n>product_id</span>  <span class=c1># DEMAND_PRODUCT:</span>
+        <span class=k>yield</span> <span class=bp>self</span><span class=o>.</span><span class=n>amount</span>  <span class=c1># DEMAND_AMOUNT:</span>
+        <span class=k>yield</span> <span class=bp>self</span><span class=o>.</span><span class=n>release_time</span>  <span class=c1># DEMAND_TIME</span>
+        <span class=k>yield</span> <span class=bp>self</span><span class=o>.</span><span class=n>deadline</span>  <span class=c1># DEMAND_DEADLINE</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the length of the demand record.</span>
+
+<span class=sd>        :returns `6`: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mi>6</span></div>
+
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__to_tuple</span><span class=p>(</span><span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>],</span>
+               <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>,</span>
+               <span class=n>empty_ok</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert an iterable of type integer to a tuple.</span>
+
+<span class=sd>    :param source: the data source</span>
+<span class=sd>    :param empty_ok: are empty tuples OK?</span>
+<span class=sd>    :param pool: the tuple pool</span>
+<span class=sd>    :return: the tuple</span>
+
+<span class=sd>    >>> ppl = {}</span>
+<span class=sd>    >>> k1 = __to_tuple([1, 2, 3], ppl)</span>
+<span class=sd>    >>> print(k1)</span>
+<span class=sd>    (1, 2, 3)</span>
+
+<span class=sd>    >>> __to_tuple({2}, ppl)</span>
+<span class=sd>    (2,)</span>
+
+<span class=sd>    >>> k2 = __to_tuple([1, 2, 3], ppl)</span>
+<span class=sd>    >>> print(k2)</span>
+<span class=sd>    (1, 2, 3)</span>
+<span class=sd>    >>> k1 is k2</span>
+<span class=sd>    True</span>
+<span class=sd>    """</span>
+    <span class=n>use_row</span> <span class=o>=</span> <span class=n>source</span> <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>)</span> <span class=k>else</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>source</span><span class=p>)</span>
+    <span class=k>if</span> <span class=p>(</span><span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>use_row</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=ow>not</span> <span class=n>empty_ok</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"row has length 0."</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>j</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>use_row</span><span class=p>):</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>v</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>v</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"row[</span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2>]"</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=mi>0</span> <span class=o><=</span> <span class=n>v</span> <span class=o><=</span> <span class=n>_INNER_MAX_DIM</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"row[</span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2>]=</span><span class=si>{</span><span class=n>v</span><span class=si>}</span><span class=s2> not in 0..</span><span class=si>{</span><span class=n>_INNER_MAX_DIM</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>use_row</span> <span class=ow>in</span> <span class=n>pool</span><span class=p>:</span>
+        <span class=k>return</span> <span class=n>pool</span><span class=p>[</span><span class=n>use_row</span><span class=p>]</span>
+    <span class=n>pool</span><span class=p>[</span><span class=n>use_row</span><span class=p>]</span> <span class=o>=</span> <span class=n>use_row</span>
+    <span class=k>return</span> <span class=n>use_row</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__to_nested_tuples</span><span class=p>(</span><span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>,</span>
+                       <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>,</span>
+                       <span class=n>empty_ok</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span><span class=p>,</span>
+                       <span class=n>inner</span><span class=p>:</span> <span class=n>Callable</span> <span class=o>=</span> <span class=n>__to_tuple</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Turn nested iterables of ints into nested tuples.</span>
+
+<span class=sd>    :param source: the source list</span>
+<span class=sd>    :param pool: the tuple pool</span>
+<span class=sd>    :param empty_ok: are empty tuples OK?</span>
+<span class=sd>    :param inner: the inner function</span>
+<span class=sd>    :return: the tuple or array</span>
+
+<span class=sd>    >>> ppl = {}</span>
+<span class=sd>    >>> k1 = __to_nested_tuples([(1, 2), [3, 2]], ppl)</span>
+<span class=sd>    >>> print(k1)</span>
+<span class=sd>    ((1, 2), (3, 2))</span>
+
+<span class=sd>    >>> k2 = __to_nested_tuples([(1, 2), (1, 2, 4),  (1, 2)], ppl)</span>
+<span class=sd>    >>> print(k2)</span>
+<span class=sd>    ((1, 2), (1, 2, 4), (1, 2))</span>
+
+<span class=sd>    >>> k2[0] is k2[2]</span>
+<span class=sd>    True</span>
+
+<span class=sd>    >>> k1[0] is k2[0]</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> k1[0] is k2[2]</span>
+<span class=sd>    True</span>
+
+<span class=sd>    >>> __to_nested_tuples([(1, 2), (1, 2, 4),  (1, 2), []], ppl, True)</span>
+<span class=sd>    ((1, 2), (1, 2, 4), (1, 2), ())</span>
+
+<span class=sd>    >>> __to_nested_tuples([(), {}, []], ppl, True)</span>
+<span class=sd>    ()</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=s2>"source"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+    <span class=n>dest</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>tuple</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>ins</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>row</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>source</span><span class=p>):</span>
+        <span class=n>use_row</span><span class=p>:</span> <span class=nb>tuple</span> <span class=o>=</span> <span class=n>inner</span><span class=p>(</span><span class=n>row</span><span class=p>,</span> <span class=n>pool</span><span class=p>,</span> <span class=n>empty_ok</span><span class=p>)</span>
+        <span class=n>ins</span> <span class=o>+=</span> <span class=nb>len</span><span class=p>(</span><span class=n>use_row</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>i</span><span class=p>):</span>
+            <span class=k>if</span> <span class=n>dest</span><span class=p>[</span><span class=n>j</span><span class=p>]</span> <span class=o>==</span> <span class=n>use_row</span><span class=p>:</span>
+                <span class=n>use_row</span> <span class=o>=</span> <span class=n>dest</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>
+                <span class=k>break</span>
+        <span class=n>dest</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>use_row</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=p>(</span><span class=n>ins</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>and</span> <span class=n>empty_ok</span><span class=p>:</span>  <span class=c1># if all inner tuples are empty,</span>
+        <span class=n>dest</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>             <span class=c1># clear the tuple source</span>
+
+    <span class=n>n_rows</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>n_rows</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=ow>not</span> <span class=n>empty_ok</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Got empty set of rows!"</span><span class=p>)</span>
+
+    <span class=n>ret_val</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span>
+    <span class=n>ret_val</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"tuple[tuple, ...]"</span><span class=p>,</span> <span class=n>source</span><span class=p>)</span> <span class=k>if</span> <span class=n>source</span> <span class=o>==</span> <span class=n>ret_val</span> \
+        <span class=k>else</span> <span class=n>ret_val</span>
+    <span class=k>if</span> <span class=n>ret_val</span> <span class=ow>in</span> <span class=n>pool</span><span class=p>:</span>
+        <span class=k>return</span> <span class=n>pool</span><span class=p>[</span><span class=n>ret_val</span><span class=p>]</span>
+    <span class=n>pool</span><span class=p>[</span><span class=n>ret_val</span><span class=p>]</span> <span class=o>=</span> <span class=n>ret_val</span>
+    <span class=k>return</span> <span class=n>ret_val</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__to_tuples</span><span class=p>(</span><span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]],</span>
+                <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>,</span> <span class=n>empty_ok</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span><span class=p>)</span> \
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Turn 2D nested iterables into 2D nested tuples.</span>
+
+<span class=sd>    :param source: the source</span>
+<span class=sd>    :param pool: the tuple pool</span>
+<span class=sd>    :param empty_ok: are empty tuples OK?</span>
+<span class=sd>    :return: the nested tuples</span>
+
+<span class=sd>    >>> ppl = {}</span>
+<span class=sd>    >>> k1 = __to_tuples([(1, 2), [3, 2]], ppl)</span>
+<span class=sd>    >>> print(k1)</span>
+<span class=sd>    ((1, 2), (3, 2))</span>
+
+<span class=sd>    >>> k2 = __to_tuples([(1, 2), (1, 2, 4),  (1, 2)], ppl)</span>
+<span class=sd>    >>> print(k2)</span>
+<span class=sd>    ((1, 2), (1, 2, 4), (1, 2))</span>
+
+<span class=sd>    >>> k2[0] is k2[2]</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> k1[0] is k2[0]</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> k1[0] is k2[2]</span>
+<span class=sd>    True</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=n>__to_nested_tuples</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>pool</span><span class=p>,</span> <span class=n>empty_ok</span><span class=p>,</span> <span class=n>__to_tuple</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__to_tuples3</span><span class=p>(</span><span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]]],</span>
+                 <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>,</span> <span class=n>empty_ok</span><span class=p>:</span> <span class=nb>bool</span><span class=p>)</span> \
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Turn 3D nested iterables into 3D nested tuples.</span>
+
+<span class=sd>    :param source: the source</span>
+<span class=sd>    :param pool: the tuple pool</span>
+<span class=sd>    :param empty_ok: are empty tuples OK?</span>
+<span class=sd>    :param key: the sort key</span>
+<span class=sd>    :return: the nested tuples</span>
+
+<span class=sd>    >>> ppl = {}</span>
+<span class=sd>    >>> k1 = __to_tuples3([[[3, 2], [44, 5], [2]], [[2], [5, 7]]], ppl, False)</span>
+<span class=sd>    >>> print(k1)</span>
+<span class=sd>    (((3, 2), (44, 5), (2,)), ((2,), (5, 7)))</span>
+<span class=sd>    >>> k1[0][2] is k1[1][0]</span>
+<span class=sd>    True</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=n>__to_nested_tuples</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>pool</span><span class=p>,</span> <span class=n>empty_ok</span><span class=p>,</span> <span class=n>__to_tuples</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_make_routes</span><span class=p>(</span>
+        <span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>n_machines</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+        <span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]],</span>
+        <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the routes through machines for the products.</span>
+
+<span class=sd>    Each product passes through a set of machines. It can pass through each</span>
+<span class=sd>    machine at most once. It can only pass through valid machines.</span>
+
+<span class=sd>    :param n_products: the number of products</span>
+<span class=sd>    :param n_machines: the number of machines</span>
+<span class=sd>    :param source: the source data</span>
+<span class=sd>    :param pool: the tuple pool</span>
+<span class=sd>    :return: the routes, a tuple of tuples</span>
+
+<span class=sd>    >>> ppl = {}</span>
+<span class=sd>    >>> _make_routes(2, 3, ((1, 2), (1, 0)), ppl)</span>
+<span class=sd>    ((1, 2), (1, 0))</span>
+
+<span class=sd>    >>> _make_routes(3, 3, ((1, 2), (1, 0), (0, 1, 2)), ppl)</span>
+<span class=sd>    ((1, 2), (1, 0), (0, 1, 2))</span>
+
+<span class=sd>    >>> k = _make_routes(3, 3, ((1, 2), (1, 2), (0, 1, 2)), ppl)</span>
+<span class=sd>    >>> k[0] is k[1]</span>
+<span class=sd>    True</span>
+<span class=sd>    """</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_products</span><span class=p>,</span> <span class=s2>"n_products"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_machines</span><span class=p>,</span> <span class=s2>"n_machines"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+    <span class=n>dest</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=n>__to_tuples</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>pool</span><span class=p>)</span>
+
+    <span class=n>n_rows</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_rows</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>n_products</span><span class=si>}</span><span class=s2> products, but </span><span class=si>{</span><span class=n>n_rows</span><span class=si>}</span><span class=s2> routes."</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>route</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>dest</span><span class=p>):</span>
+        <span class=n>stations</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>route</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><</span> <span class=n>stations</span> <span class=o><=</span> <span class=n>n_machines</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"len(row[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>])=</span><span class=si>{</span><span class=n>stations</span><span class=si>}</span><span class=s2>, but n_machines=</span><span class=si>{</span><span class=n>n_machines</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=nb>set</span><span class=p>(</span><span class=n>route</span><span class=p>))</span> <span class=o>!=</span> <span class=n>stations</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>route</span><span class=si>}</span><span class=s2> contains duplicates."</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>j</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>route</span><span class=p>):</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><=</span> <span class=n>v</span> <span class=o><</span> <span class=n>n_machines</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"row[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>,</span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2>]=</span><span class=si>{</span><span class=n>v</span><span class=si>}</span><span class=s2>, but n_machines=</span><span class=si>{</span><span class=n>n_machines</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>dest</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__to_demand</span><span class=p>(</span>
+        <span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>],</span> <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>,</span> <span class=n>_</span><span class=p>)</span> <span class=o>-></span> <span class=n>Demand</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert an integer source to a tuple or a demand.</span>
+
+<span class=sd>    :param source: the source</span>
+<span class=sd>    :param pool: the pool</span>
+<span class=sd>    :return: the Demand</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>Demand</span><span class=p>):</span>
+        <span class=k>return</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Demand"</span><span class=p>,</span> <span class=n>source</span><span class=p>)</span>
+    <span class=n>tup</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=n>__to_tuple</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>pool</span><span class=p>,</span> <span class=kc>False</span><span class=p>)</span>
+    <span class=n>dl</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>tup</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>dl</span> <span class=o>!=</span> <span class=mi>6</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Expected 6 values, got </span><span class=si>{</span><span class=n>dl</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>Demand</span><span class=p>(</span>
+        <span class=n>demand_id</span><span class=o>=</span><span class=n>tup</span><span class=p>[</span><span class=n>DEMAND_ID</span><span class=p>],</span> <span class=n>customer_id</span><span class=o>=</span><span class=n>tup</span><span class=p>[</span><span class=n>DEMAND_CUSTOMER</span><span class=p>],</span>
+        <span class=n>product_id</span><span class=o>=</span><span class=n>tup</span><span class=p>[</span><span class=n>DEMAND_PRODUCT</span><span class=p>],</span> <span class=n>amount</span><span class=o>=</span><span class=n>tup</span><span class=p>[</span><span class=n>DEMAND_AMOUNT</span><span class=p>],</span>
+        <span class=n>release_time</span><span class=o>=</span><span class=n>tup</span><span class=p>[</span><span class=n>DEMAND_TIME</span><span class=p>],</span>
+        <span class=n>deadline</span><span class=o>=</span><span class=n>tup</span><span class=p>[</span><span class=n>DEMAND_DEADLINE</span><span class=p>])</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_make_demands</span><span class=p>(</span><span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>n_customers</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>n_demands</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                  <span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]],</span> <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>)</span> \
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the demand records, sorted by release time.</span>
+
+<span class=sd>    Each demand is a tuple of demand_id, customer_id, product_id, amount,</span>
+<span class=sd>    release time, and deadline.</span>
+
+<span class=sd>    :param n_products: the number of products</span>
+<span class=sd>    :param n_customers: the number of customers</span>
+<span class=sd>    :param n_demands: the number of demands</span>
+<span class=sd>    :param source: the source data</span>
+<span class=sd>    :param pool: the tuple pool</span>
+<span class=sd>    :return: the demand tuples</span>
+
+<span class=sd>    >>> ppl = {}</span>
+<span class=sd>    >>> _make_demands(10, 10, 4, [[0, 2, 1, 4, 20, 21],</span>
+<span class=sd>    ...     [2, 5, 2, 6, 17, 27],</span>
+<span class=sd>    ...     [1, 6, 7, 12, 17, 21],</span>
+<span class=sd>    ...     [3, 7, 3, 23, 5, 21]], ppl)</span>
+<span class=sd>    (Demand(release_time=5, deadline=21, demand_id=3, customer_id=7, \</span>
+<span class=sd>product_id=3, amount=23), Demand(release_time=17, deadline=21, demand_id=1, \</span>
+<span class=sd>customer_id=6, product_id=7, amount=12), Demand(release_time=17, \</span>
+<span class=sd>deadline=27, demand_id=2, customer_id=5, product_id=2, amount=6), \</span>
+<span class=sd>Demand(release_time=20, deadline=21, demand_id=0, customer_id=2, \</span>
+<span class=sd>product_id=1, amount=4))</span>
+<span class=sd>    """</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_products</span><span class=p>,</span> <span class=s2>"n_products"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_customers</span><span class=p>,</span> <span class=s2>"n_customers"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_demands</span><span class=p>,</span> <span class=s2>"n_demands"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+
+    <span class=n>temp</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=n>__to_nested_tuples</span><span class=p>(</span>
+        <span class=n>source</span><span class=p>,</span> <span class=n>pool</span><span class=p>,</span> <span class=kc>False</span><span class=p>,</span> <span class=n>__to_demand</span><span class=p>)</span>
+    <span class=n>n_dem</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>temp</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_dem</span> <span class=o>!=</span> <span class=n>n_demands</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Expected </span><span class=si>{</span><span class=n>n_demands</span><span class=si>}</span><span class=s2> demands, got </span><span class=si>{</span><span class=n>n_dem</span><span class=si>}</span><span class=s2>?"</span><span class=p>)</span>
+
+    <span class=n>used_ids</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+    <span class=n>min_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1000</span> <span class=o>*</span> <span class=n>_MAX_DIM</span>
+    <span class=n>max_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1000</span> <span class=o>*</span> <span class=n>_MAX_DIM</span>
+    <span class=n>dest</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Demand</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>demand</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>temp</span><span class=p>):</span>
+        <span class=n>d_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>demand_id</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><=</span> <span class=n>d_id</span> <span class=o><</span> <span class=n>n_demands</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demand[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>].id = </span><span class=si>{</span><span class=n>d_id</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>d_id</span> <span class=ow>in</span> <span class=n>used_ids</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demand[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>].id </span><span class=si>{</span><span class=n>d_id</span><span class=si>}</span><span class=s2> appears twice!"</span><span class=p>)</span>
+        <span class=n>used_ids</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>d_id</span><span class=p>)</span>
+        <span class=n>min_id</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>min_id</span><span class=p>,</span> <span class=n>d_id</span><span class=p>)</span>
+        <span class=n>max_id</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>max_id</span><span class=p>,</span> <span class=n>d_id</span><span class=p>)</span>
+
+        <span class=n>c_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>customer_id</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><=</span> <span class=n>c_id</span> <span class=o><</span> <span class=n>n_customers</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demand[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>].customer = </span><span class=si>{</span><span class=n>c_id</span><span class=si>}</span><span class=s2>, "</span>
+                             <span class=sa>f</span><span class=s2>"but n_customers=</span><span class=si>{</span><span class=n>n_customers</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=n>p_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>product_id</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><=</span> <span class=n>p_id</span> <span class=o><</span> <span class=n>n_products</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demand[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>].product = </span><span class=si>{</span><span class=n>p_id</span><span class=si>}</span><span class=s2>, "</span>
+                             <span class=sa>f</span><span class=s2>"but n_products=</span><span class=si>{</span><span class=n>n_products</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>amount</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><</span> <span class=n>amount</span> <span class=o><</span> <span class=n>_MAX_DIM</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demand[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>].amount = </span><span class=si>{</span><span class=n>amount</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>release_time</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>release_time</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><</span> <span class=n>release_time</span> <span class=o><</span> <span class=n>_MAX_DIM</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demand[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>].release_time = </span><span class=si>{</span><span class=n>release_time</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>deadline</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>deadline</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>release_time</span> <span class=o><=</span> <span class=n>deadline</span> <span class=o><</span> <span class=n>_MAX_DIM</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demand[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>].deadline = </span><span class=si>{</span><span class=n>deadline</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>dest</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>demand</span><span class=p>)</span>
+
+    <span class=n>sl</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>used_ids</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>sl</span> <span class=o>!=</span> <span class=n>n_demands</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Got </span><span class=si>{</span><span class=n>n_demands</span><span class=si>}</span><span class=s2> demands, but </span><span class=si>{</span><span class=n>sl</span><span class=si>}</span><span class=s2> ids???"</span><span class=p>)</span>
+    <span class=k>if</span> <span class=p>((</span><span class=n>max_id</span> <span class=o>-</span> <span class=n>min_id</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_demands</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>min_id</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid demand id range [</span><span class=si>{</span><span class=n>min_id</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>max_id</span><span class=si>}</span><span class=s2>]."</span><span class=p>)</span>
+    <span class=n>dest</span><span class=o>.</span><span class=n>sort</span><span class=p>()</span>
+    <span class=k>return</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_make_in_warehouse</span><span class=p>(</span><span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>],</span>
+                       <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>)</span> \
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Make the amount of product in the warehouse at time 0.</span>
+
+<span class=sd>    :param n_products: the total number of products</span>
+<span class=sd>    :param source: the data source</span>
+<span class=sd>    :param pool: the tuple pool</span>
+<span class=sd>    :return: the amount of products in the warehouse</span>
+
+<span class=sd>    >>> _make_in_warehouse(3, [1, 2, 3], {})</span>
+<span class=sd>    (1, 2, 3)</span>
+<span class=sd>    """</span>
+    <span class=n>ret</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=n>__to_tuple</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>pool</span><span class=p>)</span>
+    <span class=n>rl</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>ret</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>rl</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"We have </span><span class=si>{</span><span class=n>n_products</span><span class=si>}</span><span class=s2> products, "</span>
+                         <span class=sa>f</span><span class=s2>"but the warehouse list length is </span><span class=si>{</span><span class=n>rl</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>p</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>ret</span><span class=p>):</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><=</span> <span class=n>v</span> <span class=o><=</span> <span class=n>_MAX_DIM</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Got </span><span class=si>{</span><span class=n>v</span><span class=si>}</span><span class=s2> units of product </span><span class=si>{</span><span class=n>p</span><span class=si>}</span><span class=s2> in warehouse?"</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>ret</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_make_machine_product_unit_times</span><span class=p>(</span>
+        <span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>n_machines</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+        <span class=n>routes</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>],</span>
+        <span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]]],</span>
+        <span class=n>pool</span><span class=p>:</span> <span class=nb>dict</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the structure for the work times per product unit per machine.</span>
+
+<span class=sd>    Here we have for each machine, for each product, a sequence of per-unit</span>
+<span class=sd>    production settings. Each such "production settings" is a tuple with a</span>
+<span class=sd>    per-unit production time and an end time index until which it is valid.</span>
+<span class=sd>    Production times cycle, so if we produce something after the last end</span>
+<span class=sd>    time index, we begin again at production time index 0.</span>
+
+<span class=sd>    :param n_products: the number of products</span>
+<span class=sd>    :param n_machines: the number of machines</span>
+<span class=sd>    :param routes: the routes of the products through the machines</span>
+<span class=sd>    :param source: the source array</span>
+<span class=sd>    :param pool: the tuple pool</span>
+<span class=sd>    :return: the machine unit times</span>
+
+<span class=sd>    >>> ppl = {}</span>
+<span class=sd>    >>> rts = _make_routes(3, 2, [[0, 1], [0], [1, 0]], ppl)</span>
+<span class=sd>    >>> print(rts)</span>
+<span class=sd>    ((0, 1), (0,), (1, 0))</span>
+
+<span class=sd>    >>> mpt = _make_machine_product_unit_times(3, 2, rts, [</span>
+<span class=sd>    ...     [[1, 2, 3, 5], [2, 4, 7, 18, 4, 52], [1, 10, 2, 30]],</span>
+<span class=sd>    ...     [[2, 20, 3, 40], [], [4, 56, 34, 444]]], ppl)</span>
+<span class=sd>    >>> print(mpt)</span>
+<span class=sd>    (((1, 2, 3, 5), (2, 4, 7, 18, 4, 52), (1, 10, 2, 30)), \</span>
+<span class=sd>((2, 20, 3, 40), (), (4, 56, 34, 444)))</span>
+
+<span class=sd>    >>> mpt = _make_machine_product_unit_times(3, 2, rts, [</span>
+<span class=sd>    ...     [[1, 2, 3, 5], [1, 2, 3, 5], [1, 10, 2, 30]],</span>
+<span class=sd>    ...     [[2, 20, 3, 40], [], [4, 56, 34, 444]]], ppl)</span>
+<span class=sd>    >>> print(mpt)</span>
+<span class=sd>    (((1, 2, 3, 5), (1, 2, 3, 5), (1, 10, 2, 30)), ((2, 20, 3, 40), \</span>
+<span class=sd>(), (4, 56, 34, 444)))</span>
+<span class=sd>    >>> mpt[0][0] is mpt[0][1]</span>
+<span class=sd>    True</span>
+<span class=sd>    """</span>
+    <span class=n>ret</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=n>__to_tuples3</span><span class=p>(</span>
+        <span class=n>source</span><span class=p>,</span> <span class=n>pool</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>routes</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"invalid routes!"</span><span class=p>)</span>
+
+    <span class=n>d1</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>ret</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>d1</span> <span class=o>!=</span> <span class=n>n_machines</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+            <span class=sa>f</span><span class=s2>"Got </span><span class=si>{</span><span class=n>d1</span><span class=si>}</span><span class=s2> machine-times, but </span><span class=si>{</span><span class=n>n_machines</span><span class=si>}</span><span class=s2> machines."</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>mid</span><span class=p>,</span> <span class=n>machine</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>ret</span><span class=p>):</span>
+        <span class=n>d2</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>machine</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>d2</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>pid</span><span class=p>,</span> <span class=n>r</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>routes</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>mid</span> <span class=ow>in</span> <span class=n>r</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"Machine </span><span class=si>{</span><span class=n>mid</span><span class=si>}</span><span class=s2> in route for product </span><span class=si>{</span><span class=n>pid</span><span class=si>}</span><span class=s2>, "</span>
+                        <span class=s2>"but has no production time"</span><span class=p>)</span>
+            <span class=k>continue</span>
+        <span class=k>if</span> <span class=n>d2</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"got </span><span class=si>{</span><span class=n>d2</span><span class=si>}</span><span class=s2> products for machine </span><span class=si>{</span><span class=n>mid</span><span class=si>}</span><span class=s2>, "</span>
+                             <span class=sa>f</span><span class=s2>"but have </span><span class=si>{</span><span class=n>n_products</span><span class=si>}</span><span class=s2> products"</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>pid</span><span class=p>,</span> <span class=n>product</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>machine</span><span class=p>):</span>
+            <span class=n>needs_times</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=n>mid</span> <span class=ow>in</span> <span class=n>routes</span><span class=p>[</span><span class=n>pid</span><span class=p>]</span>
+            <span class=n>d3</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>product</span><span class=p>)</span>
+            <span class=k>if</span> <span class=p>(</span><span class=ow>not</span> <span class=n>needs_times</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>d3</span> <span class=o>></span> <span class=mi>0</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"product </span><span class=si>{</span><span class=n>pid</span><span class=si>}</span><span class=s2> does not pass through machine </span><span class=si>{</span><span class=n>mid</span><span class=si>}</span><span class=s2>, "</span>
+                    <span class=s2>"so there must not be production times!"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>needs_times</span> <span class=ow>and</span> <span class=p>(</span><span class=n>d3</span> <span class=o><=</span> <span class=mi>0</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"product </span><span class=si>{</span><span class=n>pid</span><span class=si>}</span><span class=s2> does pass through machine </span><span class=si>{</span><span class=n>mid</span><span class=si>}</span><span class=s2>, "</span>
+                    <span class=s2>"so there must be production times!"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>d3</span> <span class=o>%</span> <span class=mi>2</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"production times for </span><span class=si>{</span><span class=n>pid</span><span class=si>}</span><span class=s2> does pass through machine "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>mid</span><span class=si>}</span><span class=s2>, must be of even length, but got length </span><span class=si>{</span><span class=n>d3</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>last_end</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=k>for</span> <span class=n>pt</span><span class=p>,</span> <span class=n>time</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>batched</span><span class=p>(</span><span class=n>product</span><span class=p>,</span> <span class=mi>2</span><span class=p>)):</span>
+                <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>time</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>2</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"production times must be 2-tuples, "</span>
+                                     <span class=sa>f</span><span class=s2>"but got </span><span class=si>{</span><span class=n>time</span><span class=si>}</span><span class=s2> for product </span><span class=si>{</span><span class=n>pid</span><span class=si>}</span><span class=s2> on "</span>
+                                     <span class=sa>f</span><span class=s2>"machine </span><span class=si>{</span><span class=n>mid</span><span class=si>}</span><span class=s2> at position </span><span class=si>{</span><span class=n>pt</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=n>unit_time</span><span class=p>,</span> <span class=n>end</span> <span class=o>=</span> <span class=n>time</span>
+                <span class=n>duration</span> <span class=o>=</span> <span class=n>end</span> <span class=o>-</span> <span class=n>last_end</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><</span> <span class=n>unit_time</span> <span class=o><=</span> <span class=n>duration</span> <span class=o><</span> <span class=n>_MAX_DIM</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"Invalid unit time </span><span class=si>{</span><span class=n>unit_time</span><span class=si>}</span><span class=s2> and duration "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>duration</span><span class=si>}</span><span class=s2> for product </span><span class=si>{</span><span class=n>pid</span><span class=si>}</span><span class=s2> on machine </span><span class=si>{</span><span class=n>mid</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=n>last_end</span> <span class=o>=</span> <span class=n>end</span>
+
+    <span class=k>return</span> <span class=n>ret</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_make_infos</span><span class=p>(</span><span class=n>source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>|</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>)</span>\
+        <span class=o>-></span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Make the additional information record.</span>
+
+<span class=sd>    :param source: the information to represent</span>
+<span class=sd>    :return: the information record</span>
+<span class=sd>    """</span>
+    <span class=n>use_source</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>()</span> <span class=k>if</span> <span class=n>source</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=p>(</span>
+        <span class=n>source</span><span class=o>.</span><span class=n>items</span><span class=p>()</span> <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span> <span class=k>else</span> <span class=n>source</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>use_source</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=s2>"infos"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+    <span class=n>dst</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>tup</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>use_source</span><span class=p>):</span>
+        <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>tup</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>2</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid tuple </span><span class=si>{</span><span class=n>tup</span><span class=si>}</span><span class=s2> at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> in infos."</span><span class=p>)</span>
+        <span class=n>k</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>tup</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span>
+        <span class=n>v</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>tup</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+        <span class=k>if</span> <span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>k</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>v</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid key/values </span><span class=si>{</span><span class=n>k</span><span class=si>!r}</span><span class=s2>/</span><span class=si>{</span><span class=n>v</span><span class=si>!r}</span><span class=s2> in tuple "</span>
+                             <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>tup</span><span class=si>}</span><span class=s2> at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> in infos."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>__FORBIDDEN_INFO_KEYS</span><span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=n>lower</span><span class=p>(</span><span class=n>k</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Info key </span><span class=si>{</span><span class=n>k</span><span class=si>!r}</span><span class=s2> in tuple </span><span class=si>{</span><span class=n>tup</span><span class=si>}</span><span class=s2> forbidden at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>all</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=n>__ALLOWED_INFO_KEY_CHARS</span><span class=p>,</span> <span class=n>k</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Malformed info key </span><span class=si>{</span><span class=n>k</span><span class=si>!r}</span><span class=s2> in tuple </span><span class=si>{</span><span class=n>tup</span><span class=si>}</span><span class=s2> at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>k</span> <span class=ow>in</span> <span class=n>dst</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Duplicate key </span><span class=si>{</span><span class=n>k</span><span class=si>!r}</span><span class=s2> found in tuple </span><span class=si>{</span><span class=n>tup</span><span class=si>}</span><span class=s2> "</span>
+                             <span class=sa>f</span><span class=s2>"at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> in infos."</span><span class=p>)</span>
+        <span class=n>dst</span><span class=p>[</span><span class=n>k</span><span class=p>]</span> <span class=o>=</span> <span class=n>v</span>
+    <span class=k>return</span> <span class=n>immutable_mapping</span><span class=p>(</span><span class=n>dst</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=Instance>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.instance.Instance>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Instance</span><span class=p>(</span><span class=n>Component</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An instance of the Production Scheduling Problem."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+            <span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>n_customers</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>n_machines</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+            <span class=n>n_demands</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+            <span class=n>routes</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]],</span>
+            <span class=n>demands</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]],</span>
+            <span class=n>warehous_at_t0</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>],</span>
+            <span class=n>machine_product_unit_times</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]]],</span>
+            <span class=n>infos</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>|</span> <span class=n>Mapping</span><span class=p>[</span>
+                <span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> \
+            <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create an instance of the production scheduling time.</span>
+
+<span class=sd>        :param name: the instance name</span>
+<span class=sd>        :param n_products: the number of products</span>
+<span class=sd>        :param n_customers: the number of customers</span>
+<span class=sd>        :param n_machines: the number of machines</span>
+<span class=sd>        :param n_demands: the number of demand records</span>
+<span class=sd>        :param routes: for each product, the sequence of machines that it has</span>
+<span class=sd>            to pass</span>
+<span class=sd>        :param demands: a sequences of demands of the form (</span>
+<span class=sd>            customer_id, product_id, product_amount, release_time) OR a</span>
+<span class=sd>            sequence of :class:`Demand` records.</span>
+<span class=sd>        :param warehous_at_t0: the amount of products in the warehouse at time</span>
+<span class=sd>            0 for each product</span>
+<span class=sd>        :param machine_product_unit_times: for each machine and each product</span>
+<span class=sd>            the per-unit-production time schedule, in the form of</span>
+<span class=sd>            "per_unit_time, duration", where duration is the number of time</span>
+<span class=sd>            units for which the per_unit_time is value</span>
+<span class=sd>        :param machine_product_unit_times: the cycling unit times for each</span>
+<span class=sd>            product on each machine, each with a validity duration</span>
+<span class=sd>        :param infos: additional infos to be stored with the instance.</span>
+<span class=sd>            These are key-value pairs with keys that are not used by the</span>
+<span class=sd>            instance. They have no impact on the instance performance, but may</span>
+<span class=sd>            explain settings of an instance generator.</span>
+<span class=sd>        """</span>
+        <span class=n>use_name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>sanitize_name</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>name</span> <span class=o>!=</span> <span class=n>use_name</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Name </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2> is not a valid name."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>all</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=n>_ALLOWED_NAME_CHARS</span><span class=p>,</span> <span class=n>name</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Name </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2> contains invalid characters."</span><span class=p>)</span>
+        <span class=c1>#: the name of this instance</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>name</span>
+
+        <span class=c1>#: the number of products in the scenario</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>n_products</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_products</span><span class=p>,</span> <span class=s2>"n_products"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+        <span class=c1>#: the number of customers in the scenario</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>n_customers</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_customers</span><span class=p>,</span> <span class=s2>"n_customers"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+        <span class=c1>#: the number of machines or workstations in the scenario</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>n_machines</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_machines</span><span class=p>,</span> <span class=s2>"n_machines"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+        <span class=c1>#: the number of demands in the scenario</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>n_demands</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_demands</span><span class=p>,</span> <span class=s2>"n_demands"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>_MAX_DIM</span><span class=p>)</span>
+
+        <span class=n>pool</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>dict</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+
+        <span class=c1>#: the product routes, i.e., the machines through which each product</span>
+        <span class=c1>#: must pass</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>routes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>_make_routes</span><span class=p>(</span>
+            <span class=n>n_products</span><span class=p>,</span> <span class=n>n_machines</span><span class=p>,</span> <span class=n>routes</span><span class=p>,</span> <span class=n>pool</span><span class=p>)</span>
+        <span class=c1>#: The demands: Each demand is a tuple of demand_id, customer_id,</span>
+        <span class=c1>#: product_id, amount, release_time, and deadline.</span>
+        <span class=c1>#: The customer makes their order at time step release_time.</span>
+        <span class=c1>#: They expect to receive their product by the deadline.</span>
+        <span class=c1>#: The demands are sorted by release time and then deadline.</span>
+        <span class=c1>#: The release time is always > 0.</span>
+        <span class=c1>#: The deadline is always >= release time.</span>
+        <span class=c1>#: Demand ids are unique.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>demands</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>_make_demands</span><span class=p>(</span>
+            <span class=n>n_products</span><span class=p>,</span> <span class=n>n_customers</span><span class=p>,</span> <span class=n>n_demands</span><span class=p>,</span> <span class=n>demands</span><span class=p>,</span> <span class=n>pool</span><span class=p>)</span>
+
+        <span class=c1>#: The units of product in the warehouse at time step 0.</span>
+        <span class=c1>#: For each product, we have either 0 or a positive amount of product.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>warehous_at_t0</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>_make_in_warehouse</span><span class=p>(</span>
+            <span class=n>n_products</span><span class=p>,</span> <span class=n>warehous_at_t0</span><span class=p>,</span> <span class=n>pool</span><span class=p>)</span>
+
+        <span class=c1>#: The per-machine unit production times for each product.</span>
+        <span class=c1>#: Each machine can have different production times per product.</span>
+        <span class=c1>#: Let's say that this is tuple `A`.</span>
+        <span class=c1>#: For each product, it has a tuple `B` at the index of the product</span>
+        <span class=c1>#: id.</span>
+        <span class=c1>#: If the product does not pass through the machine, `B` is empty.</span>
+        <span class=c1>#: Otherwise, it holds one or multiple tuples `C`.</span>
+        <span class=c1>#: Each tuple `C` consists of two numbers:</span>
+        <span class=c1>#: A per-unit-production time for the product.</span>
+        <span class=c1>#: An end time index for this production time.</span>
+        <span class=c1>#: Once the real time surpasses the end time of the last of these</span>
+        <span class=c1>#: production specs, the production specs are recycled and begin</span>
+        <span class=c1>#: again.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>machine_product_unit_times</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span>
+            <span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>_make_machine_product_unit_times</span><span class=p>(</span>
+            <span class=n>n_products</span><span class=p>,</span> <span class=n>n_machines</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>routes</span><span class=p>,</span> <span class=n>machine_product_unit_times</span><span class=p>,</span>
+            <span class=n>pool</span><span class=p>)</span>
+
+        <span class=c1>#: Additional information about the nature of the instance can be</span>
+        <span class=c1>#: stored here. This has no impact on the behavior of the instance,</span>
+        <span class=c1>#: but it may explain, e.g., settings of an instance generator.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>infos</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=n>_make_infos</span><span class=p>(</span><span class=n>infos</span><span class=p>)</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this instance.</span>
+
+<span class=sd>        :return: the name of this instance</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>name</span></div>
+
+
+
+<span class=c1>#: the instance name key</span>
+<span class=n>KEY_NAME</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"name"</span>
+<span class=c1>#: the key for the number of products</span>
+<span class=n>KEY_N_PRODUCTS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"n_products"</span>
+<span class=c1>#: the key for the number of customers</span>
+<span class=n>KEY_N_CUSTOMERS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"n_customers"</span>
+<span class=c1>#: the key for the number of machines</span>
+<span class=n>KEY_N_MACHINES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"n_machines"</span>
+<span class=c1>#: the number of demands in the scenario</span>
+<span class=n>KEY_N_DEMANDS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"n_demands"</span>
+<span class=c1>#: the start of a key index</span>
+<span class=n>KEY_IDX_START</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"["</span>
+<span class=c1>#: the end of a key index</span>
+<span class=n>KEY_IDX_END</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"]"</span>
+<span class=c1>#: the first part of the product route key</span>
+<span class=n>KEY_ROUTE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"product_route"</span>
+<span class=c1>#: the first part of the demand key</span>
+<span class=n>KEY_DEMAND</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"demand"</span>
+<span class=c1>#: The amount of products in the warehouse at time step 0.</span>
+<span class=n>KEY_IN_WAREHOUSE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"products_in_warehouse_at_t0"</span>
+<span class=c1>#: the first part of the production time</span>
+<span class=n>KEY_PRODUCTION_TIME</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"production_time"</span>
+
+<span class=c1>#: the key value split string</span>
+<span class=n>_KEY_VALUE_SPLIT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=p>)</span>
+
+<span class=c1>#: the forbidden keys</span>
+<span class=n>__FORBIDDEN_INFO_KEYS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>bool</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{</span>
+    <span class=n>KEY_NAME</span><span class=p>,</span> <span class=n>KEY_N_PRODUCTS</span><span class=p>,</span> <span class=n>KEY_N_CUSTOMERS</span><span class=p>,</span> <span class=n>KEY_N_MACHINES</span><span class=p>,</span>
+    <span class=n>KEY_N_DEMANDS</span><span class=p>,</span> <span class=n>KEY_ROUTE</span><span class=p>,</span> <span class=n>KEY_DEMAND</span><span class=p>,</span> <span class=n>KEY_IN_WAREHOUSE</span><span class=p>,</span>
+    <span class=n>KEY_PRODUCTION_TIME</span><span class=p>}</span><span class=o>.</span><span class=fm>__contains__</span>
+
+<span class=c1>#: the allowed information key characters</span>
+<span class=n>__ALLOWED_INFO_KEY_CHARS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>bool</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>(</span>
+    <span class=n>ascii_letters</span> <span class=o>+</span> <span class=n>digits</span> <span class=o>+</span> <span class=s2>"_."</span> <span class=o>+</span> <span class=n>KEY_IDX_START</span> <span class=o>+</span> <span class=n>KEY_IDX_END</span><span class=p>)</span><span class=o>.</span><span class=fm>__contains__</span>
+
+<span class=c1>#: the allowed characters in names</span>
+<span class=n>_ALLOWED_NAME_CHARS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>bool</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>(</span>
+    <span class=n>ascii_letters</span> <span class=o>+</span> <span class=n>digits</span> <span class=o>+</span> <span class=s2>"_"</span><span class=p>)</span><span class=o>.</span><span class=fm>__contains__</span>
+
+
+<div class=viewcode-block id=to_stream>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.instance.to_stream>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>to_stream</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=n>Generator</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span> <span class=kc>None</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert an instance to a stream of data.</span>
+
+<span class=sd>    :param instance: the instance to convert to a stream</span>
+<span class=sd>    :return: the stream of data</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> --- the data of instance </span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>name</span><span class=si>!r}</span><span class=s2> ---"</span>
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> Lines beginning with </span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>!r}</span><span class=s2> are "</span>
+           <span class=sa>f</span><span class=s2>"comments."</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the unique identifying name of the instance"</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_NAME</span><span class=si>}{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}{</span><span class=n>instance</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the number of products in the instance, > 0"</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_PRODUCTS</span><span class=si>}{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}{</span><span class=n>instance</span><span class=o>.</span><span class=n>n_products</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> (Valid product indices are in 0.."</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>n_products</span><span class=w> </span><span class=o>-</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2>.)"</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the number of customers in the instance, > 0"</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_CUSTOMERS</span><span class=si>}{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}{</span><span class=n>instance</span><span class=o>.</span><span class=n>n_customers</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> (Valid customer indices are in 0.."</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>n_customers</span><span class=w> </span><span class=o>-</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2>.)"</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the number of machines in the instance, > 0"</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_MACHINES</span><span class=si>}{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}{</span><span class=n>instance</span><span class=o>.</span><span class=n>n_machines</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> (Valid machine indices are in 0.."</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>n_machines</span><span class=w> </span><span class=o>-</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2>.)"</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the number of orders (demands) issued by the "</span>
+           <span class=sa>f</span><span class=s2>"customers, > 0"</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_DEMANDS</span><span class=si>}{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}{</span><span class=n>instance</span><span class=o>.</span><span class=n>n_demands</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> (Valid demand/order indices are in 0.."</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>n_demands</span><span class=w> </span><span class=o>-</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2>.)"</span><span class=p>)</span>
+
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> For each machine, we now specify the indices of "</span>
+           <span class=sa>f</span><span class=s2>"the machines by which it will be processed, in the order in "</span>
+           <span class=sa>f</span><span class=s2>"which it will be processed by them."</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> </span><span class=si>{</span><span class=n>KEY_ROUTE</span><span class=si>}{</span><span class=n>KEY_IDX_START</span><span class=si>}</span><span class=s2>0"</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_IDX_END</span><span class=si>}</span><span class=s2> is the production route by the first product, "</span>
+           <span class=s2>"which has index 0."</span><span class=p>)</span>
+    <span class=n>route_0</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>routes</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> This product is processed by "</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>route_0</span><span class=p>)</span><span class=si>}</span><span class=s2> machines, namely first by the "</span>
+           <span class=sa>f</span><span class=s2>"machine with index </span><span class=si>{</span><span class=nb>int</span><span class=p>(</span><span class=n>route_0</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span><span class=si>}</span><span class=s2> and last by the machine "</span>
+           <span class=sa>f</span><span class=s2>"with index </span><span class=si>{</span><span class=nb>int</span><span class=p>(</span><span class=n>route_0</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>])</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>p</span><span class=p>,</span> <span class=n>route</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>routes</span><span class=p>):</span>
+        <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_ROUTE</span><span class=si>}{</span><span class=n>KEY_IDX_START</span><span class=si>}{</span><span class=n>p</span><span class=si>}{</span><span class=n>KEY_IDX_END</span><span class=si>}</span><span class=s2>"</span>
+               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=p>,</span><span class=w> </span><span class=n>route</span><span class=p>))</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> For each customer order/demand, we now "</span>
+           <span class=sa>f</span><span class=s2>"specify the following values:"</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the demand ID in square brackets"</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the ID of the customer who made the order"</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the ID of the product that the customer ordered"</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the amount of the product that the customer"</span>
+           <span class=s2>"ordered"</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the release time of the order, > 0"</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> the deadline, i.e., when the customer expects "</span>
+           <span class=sa>f</span><span class=s2>"the product, >= release_time"</span><span class=p>)</span>
+    <span class=n>srt</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Demand</span><span class=p>]</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>demands</span><span class=p>,</span> <span class=n>key</span><span class=o>=</span><span class=k>lambda</span> <span class=n>d</span><span class=p>:</span> <span class=n>d</span><span class=o>.</span><span class=n>demand_id</span><span class=p>)</span>
+    <span class=n>fd</span><span class=p>:</span> <span class=n>Demand</span> <span class=o>=</span> <span class=n>srt</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> for example, the demand with ID </span><span class=si>{</span><span class=n>fd</span><span class=o>.</span><span class=n>demand_id</span><span class=si>}</span><span class=s2> "</span>
+           <span class=sa>f</span><span class=s2>"was issued by the customer with ID </span><span class=si>{</span><span class=n>fd</span><span class=o>.</span><span class=n>customer_id</span><span class=si>}</span><span class=s2> for "</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>fd</span><span class=o>.</span><span class=n>amount</span><span class=si>}</span><span class=s2> units of the product with ID "</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>fd</span><span class=o>.</span><span class=n>product_id</span><span class=si>}</span><span class=s2>. The order comes into the "</span>
+           <span class=sa>f</span><span class=s2>"system at time unit </span><span class=si>{</span><span class=n>fd</span><span class=o>.</span><span class=n>release_time</span><span class=si>}</span><span class=s2> and the customer expects "</span>
+           <span class=sa>f</span><span class=s2>"the product to be ready at time unit </span><span class=si>{</span><span class=n>fd</span><span class=o>.</span><span class=n>demand_id</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>demand</span> <span class=ow>in</span> <span class=n>srt</span><span class=p>:</span>
+        <span class=n>it</span> <span class=o>=</span> <span class=nb>iter</span><span class=p>(</span><span class=n>demand</span><span class=p>)</span>
+        <span class=nb>next</span><span class=p>(</span><span class=n>it</span><span class=p>)</span>  <span class=c1># pylint: disable=R1708</span>
+        <span class=n>row</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>CSV_SEPARATOR</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=p>,</span> <span class=n>it</span><span class=p>))</span>
+        <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_DEMAND</span><span class=si>}{</span><span class=n>KEY_IDX_START</span><span class=si>}{</span><span class=n>demand</span><span class=o>.</span><span class=n>demand_id</span><span class=si>}{</span><span class=n>KEY_IDX_END</span><span class=si>}</span><span class=s2>"</span>
+               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>row</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> For each product, we now specify the amount "</span>
+           <span class=sa>f</span><span class=s2>"that is in the warehouse at time step 0."</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> For example, there are "</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>warehous_at_t0</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=si>}</span><span class=s2> units of product 0 in the "</span>
+           <span class=sa>f</span><span class=s2>"warehouse at the beginning of the simulation."</span><span class=p>)</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_IN_WAREHOUSE</span><span class=si>}{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=p>,</span><span class=w> </span><span class=n>instance</span><span class=o>.</span><span class=n>warehous_at_t0</span><span class=p>))</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+    <span class=k>yield</span> <span class=n>COMMENT_START</span>
+    <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> For each machine, we now specify the production "</span>
+           <span class=sa>f</span><span class=s2>"times for each product that passes through the machine."</span><span class=p>)</span>
+    <span class=n>empty_pdx</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>filled_pdx</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>need</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>2</span>
+    <span class=k>for</span> <span class=n>mid</span><span class=p>,</span> <span class=n>machine</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>machine_product_unit_times</span><span class=p>):</span>
+        <span class=k>for</span> <span class=n>pid</span><span class=p>,</span> <span class=n>product</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>machine</span><span class=p>):</span>
+            <span class=n>pdl</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>product</span><span class=p>)</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>pdl</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>empty_pdx</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>):</span>
+                <span class=n>empty_pdx</span> <span class=o>=</span> <span class=n>mid</span><span class=p>,</span> <span class=n>pid</span>
+                <span class=n>need</span> <span class=o>-=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>need</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>break</span>
+            <span class=k>elif</span> <span class=p>(</span><span class=n>pdl</span> <span class=o>></span> <span class=mi>0</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>filled_pdx</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>):</span>
+                <span class=n>filled_pdx</span> <span class=o>=</span> <span class=n>mid</span><span class=p>,</span> <span class=n>pid</span><span class=p>,</span> <span class=n>product</span>
+                <span class=n>need</span> <span class=o>-=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>need</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>break</span>
+        <span class=k>if</span> <span class=n>need</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>break</span>
+    <span class=k>if</span> <span class=n>empty_pdx</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> For example, product </span><span class=si>{</span><span class=n>empty_pdx</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span><span class=si>}</span><span class=s2> does "</span>
+               <span class=sa>f</span><span class=s2>"not pass through machine </span><span class=si>{</span><span class=n>empty_pdx</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=si>}</span><span class=s2>, so it is not "</span>
+               <span class=s2>"listed here."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>filled_pdx</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> For example, one unit of product "</span>
+               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>filled_pdx</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span><span class=si>}</span><span class=s2> passes through machine </span><span class=si>{</span><span class=n>filled_pdx</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> There, it needs </span><span class=si>{</span><span class=n>filled_pdx</span><span class=p>[</span><span class=mi>2</span><span class=p>][</span><span class=mi>0</span><span class=p>]</span><span class=si>}</span><span class=s2> time "</span>
+               <span class=sa>f</span><span class=s2>"units per product unit from t=0 to t=</span><span class=si>{</span><span class=n>filled_pdx</span><span class=p>[</span><span class=mi>2</span><span class=p>][</span><span class=mi>1</span><span class=p>]</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>filled_pdx</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span> <span class=o>></span> <span class=mi>2</span><span class=p>:</span>
+            <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> After that, it needs </span><span class=si>{</span><span class=n>filled_pdx</span><span class=p>[</span><span class=mi>2</span><span class=p>][</span><span class=mi>2</span><span class=p>]</span><span class=si>}</span><span class=s2>"</span>
+                   <span class=s2>" time units per product unit until t="</span>
+                   <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>filled_pdx</span><span class=p>[</span><span class=mi>2</span><span class=p>][</span><span class=mi>3</span><span class=p>]</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>mid</span><span class=p>,</span> <span class=n>machine</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>machine_product_unit_times</span><span class=p>):</span>
+        <span class=k>for</span> <span class=n>pid</span><span class=p>,</span> <span class=n>product</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>machine</span><span class=p>):</span>
+            <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>product</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>continue</span>
+            <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_PRODUCTION_TIME</span><span class=si>}{</span><span class=n>KEY_IDX_START</span><span class=si>}{</span><span class=n>mid</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                   <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>pid</span><span class=si>}{</span><span class=n>KEY_IDX_END</span><span class=si>}{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                   <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>CSV_SEPARATOR</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=p>,</span><span class=w> </span><span class=n>product</span><span class=p>))</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+    <span class=n>n_infos</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>infos</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_infos</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+        <span class=k>yield</span> <span class=n>COMMENT_START</span>
+        <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> The following </span><span class=si>{</span><span class=n>n_infos</span><span class=si>}</span><span class=s2> key/value pairs "</span>
+               <span class=sa>f</span><span class=s2>"denote additional information about the instance."</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COMMENT_START</span><span class=si>}</span><span class=s2> They have no impact whatsoever on the"</span>
+               <span class=sa>f</span><span class=s2>"instance behavior."</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>k</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=n>instance</span><span class=o>.</span><span class=n>infos</span><span class=o>.</span><span class=n>items</span><span class=p>():</span>
+            <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>k</span><span class=si>}{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}{</span><span class=n>v</span><span class=si>}</span><span class=s2>"</span></div>
+
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__get_key_index</span><span class=p>(</span><span class=n>full_key</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Extract the key index from a key.</span>
+
+<span class=sd>    :param full_key: the full key</span>
+<span class=sd>    :return: the key index</span>
+
+<span class=sd>    >>> __get_key_index("s[12 ]")</span>
+<span class=sd>    '12'</span>
+<span class=sd>    """</span>
+    <span class=n>start</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>index</span><span class=p>(</span><span class=n>full_key</span><span class=p>,</span> <span class=n>KEY_IDX_START</span><span class=p>)</span>
+    <span class=n>end</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>index</span><span class=p>(</span><span class=n>full_key</span><span class=p>,</span> <span class=n>KEY_IDX_END</span><span class=p>,</span> <span class=n>start</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><</span> <span class=n>start</span> <span class=o><</span> <span class=n>end</span> <span class=o><</span> <span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>full_key</span><span class=p>)):</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid key </span><span class=si>{</span><span class=n>full_key</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=n>idx</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>full_key</span><span class=p>[</span><span class=n>start</span> <span class=o>+</span> <span class=mi>1</span><span class=p>:</span><span class=n>end</span><span class=p>])</span>
+    <span class=k>if</span> <span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>idx</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid index in key </span><span class=si>{</span><span class=n>full_key</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>idx</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__pe</span><span class=p>(</span><span class=n>message</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>oline</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=ne>ValueError</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create a value error to be raised inside the parser.</span>
+
+<span class=sd>    :param message: the message</span>
+<span class=sd>    :param oline: the original line</span>
+<span class=sd>    :param line_idx: the line index</span>
+<span class=sd>    :return: the error</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>message</span><span class=si>}</span><span class=s2> at line </span><span class=si>{</span><span class=n>line_idx</span><span class=w> </span><span class=o>+</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2> (</span><span class=si>{</span><span class=n>oline</span><span class=si>!r}</span><span class=s2>)"</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=from_stream>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.instance.from_stream>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>from_stream</span><span class=p>(</span><span class=n>stream</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>])</span> <span class=o>-></span> <span class=n>Instance</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Read an instance from a data stream.</span>
+
+<span class=sd>    :param stream: the data stream</span>
+<span class=sd>    :return: the instance</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>stream</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>stream</span><span class=p>,</span> <span class=s2>"stream"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+    <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>n_customers</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>n_machines</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>n_demands</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>routes</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>demands</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>in_warehouse</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>machine_product_times</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>infos</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+
+    <span class=k>for</span> <span class=n>line_idx</span><span class=p>,</span> <span class=n>oline</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>stream</span><span class=p>):</span>
+        <span class=n>line</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>oline</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>str</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>line</span><span class=p>,</span> <span class=n>COMMENT_START</span><span class=p>):</span>
+            <span class=k>continue</span>
+
+        <span class=n>split_idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>find</span><span class=p>(</span><span class=n>line</span><span class=p>,</span> <span class=n>_KEY_VALUE_SPLIT</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>split_idx</span> <span class=o>></span> <span class=o>-</span><span class=mi>1</span><span class=p>:</span>
+            <span class=n>key</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>lower</span><span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>line</span><span class=p>[:</span><span class=n>split_idx</span><span class=p>]))</span>
+            <span class=n>value</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span>
+                <span class=n>line</span><span class=p>[</span><span class=n>split_idx</span> <span class=o>+</span> <span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>_KEY_VALUE_SPLIT</span><span class=p>):])</span>
+            <span class=k>if</span> <span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>key</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>value</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid key/value pair </span><span class=si>{</span><span class=n>key</span><span class=si>!r}</span><span class=s2>/</span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span>
+                           <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+
+            <span class=k>if</span> <span class=n>key</span> <span class=o>==</span> <span class=n>KEY_NAME</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>name</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_NAME</span><span class=si>}</span><span class=s2> already defined as </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>, "</span>
+                               <span class=sa>f</span><span class=s2>"cannot be set to </span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>name</span> <span class=o>=</span> <span class=n>value</span>
+
+            <span class=k>elif</span> <span class=n>key</span> <span class=o>==</span> <span class=n>KEY_N_MACHINES</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>n_machines</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_MACHINES</span><span class=si>}</span><span class=s2> already defined as </span><span class=si>{</span><span class=n>n_machines</span><span class=si>!r}</span><span class=s2>,"</span>
+                        <span class=sa>f</span><span class=s2>" cannot be set to </span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>n_machines</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>value</span><span class=p>,</span> <span class=n>KEY_N_MACHINES</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+
+            <span class=k>elif</span> <span class=n>key</span> <span class=o>==</span> <span class=n>KEY_N_PRODUCTS</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>n_products</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_PRODUCTS</span><span class=si>}</span><span class=s2> already defined as </span><span class=si>{</span><span class=n>n_products</span><span class=si>!r}</span><span class=s2>,"</span>
+                        <span class=sa>f</span><span class=s2>" cannot be set to </span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>n_products</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>value</span><span class=p>,</span> <span class=n>KEY_N_PRODUCTS</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+
+            <span class=k>elif</span> <span class=n>key</span> <span class=o>==</span> <span class=n>KEY_N_CUSTOMERS</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>n_customers</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_CUSTOMERS</span><span class=si>}</span><span class=s2> already defined as "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>n_customers</span><span class=si>!r}</span><span class=s2>, cannot be set to </span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span>
+                        <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>n_customers</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>value</span><span class=p>,</span> <span class=n>KEY_N_CUSTOMERS</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+
+            <span class=k>elif</span> <span class=n>key</span> <span class=o>==</span> <span class=n>KEY_N_DEMANDS</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>n_demands</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_N_DEMANDS</span><span class=si>}</span><span class=s2> already defined as </span><span class=si>{</span><span class=n>n_demands</span><span class=si>!r}</span><span class=s2>, "</span>
+                        <span class=sa>f</span><span class=s2>"cannot be set to </span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>n_demands</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>value</span><span class=p>,</span> <span class=n>KEY_N_DEMANDS</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+
+            <span class=k>elif</span> <span class=n>key</span> <span class=o>==</span> <span class=n>KEY_IN_WAREHOUSE</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>in_warehouse</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_IN_WAREHOUSE</span><span class=si>}</span><span class=s2> already defined"</span><span class=p>,</span>
+                               <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Must define </span><span class=si>{</span><span class=n>KEY_N_PRODUCTS</span><span class=si>}</span><span class=s2> before "</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_IN_WAREHOUSE</span><span class=si>}</span><span class=s2>."</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>in_warehouse</span> <span class=o>=</span> <span class=nb>list</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=nb>str</span><span class=o>.</span><span class=n>split</span><span class=p>(</span>
+                    <span class=n>value</span><span class=p>,</span> <span class=n>CSV_SEPARATOR</span><span class=p>)))</span>
+                <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>in_warehouse</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"Expected </span><span class=si>{</span><span class=n>n_products</span><span class=si>}</span><span class=s2> products in warehouse, got "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>in_warehouse</span><span class=si>}</span><span class=s2>."</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+
+            <span class=k>elif</span> <span class=nb>str</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>key</span><span class=p>,</span> <span class=n>KEY_ROUTE</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Must define </span><span class=si>{</span><span class=n>KEY_N_PRODUCTS</span><span class=si>}</span><span class=s2> before "</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_ROUTE</span><span class=si>}</span><span class=s2>."</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>n_machines</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Must define </span><span class=si>{</span><span class=n>KEY_N_MACHINES</span><span class=si>}</span><span class=s2> before "</span>
+                                     <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_ROUTE</span><span class=si>}</span><span class=s2>."</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>routes</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=n>routes</span> <span class=o>=</span> <span class=p>[[]</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>)]</span>
+
+                <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>__get_key_index</span><span class=p>(</span><span class=n>key</span><span class=p>),</span> <span class=n>KEY_ROUTE</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>n_products</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+                <span class=n>rlst</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>routes</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+                <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>rlst</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"Already gave </span><span class=si>{</span><span class=n>KEY_ROUTE</span><span class=si>}{</span><span class=n>KEY_IDX_START</span><span class=si>}{</span><span class=n>product_id</span><span class=si>}</span><span class=s2>"</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_IDX_END</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>rlst</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=nb>str</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=n>value</span><span class=p>,</span> <span class=n>CSV_SEPARATOR</span><span class=p>)))</span>
+                <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>rlst</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Route for product </span><span class=si>{</span><span class=n>product_id</span><span class=si>}</span><span class=s2> is empty"</span><span class=p>,</span>
+                               <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+
+            <span class=k>elif</span> <span class=nb>str</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>key</span><span class=p>,</span> <span class=n>KEY_DEMAND</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>n_customers</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Must define </span><span class=si>{</span><span class=n>KEY_N_CUSTOMERS</span><span class=si>}</span><span class=s2> before "</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_DEMAND</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Must define </span><span class=si>{</span><span class=n>KEY_N_PRODUCTS</span><span class=si>}</span><span class=s2> before "</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_DEMAND</span><span class=si>}</span><span class=s2>."</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>n_demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Must define </span><span class=si>{</span><span class=n>KEY_N_DEMANDS</span><span class=si>}</span><span class=s2> before "</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_DEMAND</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=n>demands</span> <span class=o>=</span> <span class=p>[[</span><span class=n>i</span><span class=p>]</span> <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_demands</span><span class=p>)]</span>
+
+                <span class=n>demand_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>__get_key_index</span><span class=p>(</span><span class=n>key</span><span class=p>),</span> <span class=n>KEY_DEMAND</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>n_demands</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+                <span class=n>dlst</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>demands</span><span class=p>[</span><span class=n>demand_id</span><span class=p>]</span>
+                <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>dlst</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>1</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Already gave </span><span class=si>{</span><span class=n>KEY_DEMAND</span><span class=si>}{</span><span class=n>KEY_IDX_START</span><span class=si>}</span><span class=s2>"</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>demand_id</span><span class=si>}{</span><span class=n>KEY_IDX_END</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>dlst</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=nb>str</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=n>value</span><span class=p>,</span> <span class=n>CSV_SEPARATOR</span><span class=p>)))</span>
+                <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>dlst</span><span class=p>)</span> <span class=o><=</span> <span class=mi>5</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Demand </span><span class=si>{</span><span class=n>demand_id</span><span class=si>}</span><span class=s2> is too short: </span><span class=si>{</span><span class=n>dlst</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span>
+                               <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+
+            <span class=k>elif</span> <span class=nb>str</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>key</span><span class=p>,</span> <span class=n>KEY_PRODUCTION_TIME</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Must define </span><span class=si>{</span><span class=n>KEY_N_PRODUCTS</span><span class=si>}</span><span class=s2> before "</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_PRODUCTION_TIME</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>n_machines</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Must define </span><span class=si>{</span><span class=n>KEY_N_MACHINES</span><span class=si>}</span><span class=s2> before"</span>
+                               <span class=sa>f</span><span class=s2>" </span><span class=si>{</span><span class=n>KEY_PRODUCTION_TIME</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>machine</span><span class=p>,</span> <span class=n>product</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>split</span><span class=p>(</span>
+                    <span class=n>__get_key_index</span><span class=p>(</span><span class=n>key</span><span class=p>),</span> <span class=n>CSV_SEPARATOR</span><span class=p>)</span>
+                <span class=n>machine_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>machine</span><span class=p>,</span> <span class=s2>"machine"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>n_machines</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+                <span class=n>product_id</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>product</span><span class=p>,</span> <span class=s2>"product"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>n_products</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+
+                <span class=k>if</span> <span class=n>machine_product_times</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=n>machine_product_times</span> <span class=o>=</span> \
+                        <span class=p>[[[]</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>)]</span>
+                         <span class=k>for</span> <span class=n>__</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_machines</span><span class=p>)]</span>
+
+                <span class=n>mpd</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>machine_product_times</span><span class=p>[</span>
+                    <span class=n>machine_id</span><span class=p>][</span><span class=n>product_id</span><span class=p>]</span>
+                <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>mpd</span><span class=p>)</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=n>__pe</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Already gave </span><span class=si>{</span><span class=n>KEY_PRODUCTION_TIME</span><span class=si>}</span><span class=s2>"</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_IDX_START</span><span class=si>}{</span><span class=n>machine_id</span><span class=si>}{</span><span class=n>CSV_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+                               <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>product_id</span><span class=si>}{</span><span class=n>KEY_IDX_END</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>oline</span><span class=p>,</span> <span class=n>line_idx</span><span class=p>)</span>
+                <span class=n>mpd</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span>
+                    <span class=nb>map</span><span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=nb>str</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=n>value</span><span class=p>,</span> <span class=n>CSV_SEPARATOR</span><span class=p>)))</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>infos</span><span class=p>[</span><span class=n>key</span><span class=p>]</span> <span class=o>=</span> <span class=n>value</span>
+
+    <span class=k>if</span> <span class=n>name</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Did not specify instance name (</span><span class=si>{</span><span class=n>KEY_NAME</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Did not specify instance n_products"</span>
+                         <span class=sa>f</span><span class=s2>" (</span><span class=si>{</span><span class=n>KEY_N_PRODUCTS</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_customers</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Did not specify instance n_customers"</span>
+                         <span class=sa>f</span><span class=s2>" (</span><span class=si>{</span><span class=n>KEY_N_CUSTOMERS</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_machines</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Did not specify instance n_machines"</span>
+                         <span class=sa>f</span><span class=s2>" (</span><span class=si>{</span><span class=n>KEY_N_MACHINES</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Did not specify instance n_demands"</span>
+                         <span class=sa>f</span><span class=s2>" (</span><span class=si>{</span><span class=n>KEY_N_DEMANDS</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>routes</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Did not specify instance routes (</span><span class=si>{</span><span class=n>KEY_ROUTE</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Did not specify instance demands (</span><span class=si>{</span><span class=n>KEY_DEMAND</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>in_warehouse</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Did not specify instance warehouse values"</span>
+                         <span class=sa>f</span><span class=s2>" (</span><span class=si>{</span><span class=n>KEY_IN_WAREHOUSE</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>machine_product_times</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Did not specify per-machine product production"</span>
+                         <span class=sa>f</span><span class=s2>"times (</span><span class=si>{</span><span class=n>KEY_PRODUCTION_TIME</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+
+    <span class=k>return</span> <span class=n>Instance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=n>n_products</span><span class=p>,</span> <span class=n>n_customers</span><span class=p>,</span> <span class=n>n_machines</span><span class=p>,</span> <span class=n>n_demands</span><span class=p>,</span>
+                    <span class=n>routes</span><span class=p>,</span> <span class=n>demands</span><span class=p>,</span> <span class=n>in_warehouse</span><span class=p>,</span> <span class=n>machine_product_times</span><span class=p>,</span>
+                    <span class=n>infos</span><span class=p>)</span></div>
+
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>__round_time</span><span class=p>(</span><span class=n>value</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Round a production time.</span>
+
+<span class=sd>    Production times are always rounded up (ceil), except if they are very</span>
+<span class=sd>    very close to the nearest integer. "Very very close" here means that,</span>
+<span class=sd>    if a predicted time differs only by 1/16834th (= 2**⁻14) from the</span>
+<span class=sd>    next-smaller integer, it is rounded down. Production times can never be</span>
+<span class=sd>    zero.</span>
+
+<span class=sd>    If the original value be `v` and the result of this function is `r`, then</span>
+<span class=sd>    it is guaranteed that `0 < r` and that `floor(v) <= r <= `floor(v) + 1`</span>
+<span class=sd>    for any `v > 0`. For `v <= 1`, `r = 1`.</span>
+
+<span class=sd>    :param value: the value `v`</span>
+<span class=sd>    :return: the rounded value `r`.</span>
+
+<span class=sd>    >>> __round_time(10.0)</span>
+<span class=sd>    10</span>
+<span class=sd>    >>> __round_time(10)</span>
+<span class=sd>    10</span>
+<span class=sd>    >>> __round_time(10.000001)</span>
+<span class=sd>    10</span>
+<span class=sd>    >>> __round_time(10.00006103515625)</span>
+<span class=sd>    11</span>
+<span class=sd>    >>> __round_time(10.0000610351562)</span>
+<span class=sd>    10</span>
+<span class=sd>    >>> __round_time(10.02)</span>
+<span class=sd>    11</span>
+<span class=sd>    >>> __round_time(10.9999)</span>
+<span class=sd>    11</span>
+<span class=sd>    >>> __round_time(0)</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> __round_time(0.0)</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> __round_time(0.00006103515625)</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> __round_time(0.0000610351562)</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> __round_time(0.9)</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> __round_time(1.01)</span>
+<span class=sd>    2</span>
+<span class=sd>    """</span>
+    <span class=n>fl</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>value</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>fl</span> <span class=o><</span> <span class=mi>1</span><span class=p>:</span>
+        <span class=k>return</span> <span class=mi>1</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>fl</span> <span class=o>>=</span> <span class=n>value</span><span class=p>)</span> <span class=ow>or</span> <span class=p>((</span><span class=n>value</span> <span class=o>-</span> <span class=n>fl</span><span class=p>)</span> <span class=o><</span> <span class=mf>0.00006103515625</span><span class=p>):</span>
+        <span class=k>return</span> <span class=n>fl</span>
+    <span class=k>return</span> <span class=n>fl</span> <span class=o>+</span> <span class=mi>1</span>
+
+
+<div class=viewcode-block id=compute_finish_time>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.instance.compute_finish_time>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>compute_finish_time</span><span class=p>(</span><span class=n>start_time</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                        <span class=n>production_times</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>])</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the time when one job is finished.</span>
+
+<span class=sd>    The production times are cyclic intervals of unit production times and</span>
+<span class=sd>    interval ends.</span>
+
+<span class=sd>    :param start_time: the starting time of the job</span>
+<span class=sd>    :param amount: the number of units to be produced</span>
+<span class=sd>    :param production_times: the production times array</span>
+<span class=sd>    :return: the end time</span>
+
+
+<span class=sd>    Here, the production time is 10 time units / 1 product unit, valid until</span>
+<span class=sd>    end time 100.</span>
+<span class=sd>    >>> compute_finish_time(0, 1, (10, 100))</span>
+<span class=sd>    10</span>
+
+<span class=sd>    Here, the production time is 10 time units / 1 product unit, valid until</span>
+<span class=sd>    end time 100. We begin producing at time unit 250. Since the production</span>
+<span class=sd>    periods are cyclic, this is OK: we would be halfway through the third</span>
+<span class=sd>    production period when the request comes in. It will consume 10 time units</span>
+<span class=sd>    and be done at time unit 260.</span>
+<span class=sd>    >>> compute_finish_time(250, 1, (10, 100))</span>
+<span class=sd>    260</span>
+
+<span class=sd>    Here, the end time of the production time validity is at time unit 100.</span>
+<span class=sd>    However, we begin producing 1 product unit at time step 90. This unit will</span>
+<span class=sd>    use 10 time units, meaning that its production is exactly finished when</span>
+<span class=sd>    the production time validity ends.</span>
+<span class=sd>    It will be finished at time step 100.</span>
+<span class=sd>    >>> compute_finish_time(90, 1, (10, 100))</span>
+<span class=sd>    100</span>
+
+<span class=sd>    Here, the end time of the production time validity is at time unit 100.</span>
+<span class=sd>    However, we begin producing 1 product unit at time step 95. This unit would</span>
+<span class=sd>    use 10 time units. It cannot be completed until the end of the period. So</span>
+<span class=sd>    only 0.5 units are produced, needing 5 time units and finishing at period</span>
+<span class=sd>    100. Then the production time window begins again. Since there is only 1</span>
+<span class=sd>    production time, in the second production cycle there will still be 10</span>
+<span class=sd>    time units per production unit. The remaining 0.5 units will be produced</span>
+<span class=sd>    in 5 time units, meaning that the overall production is finished at time</span>
+<span class=sd>    step 105.</span>
+<span class=sd>    >>> compute_finish_time(95, 1, (10, 100))</span>
+<span class=sd>    105</span>
+
+<span class=sd>    Now we have two production periods. The production begins again at time</span>
+<span class=sd>    step 95. 0.5 units are finished until the production period ends at time</span>
+<span class=sd>    step 100. Then, the second production period begins, requiring 20 time</span>
+<span class=sd>    units per product unit. We thus need 10 time units to finish the remaining</span>
+<span class=sd>    0.5 product unit, completing the job at time unit 110.</span>
+<span class=sd>    >>> compute_finish_time(95, 1, (10, 100, 20, 200))</span>
+<span class=sd>    110</span>
+
+<span class=sd>    Now things get more complex. We want to do 10 units of product.</span>
+<span class=sd>    We can finish 0.5 units until the first period ends after 5 time steps.</span>
+<span class=sd>    Then, in the second period, we can do exactly 2 units of product until</span>
+<span class=sd>    the period ends at time 140. This leaves 7.5 units of product to be done</span>
+<span class=sd>    in the third period, where each unit needs 50 time units. Thus, we end</span>
+<span class=sd>    up needing 5 + 40 + 7.5*50 time units, which add to the starting time.</span>
+<span class=sd>    >>> compute_finish_time(95, 10, (10, 100, 20, 140, 50, 5000))</span>
+<span class=sd>    515</span>
+<span class=sd>    >>> 95 + (0.5*10 + 2*20 + 7.5*50)</span>
+<span class=sd>    515.0</span>
+
+<span class=sd>    This is the same as the example before, except that the third period now</span>
+<span class=sd>    ends at time step 200. Thus, we can only do 1.2=(200-140)/50 units of</span>
+<span class=sd>    product in the 200 - 140 time units this period lasts. Then the production</span>
+<span class=sd>    cycle wraps over. Luckily, we can complete the remaining 6.3 units of</span>
+<span class=sd>    product in the first period, where each product unit needs only 10 time</span>
+<span class=sd>    units.</span>
+<span class=sd>    >>> compute_finish_time(95, 10, (10, 100, 20, 140, 50, 200))</span>
+<span class=sd>    263</span>
+<span class=sd>    >>> 95 + (0.5*10 + 2*20 + 1.2*50 + 6.3*10)</span>
+<span class=sd>    263.0</span>
+
+<span class=sd>    Here we illustrate that production times are rounded to the nearest larger</span>
+<span class=sd>    integer. If we encounter a situation such that the production would need</span>
+<span class=sd>    246.6666 time units, we return 247. The only exception for this "rounding</span>
+<span class=sd>    up" strategy is if the result is very very close to the nearest integer.</span>
+<span class=sd>    For example, 10.00006103515625 would be rounded to 11, whereas</span>
+<span class=sd>    10.0000610351562 will be rounded to 10. (0.00006103515625 = 1/16384</span>
+<span class=sd>    = 2**⁻14).</span>
+<span class=sd>    >>> compute_finish_time(95, 10, (10, 100, 20, 140, 50, 200, 3, 207))</span>
+<span class=sd>    247</span>
+<span class=sd>    >>> 95 + (0.5*10 + 2*20 + 1.2*50 + (7/3)*3 + (6.3-(7/3))*10)</span>
+<span class=sd>    246.66666666666666</span>
+<span class=sd>    """</span>
+    <span class=n>time_mod</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>production_times</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span>
+    <span class=n>low_end</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>production_times</span><span class=p>)</span>
+    <span class=n>total</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>low_end</span> <span class=o>//</span> <span class=mi>2</span>
+
+    <span class=c1># First, we need to find the segment in the production cycle</span>
+    <span class=c1># where the production begins. We use a binary search for that.</span>
+    <span class=n>remaining</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>amount</span>
+    <span class=n>seg_start</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>start_time</span> <span class=o>%</span> <span class=n>time_mod</span>
+    <span class=n>low</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=n>high</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>total</span>
+    <span class=k>while</span> <span class=n>low</span> <span class=o><</span> <span class=n>high</span><span class=p>:</span>
+        <span class=n>mid</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=p>((</span><span class=n>low</span> <span class=o>+</span> <span class=n>high</span><span class=p>)</span> <span class=o>//</span> <span class=mi>2</span><span class=p>)</span>
+        <span class=n>th</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>production_times</span><span class=p>[</span><span class=n>mid</span> <span class=o>*</span> <span class=mi>2</span> <span class=o>+</span> <span class=mi>1</span><span class=p>]</span>
+        <span class=k>if</span> <span class=n>th</span> <span class=o><=</span> <span class=n>seg_start</span><span class=p>:</span>
+            <span class=n>low</span> <span class=o>=</span> <span class=n>mid</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>high</span> <span class=o>=</span> <span class=n>mid</span> <span class=o>-</span> <span class=mi>1</span>
+    <span class=n>low</span> <span class=o>*=</span> <span class=mi>2</span>
+    <span class=n>max_time</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>production_times</span><span class=p>[</span><span class=n>low</span> <span class=o>+</span> <span class=mi>1</span><span class=p>]</span>
+    <span class=k>if</span> <span class=n>max_time</span> <span class=o><=</span> <span class=n>seg_start</span><span class=p>:</span>
+        <span class=n>low</span> <span class=o>+=</span> <span class=mi>2</span>
+
+    <span class=c1># Now we can cycle through the production cycle until the product has</span>
+    <span class=c1># been produced.</span>
+    <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>
+        <span class=n>max_time</span> <span class=o>=</span> <span class=n>production_times</span><span class=p>[</span><span class=n>low</span> <span class=o>+</span> <span class=mi>1</span><span class=p>]</span>
+        <span class=n>unit_time</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>production_times</span><span class=p>[</span><span class=n>low</span><span class=p>]</span>
+        <span class=n>seg_end</span> <span class=o>=</span> <span class=n>seg_start</span> <span class=o>+</span> <span class=p>(</span><span class=n>unit_time</span> <span class=o>*</span> <span class=n>remaining</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>seg_end</span> <span class=o><=</span> <span class=n>max_time</span><span class=p>:</span>
+            <span class=k>return</span> <span class=n>__round_time</span><span class=p>(</span><span class=n>start_time</span> <span class=o>+</span> <span class=n>seg_end</span> <span class=o>-</span> <span class=n>seg_start</span><span class=p>)</span>
+        <span class=n>duration</span> <span class=o>=</span> <span class=n>max_time</span> <span class=o>-</span> <span class=n>seg_start</span>
+        <span class=n>start_time</span> <span class=o>+=</span> <span class=n>duration</span>
+        <span class=n>remaining</span> <span class=o>-=</span> <span class=p>(</span><span class=n>duration</span> <span class=o>/</span> <span class=n>unit_time</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>remaining</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>return</span> <span class=n>__round_time</span><span class=p>(</span><span class=n>start_time</span><span class=p>)</span>
+        <span class=n>low</span> <span class=o>+=</span> <span class=mi>2</span>
+        <span class=k>if</span> <span class=n>low</span> <span class=o>>=</span> <span class=n>low_end</span><span class=p>:</span>
+            <span class=n>low</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=n>seg_start</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=k>continue</span>
+        <span class=n>seg_start</span> <span class=o>=</span> <span class=n>max_time</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.70 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.instance</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

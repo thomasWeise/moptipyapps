@@ -1,0 +1,18 @@
+moptipyapps.utils package
+=========================
+
+.. automodule:: moptipyapps.utils
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.utils.sampling module
+---------------------------------
+
+.. automodule:: moptipyapps.utils.sampling
+   :members:
+   :show-inheritance:
+   :undoc-members:

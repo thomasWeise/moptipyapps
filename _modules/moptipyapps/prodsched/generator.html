@@ -1,0 +1,1194 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.generator — moptipyapps 0.8.70 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=bfdce523"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/generator.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.70 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.generator</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.generator</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Methods for generating instances.</span>
+
+<span class=sd>>>> from moptipyapps.prodsched.instance import to_stream</span>
+
+<span class=sd>>>> def receive(inst: Instance) -> None:</span>
+<span class=sd>...     for z in to_stream(inst):</span>
+<span class=sd>...         print(z)</span>
+
+
+<span class=sd>>>> with InstanceGenerator(receive) as ig:</span>
+<span class=sd>...     ig.set_seed(11323)</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>contextlib</span><span class=w> </span><span class=kn>import</span> <span class=n>AbstractContextManager</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>dataclasses</span><span class=w> </span><span class=kn>import</span> <span class=n>dataclass</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>ceil</span><span class=p>,</span> <span class=n>isqrt</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>operator</span><span class=w> </span><span class=kn>import</span> <span class=n>itemgetter</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>rand_generator</span><span class=p>,</span>
+    <span class=n>rand_seed_generate</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.strings</span><span class=w> </span><span class=kn>import</span> <span class=n>sanitize_name</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>numpy.random</span><span class=w> </span><span class=kn>import</span> <span class=n>Generator</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>DEMAND_AMOUNT</span><span class=p>,</span>
+    <span class=n>DEMAND_CUSTOMER</span><span class=p>,</span>
+    <span class=n>DEMAND_DEADLINE</span><span class=p>,</span>
+    <span class=n>DEMAND_PRODUCT</span><span class=p>,</span>
+    <span class=n>DEMAND_TIME</span><span class=p>,</span>
+    <span class=n>Demand</span><span class=p>,</span>
+    <span class=n>Instance</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.sampling</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>AtLeast</span><span class=p>,</span>
+    <span class=n>Choice</span><span class=p>,</span>
+    <span class=n>Const</span><span class=p>,</span>
+    <span class=n>In</span><span class=p>,</span>
+    <span class=n>IntDistribution</span><span class=p>,</span>
+    <span class=n>Mul</span><span class=p>,</span>
+    <span class=n>Normal</span><span class=p>,</span>
+    <span class=n>distribution</span><span class=p>,</span>
+<span class=p>)</span>
+
+<span class=c1>#: the random seed of the generator</span>
+<span class=n>INFO_RAND_SEED</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"generator_rand_seed"</span>
+<span class=c1>#: the source for the number of products</span>
+<span class=n>INFO_N_PRODUCTS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_n_products"</span>
+<span class=c1>#: the source for the number of customers</span>
+<span class=n>INFO_N_CUSTOMERS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_n_customers"</span>
+<span class=c1>#: the source for the number of machines</span>
+<span class=n>INFO_N_MACHINES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_n_machines"</span>
+<span class=c1>#: the source for the number of demands</span>
+<span class=n>INFO_N_DEMANDS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_n_demands"</span>
+<span class=c1>#: the source for the routes</span>
+<span class=n>INFO_ROUTES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_routes"</span>
+<span class=c1>#: the machines per product, if any</span>
+<span class=n>INFO_MACHINES_PER_PRODUCT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_routes_machines_per_product"</span>
+<span class=c1>#: the machines order offset</span>
+<span class=n>INFO_MACHINE_ORDER_OFFSET</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_routes_machine_order_offset"</span>
+<span class=c1>#: the key for the day time unit distribution</span>
+<span class=n>INFO_DAY_TIME_UNIS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_day_time_units"</span>
+<span class=c1>#: the key for the day time unit distribution generator</span>
+<span class=n>INFO_DAY_TIME_UNIS_GEN</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_day_time_units_gen"</span>
+<span class=c1>#: the key for the production time unit distribution</span>
+<span class=n>INFO_PRODUCTION_TIME_UNITS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_production_time_units"</span>
+<span class=c1>#: the key for the production time unit distribution generator</span>
+<span class=n>INFO_PRODUCTION_TIME_UNITS_GEN</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_production_time_units_gen"</span>
+
+<span class=c1>#: the source for the product base demands</span>
+<span class=n>INFO_PRODUCT_BASE_DEMANDS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_product_base_demands"</span>
+<span class=c1>#: the distribution of the amount that is usually ordered per product</span>
+<span class=n>INFO_PRODUCT_BASE_DEMAND</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_product_base_demand"</span>
+
+<span class=c1>#: the source for the customers</span>
+<span class=n>INFO_CUSTOMERS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_customers"</span>
+<span class=c1>#: the time offset of the customer</span>
+<span class=n>INFO_CUSTOMER_TIME_OFFSET</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_customer_time_offset"</span>
+<span class=c1>#: the size of the custmer</span>
+<span class=n>INFO_CUSTOMER_SIZE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_customer_size"</span>
+<span class=c1>#: the distribution for the number of demands per customer</span>
+<span class=n>INFO_DEMANDS_PER_CUSTOMER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_demands_per_customer"</span>
+<span class=c1>#: the distribution for the number of products per customer</span>
+<span class=n>INFO_PRODUCTS_PER_CUSTOMER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_products_per_customer"</span>
+
+
+<span class=c1>#: the source for the routes</span>
+<span class=n>INFO_DEMANDS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_demands"</span>
+
+<span class=c1>#: the distribution for the number of days between orders per customer</span>
+<span class=n>INFO_CUSTOMER_BETWEEN_ORDER_DAYS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> \
+    <span class=s2>"src_customer_between_order_days"</span>
+<span class=c1>#: the time jitter added to the days between orders</span>
+<span class=n>INFO_BETWEEN_ORDER_JITTER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_between_order_jitter"</span>
+
+<span class=c1>#: the base amount that the customer usually orders</span>
+<span class=n>INFO_CUSTOMER_BASE_AMOUNT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_customer_base_amount"</span>
+<span class=c1>#: the jitter applied to the orders</span>
+<span class=n>INFO_ORDER_AMOUNT_JITTER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_order_amount_jitter"</span>
+<span class=c1>#: the normal time that the customer provides until the deadline</span>
+<span class=n>INFO_CUSTOMER_TO_DEADLINE_DAYS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_customer_to_deadline_days"</span>
+<span class=c1>#: the jitter applied until the deadline</span>
+<span class=n>INFO_TO_DEADLINE_JITTER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"src_to_deadline_jitter"</span>
+
+<span class=c1>#: a fixed structure</span>
+<span class=n>INFO_FIXED</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"USER_PROVIDED"</span>
+<span class=c1>#: a deterministic structure</span>
+<span class=n>INFO_DETERMINISTIC</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"ONLY_ONE_CHOICE"</span>
+<span class=c1>#: a sampled structure</span>
+<span class=n>INFO_SAMPLED</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"SAMPLED"</span>
+<span class=c1>#: an aggregation of the giving sampling method</span>
+<span class=n>INFO_AGGREGATED</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"AGGREGATED "</span>
+
+<span class=c1>#: the maximum attempts at sampling before giving up</span>
+<span class=n>_MAX_TRIALS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1_000_000</span>
+
+
+<div class=viewcode-block id=Customer>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.Customer>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Customer</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""A customer represents purchase orders sequences."""</span>
+
+    <span class=c1>#: the customer ID</span>
+    <span class=nb>id</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the number of demands that the customer will issue</span>
+    <span class=n>n_demands</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the time when the customer begins doing their orders</span>
+    <span class=n>time_offset</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the products that the customer orders and the corresponding amount</span>
+    <span class=c1>#: distributions</span>
+    <span class=n>demands_products</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>],</span> <span class=o>...</span><span class=p>]</span>
+    <span class=c1>#: the time between orders</span>
+    <span class=n>between_order_times</span><span class=p>:</span> <span class=n>IntDistribution</span>
+    <span class=c1>#: the base time given until the deadline</span>
+    <span class=n>until_deadline</span><span class=p>:</span> <span class=n>IntDistribution</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__post_init__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform sanity checks."""</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>id</span><span class=p>,</span> <span class=s2>"id"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>n_demands</span><span class=p>,</span> <span class=s2>"n_demands"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>time_offset</span><span class=p>,</span> <span class=s2>"time_offset"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"between_order_times"</span><span class=p>,</span> <span class=n>distribution</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>between_order_times</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"until_deadline"</span><span class=p>,</span> <span class=n>distribution</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>until_deadline</span><span class=p>))</span></div>
+
+
+
+<span class=c1># pylint: disable=R0904</span>
+<div class=viewcode-block id=InstanceGenerator>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>InstanceGenerator</span><span class=p>(</span><span class=n>AbstractContextManager</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""The class for generating instances."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>consumer</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Any</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the instance generator.</span>
+
+<span class=sd>        :param consumer: the consumer for the generated instances</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>consumer</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>consumer</span><span class=p>,</span> <span class=s2>"consumer"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+
+        <span class=c1>#: the internal consumer</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__consumer</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Any</span><span class=p>]]</span> <span class=o>=</span> <span class=n>consumer</span>
+        <span class=c1>#: the information collection</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{}</span>
+        <span class=c1>#: the random seed</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__seed</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the random number generator</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__random</span><span class=p>:</span> <span class=n>Generator</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the name of the instance</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the number of products</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the number of customers</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the number of machines</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_machines</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the number of demands</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the routes that the products take through the machines</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the time units per day</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__day_time_unis</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the production-step base time units</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__production_time_units</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the normal amount of order per product</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__product_base_demands</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the customer records</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__customers</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Customer</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the demand records</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__demands</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__enter__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"InstanceGenerator"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Begin the random instance generation process."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__name</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__seed</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__random</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_machines</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__day_time_unis</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__production_time_units</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__customers</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__product_base_demands</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__demands</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=k>return</span> <span class=bp>self</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__exit__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>exception_type</span><span class=p>,</span> <span class=n>_</span><span class=p>,</span> <span class=n>__</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Finalize the instance generation process.</span>
+
+<span class=sd>        :param exception_type: the exception type</span>
+<span class=sd>        :return: `True` to suppress an exception, `False` to rethrow it</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=n>exception_type</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>return</span> <span class=kc>False</span>
+
+        <span class=n>k</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span>
+        <span class=n>p</span> <span class=o>=</span> <span class=nb>str</span>  <span class=c1># print</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"name: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=p>()</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"seed: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>seed</span><span class=p>()</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"products: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>n_products</span><span class=p>()</span><span class=si>}</span><span class=s2> / </span><span class=si>{</span><span class=n>k</span><span class=o>.</span><span class=n>pop</span><span class=p>(</span><span class=n>INFO_N_PRODUCTS</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"customers: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>n_customers</span><span class=p>()</span><span class=si>}</span><span class=s2> / </span><span class=si>{</span><span class=n>k</span><span class=o>.</span><span class=n>pop</span><span class=p>(</span><span class=n>INFO_N_CUSTOMERS</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demands: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>n_demands</span><span class=p>()</span><span class=si>}</span><span class=s2> / </span><span class=si>{</span><span class=n>k</span><span class=o>.</span><span class=n>pop</span><span class=p>(</span><span class=n>INFO_N_DEMANDS</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"machines: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>n_machines</span><span class=p>()</span><span class=si>}</span><span class=s2> / </span><span class=si>{</span><span class=n>k</span><span class=o>.</span><span class=n>pop</span><span class=p>(</span><span class=n>INFO_N_MACHINES</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"routes: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>routes</span><span class=p>()</span><span class=si>}</span><span class=s2> / </span><span class=si>{</span><span class=n>k</span><span class=o>.</span><span class=n>pop</span><span class=p>(</span><span class=n>INFO_ROUTES</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"tu/day: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>day_time_units</span><span class=p>()</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"tu/prod: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>production_time_units</span><span class=p>()</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"customers: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>customers</span><span class=p>()</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"demands: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>demands</span><span class=p>()</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>p</span><span class=p>(</span><span class=sa>f</span><span class=s2>"remaining: </span><span class=si>{</span><span class=n>k</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=k>return</span> <span class=kc>True</span>
+
+<div class=viewcode-block id=InstanceGenerator.set_name>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_name>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_name</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the name of the instance.</span>
+
+<span class=sd>        :param name: the name of the instance.</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__name</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Name already set to </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>__name</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__name</span> <span class=o>=</span> <span class=n>sanitize_name</span><span class=p>(</span><span class=n>name</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.name>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.name>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>name</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name.</span>
+
+<span class=sd>        :return: the name</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__name</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_name</span><span class=p>(</span><span class=sa>f</span><span class=s2>"inst_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>seed</span><span class=p>()</span><span class=si>:</span><span class=s2>x</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__name</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_seed>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_seed>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_seed</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>seed</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the random seed either explicitly or automatically.</span>
+
+<span class=sd>        :param seed: the optional random seed</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__random</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__seed</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Random number generator already initialized."</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__seed</span> <span class=o>=</span> <span class=n>rand_seed_generate</span><span class=p>()</span> <span class=k>if</span> <span class=n>seed</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=n>seed</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_RAND_SEED</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>seed</span><span class=si>:</span><span class=s2>x</span><span class=si>}</span><span class=s2>"</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.seed>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.seed>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>seed</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the seed.</span>
+
+<span class=sd>        :return: the seed</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__seed</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_seed</span><span class=p>(</span><span class=kc>None</span><span class=p>)</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__seed</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__rnd</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>Generator</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the random number generator.</span>
+
+<span class=sd>        :return: the random number generator</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__random</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__random</span> <span class=o>=</span> <span class=n>rand_generator</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>seed</span><span class=p>())</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__random</span>
+
+<div class=viewcode-block id=InstanceGenerator.set_n_products>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_n_products>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_n_products</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the number of products.</span>
+
+<span class=sd>        :param n_products: the number of products, either explicitly or</span>
+<span class=sd>            implicitly set.</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Number of products already set."</span><span class=p>)</span>
+
+        <span class=n>n_products</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>n_products</span><span class=p>)</span>
+        <span class=n>nx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span>
+        <span class=k>if</span> <span class=n>nx</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>n_products</span> <span class=o>=</span> <span class=n>In</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>nx</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>n_products</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>n_products</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>n_products</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=n>products</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>n_products</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>())</span>
+
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>nx</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__routes</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>n_products</span> <span class=o>!=</span> <span class=n>nx</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid value </span><span class=si>{</span><span class=n>products</span><span class=si>}</span><span class=s2> for n_products "</span>
+                                 <span class=sa>f</span><span class=s2>"for </span><span class=si>{</span><span class=n>nx</span><span class=si>}</span><span class=s2> routes"</span><span class=p>)</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span> <span class=o>=</span> <span class=n>products</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_N_PRODUCTS</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>n_products</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.n_products>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.n_products>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>n_products</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the number of products.</span>
+
+<span class=sd>        :return: the number of products</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>set_n_products</span><span class=p>(</span><span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__routes</span><span class=p>))</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>dist</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>=</span> <span class=n>Choice</span><span class=p>(</span>
+                    <span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>5</span><span class=p>,</span> <span class=mi>1</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>10</span><span class=p>,</span> <span class=mi>3</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>20</span><span class=p>,</span> <span class=mi>5</span><span class=p>)))</span>
+                <span class=n>at_most</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>set_n_products</span><span class=p>(</span><span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>dist</span><span class=p>)</span> <span class=k>if</span> <span class=n>at_most</span> <span class=ow>is</span> <span class=kc>None</span>
+                                    <span class=k>else</span> <span class=n>In</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>at_most</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>dist</span><span class=p>))</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_n_customers>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_n_customers>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_n_customers</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>n_customers</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the number of customers.</span>
+
+<span class=sd>        :param n_customers: the number of customers, either explicitly or</span>
+<span class=sd>            implicitly set.</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Number of customers already defined."</span><span class=p>)</span>
+
+        <span class=n>n_customers</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>n_customers</span><span class=p>)</span>
+        <span class=n>nx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span>
+        <span class=k>if</span> <span class=n>nx</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>n_customers</span> <span class=o>=</span> <span class=n>In</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>nx</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>n_customers</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>n_customers</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>n_customers</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=n>customers</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>n_customers</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>())</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span> <span class=o>=</span> <span class=n>customers</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_N_CUSTOMERS</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>n_customers</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.n_customers>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.n_customers>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>n_customers</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the number of customers.</span>
+
+<span class=sd>        :return: the number of customers</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>dist</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>=</span> <span class=n>Choice</span><span class=p>((</span>
+                <span class=n>Normal</span><span class=p>(</span><span class=mi>8</span><span class=p>,</span> <span class=mi>2</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>32</span><span class=p>,</span> <span class=mi>4</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>64</span><span class=p>,</span> <span class=mi>16</span><span class=p>)))</span>
+            <span class=n>at_most</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_customers</span><span class=p>(</span><span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>dist</span><span class=p>)</span> <span class=k>if</span> <span class=n>at_most</span> <span class=ow>is</span> <span class=kc>None</span>
+                                 <span class=k>else</span> <span class=n>In</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>at_most</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>dist</span><span class=p>))</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_n_machines>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_n_machines>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_n_machines</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>n_machines</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the number of machines.</span>
+
+<span class=sd>        :param n_machines: the number of machines, either explicitly or</span>
+<span class=sd>            implicitly set.</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_machines</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Number of machines already set."</span><span class=p>)</span>
+        <span class=n>n_machines</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>distribution</span><span class=p>(</span><span class=n>n_machines</span><span class=p>))</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=n>machines</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>n_machines</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>())</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_machines</span> <span class=o>=</span> <span class=n>machines</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_N_MACHINES</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>n_machines</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.n_machines>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.n_machines>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>n_machines</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the number of machines.</span>
+
+<span class=sd>        :return: the number of machines</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_machines</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_machines</span><span class=p>(</span><span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>Choice</span><span class=p>((</span>
+                <span class=n>Normal</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=mi>1</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>16</span><span class=p>,</span> <span class=mi>4</span><span class=p>)))))</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_machines</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_n_demands>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_n_demands>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_n_demands</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>n_demands</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the number of demands.</span>
+
+<span class=sd>        :param n_demands: the number of demands, either explicitly or</span>
+<span class=sd>            implicitly set.</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Number of demands already set."</span><span class=p>)</span>
+
+        <span class=n>min_v</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=n>nx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>nx</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>nx</span> <span class=o>></span> <span class=n>min_v</span><span class=p>):</span>
+            <span class=n>min_v</span> <span class=o>=</span> <span class=n>nx</span>
+        <span class=n>nx</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>nx</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>nx</span> <span class=o>></span> <span class=n>min_v</span><span class=p>):</span>
+            <span class=n>min_v</span> <span class=o>=</span> <span class=n>nx</span>
+
+        <span class=n>n_demands</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=n>min_v</span><span class=p>,</span> <span class=n>distribution</span><span class=p>(</span><span class=n>n_demands</span><span class=p>))</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=n>demands</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>n_demands</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>())</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span> <span class=o>=</span> <span class=n>demands</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_N_DEMANDS</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>n_demands</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.n_demands>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.n_demands>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>n_demands</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the number of demands.</span>
+
+<span class=sd>        :return: the number of demands</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>products</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_products</span><span class=p>()</span>
+            <span class=n>customers</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_customers</span><span class=p>()</span>
+            <span class=n>at_least</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>products</span><span class=p>,</span> <span class=n>customers</span><span class=p>)</span>
+
+            <span class=n>choices</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span>
+                <span class=n>Normal</span><span class=p>(</span><span class=n>at_least</span><span class=p>,</span> <span class=n>ceil</span><span class=p>(</span><span class=mf>0.2</span> <span class=o>*</span> <span class=n>at_least</span><span class=p>)),</span>
+                <span class=n>Normal</span><span class=p>(</span><span class=mi>2</span> <span class=o>*</span> <span class=n>at_least</span><span class=p>,</span> <span class=n>ceil</span><span class=p>(</span><span class=mf>0.5</span> <span class=o>*</span> <span class=n>at_least</span><span class=p>)),</span>
+                <span class=n>Normal</span><span class=p>(</span><span class=mi>8</span> <span class=o>*</span> <span class=n>at_least</span><span class=p>,</span> <span class=n>ceil</span><span class=p>(</span><span class=mi>2</span> <span class=o>*</span> <span class=n>at_least</span><span class=p>)),</span>
+            <span class=p>]</span>
+            <span class=k>if</span> <span class=n>at_least</span> <span class=o><</span> <span class=mi>100</span><span class=p>:</span>
+                <span class=n>choices</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>Normal</span><span class=p>(</span><span class=mi>100</span><span class=p>,</span> <span class=mi>10</span><span class=p>))</span>
+            <span class=k>if</span> <span class=n>at_least</span> <span class=o><</span> <span class=mi>1000</span><span class=p>:</span>
+                <span class=n>choices</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>Normal</span><span class=p>(</span><span class=mi>1000</span><span class=p>,</span> <span class=mi>100</span><span class=p>))</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_demands</span><span class=p>(</span><span class=n>AtLeast</span><span class=p>(</span><span class=n>at_least</span><span class=p>,</span> <span class=n>Choice</span><span class=p>(</span><span class=nb>tuple</span><span class=p>(</span><span class=n>choices</span><span class=p>))))</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_routes>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_routes>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_routes</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>routes</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>n_machines_per_product</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>machine_order_offset</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the routes on which the products pass through machines.</span>
+
+<span class=sd>        The routes can either be set directly as a constance, by providing</span>
+<span class=sd>        `routes`. Otherwise, they can be sampled randomly.</span>
+
+<span class=sd>        If you specify `routes`, then this parameter provides a sequence of</span>
+<span class=sd>        sequences: For each product, it specifies the machines through which</span>
+<span class=sd>        the product must pass. No product can pass through the same machine</span>
+<span class=sd>        twice. No machine must be left unused. Each product passes through</span>
+<span class=sd>        at least one machine.</span>
+
+<span class=sd>        If you want to randomly sample the machines, you can provide a</span>
+<span class=sd>        distribution from which the number of machines through which each</span>
+<span class=sd>        product needs to go is drawn via `n_machines_per_product`.</span>
+
+<span class=sd>        Now, in the real world, even if we have different products with</span>
+<span class=sd>        different production steps, the order in which the products pass</span>
+<span class=sd>        through machines is not completely "random". If we randomly sample</span>
+<span class=sd>        machines, then our idea to realize a reasonable order is as follows:</span>
+<span class=sd>        If a product goes through a set of machines `{a, b, c}`, then it tends</span>
+<span class=sd>        to go through the machine with the lower indices first. In some cases,</span>
+<span class=sd>        the order may be different, but generally lower-index machines tend to</span>
+<span class=sd>        come earlier in production cycles. To realize this, once we have the</span>
+<span class=sd>        machines for a product selected, each machine gets base priority</span>
+<span class=sd>        `p = 10*i`, where `i` is the machine index. To this base priority, we</span>
+<span class=sd>        add a random number distributed as `machine_order_offset`. This offset</span>
+<span class=sd>        can thus change the order priority of the machines. The machines are</span>
+<span class=sd>        then used by the product based on the order priority.</span>
+
+<span class=sd>        :param routes: the routes</span>
+<span class=sd>        :param n_machines_per_product: the distribution for machines per</span>
+<span class=sd>            product</span>
+<span class=sd>        :param machine_order_offset: the machine order offset</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Routes already set."</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>routes</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_ROUTES</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_FIXED</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__do_set_routes</span><span class=p>(</span><span class=n>routes</span><span class=p>)</span>
+            <span class=k>return</span>
+
+        <span class=n>n_products</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_products</span><span class=p>()</span>
+        <span class=n>n_machines</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_machines</span><span class=p>()</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>n_products</span> <span class=o>==</span> <span class=mi>1</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>n_machines</span> <span class=o>==</span> <span class=mi>1</span><span class=p>):</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_ROUTES</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_DETERMINISTIC</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__do_set_routes</span><span class=p>([</span><span class=nb>list</span><span class=p>(</span><span class=nb>range</span><span class=p>(</span><span class=n>n_machines</span><span class=p>))]</span> <span class=o>*</span> <span class=n>n_products</span><span class=p>)</span>
+            <span class=k>return</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_ROUTES</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_SAMPLED</span>
+
+        <span class=k>if</span> <span class=n>n_machines_per_product</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>n_machines_per_product</span> <span class=o>=</span> <span class=n>Normal</span><span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=nb>min</span><span class=p>(</span>
+                <span class=mi>3</span><span class=p>,</span> <span class=n>n_machines</span> <span class=o>//</span> <span class=mi>2</span><span class=p>,</span> <span class=p>(</span><span class=mi>3</span> <span class=o>*</span> <span class=n>n_machines</span><span class=p>)</span> <span class=o>//</span> <span class=n>n_products</span><span class=p>)),</span>
+                <span class=n>n_machines</span> <span class=o>//</span> <span class=mi>4</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>n_machines_per_product</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>n_machines_per_product</span><span class=p>,</span> <span class=s2>"n_machines_per_product"</span><span class=p>,</span>
+                             <span class=n>IntDistribution</span><span class=p>)</span>
+        <span class=n>n_machines_per_product</span> <span class=o>=</span> <span class=n>In</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>n_machines</span><span class=p>,</span> <span class=n>n_machines_per_product</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_MACHINES_PER_PRODUCT</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>n_machines_per_product</span><span class=p>)</span>
+        <span class=n>rnd</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Generator</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>()</span>
+        <span class=n>trials</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>_MAX_TRIALS</span>
+        <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>
+            <span class=n>npm</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span>
+                <span class=n>n_machines_per_product</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>)]</span>
+            <span class=n>todo</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>sum</span><span class=p>(</span><span class=n>npm</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>todo</span> <span class=o>></span> <span class=n>n_machines</span><span class=p>:</span>
+                <span class=k>break</span>
+            <span class=n>trials</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=k>if</span> <span class=n>trials</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Failed to sample number of machines."</span><span class=p>)</span>
+
+        <span class=n>new_routes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>[[]</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>)]</span>
+        <span class=n>choose</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>n_choose</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>trials</span> <span class=o>=</span> <span class=n>_MAX_TRIALS</span>
+        <span class=k>while</span> <span class=n>todo</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>trials</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=k>if</span> <span class=n>trials</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Failed to sample machines."</span><span class=p>)</span>
+            <span class=k>for</span> <span class=n>prod</span><span class=p>,</span> <span class=n>machs</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>new_routes</span><span class=p>):</span>
+                <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>machs</span><span class=p>)</span> <span class=o>>=</span> <span class=n>npm</span><span class=p>[</span><span class=n>prod</span><span class=p>]:</span>
+                    <span class=k>continue</span>
+                <span class=k>if</span> <span class=n>n_choose</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=n>choose</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=nb>range</span><span class=p>(</span><span class=n>n_machines</span><span class=p>))</span>
+                    <span class=n>n_choose</span> <span class=o>=</span> <span class=n>n_machines</span>
+                <span class=n>chosen</span> <span class=o>=</span> <span class=n>choose</span><span class=o>.</span><span class=n>pop</span><span class=p>(</span><span class=n>rnd</span><span class=o>.</span><span class=n>integers</span><span class=p>(</span><span class=n>n_choose</span><span class=p>))</span>
+                <span class=n>n_choose</span> <span class=o>-=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>chosen</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>machs</span><span class=p>:</span>
+                    <span class=n>machs</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>chosen</span><span class=p>)</span>
+                    <span class=n>todo</span> <span class=o>-=</span> <span class=mi>1</span>
+
+        <span class=c1># bring some order into the machines</span>
+        <span class=k>if</span> <span class=n>machine_order_offset</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>machine_order_offset</span> <span class=o>=</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=nb>max</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=p>(</span><span class=mi>10</span> <span class=o>*</span> <span class=n>n_machines</span><span class=p>)</span> <span class=o>//</span> <span class=mi>4</span><span class=p>))</span>
+        <span class=k>elif</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>machine_order_offset</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>machine_order_offset</span><span class=p>,</span> <span class=s2>"machine_order_offset"</span><span class=p>,</span>
+                             <span class=n>IntDistribution</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_MACHINE_ORDER_OFFSET</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>machine_order_offset</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>route</span> <span class=ow>in</span> <span class=n>new_routes</span><span class=p>:</span>
+            <span class=n>srx</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>((</span><span class=mi>10</span> <span class=o>*</span> <span class=n>ma</span> <span class=o>+</span> <span class=n>machine_order_offset</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>),</span> <span class=n>ma</span><span class=p>)</span>
+                         <span class=k>for</span> <span class=n>ma</span> <span class=ow>in</span> <span class=n>route</span><span class=p>)</span>
+            <span class=n>route</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+            <span class=n>route</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=k>for</span> <span class=n>x</span> <span class=ow>in</span> <span class=n>srx</span><span class=p>)</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__do_set_routes</span><span class=p>(</span><span class=n>new_routes</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__do_set_routes</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>routes</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the fully realized product routs.</span>
+
+<span class=sd>        :param routes: the routes</span>
+<span class=sd>        """</span>
+        <span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span>
+        <span class=n>n_machines</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_machines</span>
+
+        <span class=n>uroutes</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>tuple</span><span class=p>,</span> <span class=n>routes</span><span class=p>))</span>
+
+        <span class=n>n_routes</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>uroutes</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>n_routes</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>((</span><span class=n>n_products</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span>
+                <span class=n>n_routes</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid number of uroutes </span><span class=si>{</span><span class=n>n_routes</span><span class=si>}</span><span class=s2> "</span>
+                             <span class=sa>f</span><span class=s2>"for </span><span class=si>{</span><span class=n>n_products</span><span class=si>}</span><span class=s2> products."</span><span class=p>)</span>
+        <span class=n>max_machine</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+        <span class=n>used_machines</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=n>all_machines</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=k>for</span> <span class=n>p</span><span class=p>,</span> <span class=n>route</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>uroutes</span><span class=p>):</span>
+            <span class=n>rlen</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>route</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>rlen</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Empty route for product </span><span class=si>{</span><span class=n>p</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>used_machines</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+            <span class=k>for</span> <span class=n>idx</span><span class=p>,</span> <span class=n>mach</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>route</span><span class=p>):</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>mach</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>TypeError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"invalid machine </span><span class=si>{</span><span class=n>mach</span><span class=si>}</span><span class=s2> at route step "</span>
+                                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>idx</span><span class=si>}</span><span class=s2> for product </span><span class=si>{</span><span class=n>p</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>if</span> <span class=p>(</span><span class=n>mach</span> <span class=o><</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>((</span><span class=n>n_machines</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span>
+                        <span class=n>mach</span> <span class=o>>=</span> <span class=n>n_machines</span><span class=p>)):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"invalid machine </span><span class=si>{</span><span class=n>mach</span><span class=si>}</span><span class=s2> at route step "</span>
+                                     <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>idx</span><span class=si>}</span><span class=s2> for product </span><span class=si>{</span><span class=n>p</span><span class=si>}</span><span class=s2> and n_machines="</span>
+                                     <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>n_machines</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=n>used_machines</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>mach</span><span class=p>)</span>
+                <span class=n>max_machine</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>mach</span><span class=p>,</span> <span class=n>max_machine</span><span class=p>)</span>
+            <span class=k>if</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>used_machines</span><span class=p>)</span> <span class=o>!=</span> <span class=n>rlen</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"machine used twice in route </span><span class=si>{</span><span class=n>p</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+            <span class=n>all_machines</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>used_machines</span><span class=p>)</span>
+
+        <span class=n>max_machine</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>all_machines</span><span class=p>)</span> <span class=o>!=</span> <span class=n>max_machine</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Did not use some of the </span><span class=si>{</span><span class=n>max_machine</span><span class=si>}</span><span class=s2> machines"</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>n_machines</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_machines</span><span class=p>(</span><span class=n>max_machine</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_products</span><span class=p>(</span><span class=n>n_routes</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span> <span class=o>=</span> <span class=n>uroutes</span>
+
+<div class=viewcode-block id=InstanceGenerator.routes>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.routes>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>routes</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the routes for the products through the machines.</span>
+
+<span class=sd>        :return: the routes for the products through the machines</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_routes</span><span class=p>()</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_day_time_units>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_day_time_units>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_day_time_units</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>tu</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the distribution of the time units per day.</span>
+
+<span class=sd>        :param tu: the time units per day</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__day_time_unis</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Day time units already set."</span><span class=p>)</span>
+
+        <span class=n>tu</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>8</span><span class=p>,</span> <span class=n>distribution</span><span class=p>(</span><span class=n>tu</span><span class=p>))</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__day_time_unis</span> <span class=o>=</span> <span class=n>tu</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_DAY_TIME_UNIS</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>tu</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.day_time_units>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.day_time_units>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>day_time_units</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>IntDistribution</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the day time units distribution.</span>
+
+<span class=sd>        :return: the day time units distribution</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__day_time_unis</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>gen</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>100</span><span class=p>,</span> <span class=n>Choice</span><span class=p>((</span>
+                <span class=n>Normal</span><span class=p>(</span><span class=mi>60</span> <span class=o>*</span> <span class=mi>60</span> <span class=o>*</span> <span class=mi>8</span><span class=p>,</span> <span class=mi>60</span> <span class=o>*</span> <span class=mi>4</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>60</span> <span class=o>*</span> <span class=mi>60</span> <span class=o>*</span> <span class=mi>24</span><span class=p>,</span> <span class=mi>60</span> <span class=o>*</span> <span class=mi>4</span><span class=p>))))</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_DAY_TIME_UNIS_GEN</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>gen</span><span class=p>)</span>
+            <span class=n>nm</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>gen</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>())</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_day_time_units</span><span class=p>(</span><span class=n>Normal</span><span class=p>(</span><span class=n>nm</span><span class=p>,</span> <span class=n>ceil</span><span class=p>(</span><span class=n>nm</span> <span class=o>/</span> <span class=mi>12</span><span class=p>)))</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__day_time_unis</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_production_time_units>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_production_time_units>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_production_time_units</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>tu</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the distribution of the base time units per production step.</span>
+
+<span class=sd>        :param tu: the time units per day</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__production_time_units</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Production time units already set."</span><span class=p>)</span>
+
+        <span class=n>tu</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>distribution</span><span class=p>(</span><span class=n>tu</span><span class=p>))</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__production_time_units</span> <span class=o>=</span> <span class=n>tu</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_PRODUCTION_TIME_UNITS</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>tu</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.production_time_units>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.production_time_units>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>production_time_units</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>IntDistribution</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the production time units base distribution.</span>
+
+<span class=sd>        :return: the production time units base distribution</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__production_time_units</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>gen</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>60</span><span class=p>,</span> <span class=mi>10</span><span class=p>))</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_PRODUCTION_TIME_UNITS_GEN</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>gen</span><span class=p>)</span>
+            <span class=n>nm</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>gen</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>())</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_production_time_units</span><span class=p>(</span><span class=n>Normal</span><span class=p>(</span><span class=n>nm</span><span class=p>,</span> <span class=n>ceil</span><span class=p>(</span><span class=n>nm</span> <span class=o>/</span> <span class=mi>12</span><span class=p>)))</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__production_time_units</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_product_base_demands>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_product_base_demands>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_product_base_demands</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>base_demands</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>base_demand</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the base unit distributions for the products.</span>
+
+<span class=sd>        :param base_demands: the base demand units per product</span>
+<span class=sd>        :param base_demand: the distribution from which we draw the base</span>
+<span class=sd>            demands</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__product_base_demands</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Cannot set product base demand"</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>base_demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_PRODUCT_BASE_DEMANDS</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_SAMPLED</span>
+            <span class=k>if</span> <span class=n>base_demand</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>base_demand</span> <span class=o>=</span> <span class=n>Choice</span><span class=p>((</span><span class=n>Const</span><span class=p>(</span><span class=mi>1</span><span class=p>),</span> <span class=n>Const</span><span class=p>(</span><span class=mi>10</span><span class=p>),</span> <span class=n>Const</span><span class=p>(</span><span class=mi>30</span><span class=p>)))</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>base_demand</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>base_demand</span><span class=p>)</span>
+            <span class=n>base_demand</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>base_demand</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_PRODUCT_BASE_DEMAND</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>base_demand</span><span class=p>)</span>
+            <span class=n>rnd</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Generator</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>()</span>
+            <span class=n>base_demands</span> <span class=o>=</span> <span class=p>(</span><span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=p>(</span><span class=n>Normal</span><span class=p>(</span><span class=n>base_demand</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>),</span> <span class=mi>1</span><span class=p>)))</span>
+                            <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>n_products</span><span class=p>()))</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_PRODUCT_BASE_DEMANDS</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_FIXED</span>
+
+        <span class=n>base_demands</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>d</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span> <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=n>base_demands</span><span class=p>)</span>
+        <span class=n>n_base_demands</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>base_demands</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_products</span><span class=p>(</span><span class=n>n_base_demands</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>n_base_demands</span> <span class=o>!=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Inconsistent number of product demands"</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__product_base_demands</span> <span class=o>=</span> <span class=n>base_demands</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.product_base_demands>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.product_base_demands>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>product_base_demands</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>IntDistribution</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the product base demand unit.</span>
+
+<span class=sd>        :return: the base demand distributions</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__product_base_demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_product_base_demands</span><span class=p>()</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__product_base_demands</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_customers>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_customers>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_customers</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>customers</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Customer</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>time_offset</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>demands_per_customer</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>products_per_customer</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>customer_size</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>between_order_days</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>between_order_jitter</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>to_deadline_days</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+            <span class=n>to_deadline_jitter</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>IntDistribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> \
+            <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the customers.</span>
+
+<span class=sd>        You can either set the customers directly, by providing `customers`.</span>
+<span class=sd>        Or they can be randomly sampled.</span>
+
+<span class=sd>        :param customers: the customers</span>
+<span class=sd>        :param time_offset: the distribution for the time offset when</span>
+<span class=sd>            customers begin ordering</span>
+<span class=sd>        :param demands_per_customer: an optional distribution of the number of</span>
+<span class=sd>            demands that each customer may issue. In total, there will always</span>
+<span class=sd>            be exactly the number of expected demands. The distributions are</span>
+<span class=sd>            sampled again and again, until that number is reached.</span>
+<span class=sd>        :param products_per_customer: the products to be sampled per customer</span>
+<span class=sd>        :param customer_size: the multiplier of the order amount</span>
+<span class=sd>        :param between_order_days: a distribution for the number of</span>
+<span class=sd>            days between customer orders</span>
+<span class=sd>        :param between_order_jitter: the jitter for the time between orders</span>
+<span class=sd>        :param to_deadline_days: the normal amount of days that a</span>
+<span class=sd>            customer gives as deadline</span>
+<span class=sd>        :param to_deadline_jitter: the jitter for the above</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=n>customers</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_CUSTOMERS</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_FIXED</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__do_set_customers</span><span class=p>(</span><span class=n>customers</span><span class=p>)</span>
+            <span class=k>return</span>
+        <span class=k>if</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__customers</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__demands</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Cannot set customers anymore."</span><span class=p>)</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_CUSTOMERS</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_SAMPLED</span>
+        <span class=n>n_demands</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_demands</span><span class=p>()</span>
+        <span class=n>n_customers</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_customers</span><span class=p>()</span>
+        <span class=n>n_products</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_products</span><span class=p>()</span>
+
+        <span class=c1># Assign the demands to customers</span>
+        <span class=k>if</span> <span class=n>demands_per_customer</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>frac</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=mf>1.0</span><span class=p>,</span> <span class=n>n_demands</span> <span class=o>/</span> <span class=n>n_customers</span><span class=p>)</span>
+            <span class=n>demands_per_customer</span> <span class=o>=</span> <span class=n>Normal</span><span class=p>(</span><span class=n>frac</span><span class=p>,</span> <span class=n>ceil</span><span class=p>(</span><span class=mf>0.3</span> <span class=o>*</span> <span class=n>frac</span><span class=p>))</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>demands_per_customer</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>demands_per_customer</span><span class=p>)</span>
+        <span class=n>demands_per_customer</span> <span class=o>=</span> <span class=n>In</span><span class=p>(</span>
+            <span class=mi>1</span><span class=p>,</span> <span class=n>n_demands</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>demands_per_customer</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_DEMANDS_PER_CUSTOMER</span><span class=p>]</span> <span class=o>=</span>\
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_AGGREGATED</span><span class=si>}{</span><span class=n>demands_per_customer</span><span class=si>!r}</span><span class=s2>"</span>
+
+        <span class=n>prod_base_dem</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span>
+            <span class=n>IntDistribution</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>product_base_demands</span><span class=p>()</span>
+
+        <span class=c1># Assign the products to customers</span>
+        <span class=k>if</span> <span class=n>products_per_customer</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>frac</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=mf>1.0</span><span class=p>,</span> <span class=n>n_products</span> <span class=o>/</span> <span class=n>n_customers</span><span class=p>)</span>
+            <span class=n>products_per_customer</span> <span class=o>=</span> <span class=n>Normal</span><span class=p>(</span><span class=n>frac</span><span class=p>,</span> <span class=n>ceil</span><span class=p>(</span><span class=mf>0.3</span> <span class=o>*</span> <span class=n>frac</span><span class=p>))</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>products_per_customer</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>products_per_customer</span><span class=p>)</span>
+        <span class=n>products_per_customer</span> <span class=o>=</span> <span class=n>In</span><span class=p>(</span>
+            <span class=mi>1</span><span class=p>,</span> <span class=n>n_products</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>products_per_customer</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_PRODUCTS_PER_CUSTOMER</span><span class=p>]</span> <span class=o>=</span>\
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_AGGREGATED</span><span class=si>}{</span><span class=n>products_per_customer</span><span class=si>!r}</span><span class=s2>"</span>
+
+        <span class=n>tod</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>100</span>
+        <span class=k>if</span> <span class=n>time_offset</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>time_offset</span> <span class=o>=</span> <span class=n>Choice</span><span class=p>((</span><span class=n>Const</span><span class=p>(</span><span class=mi>0</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span>
+                <span class=n>tod</span> <span class=o>*</span> <span class=mi>10</span><span class=p>,</span> <span class=n>tod</span> <span class=o>*</span> <span class=mi>10</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=n>tod</span> <span class=o>*</span> <span class=mi>100</span><span class=p>,</span> <span class=n>tod</span> <span class=o>*</span> <span class=mi>100</span><span class=p>)))</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>tod</span> <span class=o>=</span> <span class=mi>1</span>
+            <span class=n>time_offset</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>time_offset</span><span class=p>)</span>
+        <span class=n>time_offset</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>time_offset</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_CUSTOMER_TIME_OFFSET</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>time_offset</span><span class=si>!r}</span><span class=s2>/</span><span class=si>{</span><span class=n>tod</span><span class=si>}</span><span class=s2>"</span>
+
+        <span class=k>if</span> <span class=n>customer_size</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>customer_size</span> <span class=o>=</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mi>5</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>customer_size</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>customer_size</span><span class=p>)</span>
+        <span class=n>customer_size</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>customer_size</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_CUSTOMER_SIZE</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span><span class=n>customer_size</span><span class=p>)</span>
+
+        <span class=c1>#: Set up the required distributions</span>
+        <span class=k>if</span> <span class=n>between_order_days</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>between_order_days</span> <span class=o>=</span> <span class=n>Choice</span><span class=p>((</span>
+                <span class=n>Normal</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mi>1</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>10</span><span class=p>,</span> <span class=mi>2</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>30</span><span class=p>,</span> <span class=mi>2</span><span class=p>)))</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>between_order_days</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span>
+                <span class=n>between_order_days</span><span class=p>)</span>
+        <span class=n>between_order_days</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span>
+            <span class=mi>0</span><span class=p>,</span> <span class=n>between_order_days</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_CUSTOMER_BETWEEN_ORDER_DAYS</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span>
+            <span class=n>between_order_days</span><span class=p>)</span>
+
+        <span class=n>bojd</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>100</span>
+        <span class=k>if</span> <span class=n>between_order_jitter</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>between_order_jitter</span> <span class=o>=</span> <span class=n>Normal</span><span class=p>(</span><span class=n>bojd</span><span class=p>,</span> <span class=n>bojd</span> <span class=o>/</span> <span class=mi>3</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>bojd</span> <span class=o>=</span> <span class=mi>1</span>
+            <span class=n>between_order_jitter</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>between_order_jitter</span><span class=p>)</span>
+        <span class=n>between_order_jitter</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>between_order_jitter</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_BETWEEN_ORDER_JITTER</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>between_order_jitter</span><span class=si>!r}</span><span class=s2>/</span><span class=si>{</span><span class=n>bojd</span><span class=si>}</span><span class=s2>"</span>
+
+        <span class=c1>#: Set up the required distributions</span>
+        <span class=k>if</span> <span class=n>to_deadline_days</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>to_deadline_days</span> <span class=o>=</span> <span class=n>Choice</span><span class=p>((</span>
+                <span class=n>Normal</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mi>1</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>10</span><span class=p>,</span> <span class=mi>2</span><span class=p>),</span> <span class=n>Normal</span><span class=p>(</span><span class=mi>30</span><span class=p>,</span> <span class=mi>2</span><span class=p>)))</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>to_deadline_days</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>to_deadline_days</span><span class=p>)</span>
+        <span class=n>to_deadline_days</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>to_deadline_days</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_CUSTOMER_TO_DEADLINE_DAYS</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span>
+            <span class=n>to_deadline_days</span><span class=p>)</span>
+
+        <span class=n>tdjd</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>100</span>
+        <span class=k>if</span> <span class=n>to_deadline_jitter</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>to_deadline_jitter</span> <span class=o>=</span> <span class=n>Normal</span><span class=p>(</span><span class=n>tdjd</span><span class=p>,</span> <span class=n>tdjd</span> <span class=o>/</span> <span class=mi>3</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>to_deadline_jitter</span> <span class=o>=</span> <span class=n>distribution</span><span class=p>(</span><span class=n>to_deadline_jitter</span><span class=p>)</span>
+            <span class=n>tdjd</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=n>to_deadline_jitter</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>to_deadline_jitter</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_TO_DEADLINE_JITTER</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>to_deadline_jitter</span><span class=si>!r}</span><span class=s2>/</span><span class=si>{</span><span class=n>tdjd</span><span class=si>}</span><span class=s2>"</span>
+
+        <span class=n>rnd</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Generator</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>()</span>
+
+        <span class=n>cust_dem_prod</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>],</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]]]</span> <span class=o>=</span> <span class=p>[</span>
+            <span class=p>([</span><span class=mi>0</span><span class=p>],</span> <span class=p>[])</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_customers</span><span class=p>)]</span>
+
+        <span class=n>outer_trials</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=p>(</span><span class=mi>10</span> <span class=o>+</span> <span class=n>isqrt</span><span class=p>(</span><span class=n>_MAX_TRIALS</span><span class=p>))</span>
+        <span class=n>products</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+
+        <span class=n>success</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=k>while</span> <span class=ow>not</span> <span class=n>success</span><span class=p>:</span>
+            <span class=n>outer_trials</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=k>if</span> <span class=n>outer_trials</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Could not distribute demands to customers."</span><span class=p>)</span>
+
+            <span class=n>inner_trials</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=p>(</span><span class=mi>10</span> <span class=o>+</span> <span class=n>isqrt</span><span class=p>(</span><span class=n>_MAX_TRIALS</span><span class=p>))</span>
+            <span class=k>while</span> <span class=ow>not</span> <span class=n>success</span><span class=p>:</span>
+                <span class=n>inner_trials</span> <span class=o>-=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>inner_trials</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=s2>"Could not distribute demands to customers."</span><span class=p>)</span>
+                <span class=k>for</span> <span class=n>dems</span><span class=p>,</span> <span class=n>_</span> <span class=ow>in</span> <span class=n>cust_dem_prod</span><span class=p>:</span>
+                    <span class=n>dems</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>
+                <span class=n>total</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>n_demands</span>
+                <span class=n>current</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+                <span class=k>while</span> <span class=n>total</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=n>n</span> <span class=o>=</span> <span class=n>In</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>total</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>demands_per_customer</span><span class=p>)</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span>
+                    <span class=n>cust_dem_prod</span><span class=p>[</span><span class=n>current</span><span class=p>][</span><span class=mi>0</span><span class=p>][</span><span class=mi>0</span><span class=p>]</span> <span class=o>+=</span> <span class=n>n</span>
+                    <span class=n>total</span> <span class=o>-=</span> <span class=n>n</span>
+                    <span class=n>current</span> <span class=o>=</span> <span class=p>(</span><span class=n>current</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>%</span> <span class=n>n_customers</span>
+                <span class=n>success</span> <span class=o>=</span> <span class=nb>all</span><span class=p>(</span><span class=n>k</span><span class=p>[</span><span class=mi>0</span><span class=p>][</span><span class=mi>0</span><span class=p>]</span> <span class=o>></span> <span class=mi>0</span> <span class=k>for</span> <span class=n>k</span> <span class=ow>in</span> <span class=n>cust_dem_prod</span><span class=p>)</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=n>success</span><span class=p>:</span>
+                <span class=k>continue</span>
+            <span class=n>rnd</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>cust_dem_prod</span><span class=p>)</span>
+
+            <span class=n>inner_trials</span> <span class=o>=</span> <span class=p>(</span><span class=mi>10</span> <span class=o>+</span> <span class=n>isqrt</span><span class=p>(</span><span class=n>_MAX_TRIALS</span><span class=p>))</span>
+            <span class=n>success</span> <span class=o>=</span> <span class=kc>False</span>
+            <span class=k>while</span> <span class=ow>not</span> <span class=n>success</span><span class=p>:</span>
+                <span class=n>inner_trials</span> <span class=o>-=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>inner_trials</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=s2>"Could not distribute products to customers."</span><span class=p>)</span>
+
+                <span class=k>for</span> <span class=n>_</span><span class=p>,</span> <span class=n>prods</span> <span class=ow>in</span> <span class=n>cust_dem_prod</span><span class=p>:</span>
+                    <span class=n>prods</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+
+                <span class=n>products</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>))</span>
+                <span class=k>for</span> <span class=n>dems</span><span class=p>,</span> <span class=n>prods</span> <span class=ow>in</span> <span class=n>cust_dem_prod</span><span class=p>:</span>
+                    <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>In</span><span class=p>(</span>  <span class=c1># no more products than orders</span>
+                            <span class=mi>1</span><span class=p>,</span> <span class=n>dems</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>products_per_customer</span><span class=p>)</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span>
+                            <span class=n>rnd</span><span class=p>)):</span>
+                        <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>
+                            <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>products</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                                <span class=n>success</span> <span class=o>=</span> <span class=kc>True</span>
+                                <span class=n>products</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>))</span>
+                            <span class=n>prod</span> <span class=o>=</span> <span class=n>products</span><span class=o>.</span><span class=n>pop</span><span class=p>(</span><span class=n>rnd</span><span class=o>.</span><span class=n>integers</span><span class=p>(</span>
+                                <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>products</span><span class=p>)))</span>
+                            <span class=k>if</span> <span class=n>prod</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>prods</span><span class=p>:</span>
+                                <span class=n>prods</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>prod</span><span class=p>)</span>
+                                <span class=k>break</span>
+
+        <span class=c1># At this stage, we have created the customers.</span>
+        <span class=c1># Each customer will order from a set of products.</span>
+        <span class=c1># Each customer has a number of demands.</span>
+        <span class=n>rnd</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>cust_dem_prod</span><span class=p>)</span>
+        <span class=n>output</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Customer</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>dtu_dist</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>day_time_units</span><span class=p>()</span>
+        <span class=k>for</span> <span class=n>cust_id</span><span class=p>,</span> <span class=n>cust_data</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>cust_dem_prod</span><span class=p>):</span>
+            <span class=n>cust_demands</span> <span class=o>=</span> <span class=n>cust_data</span><span class=p>[</span><span class=mi>0</span><span class=p>][</span><span class=mi>0</span><span class=p>]</span>
+            <span class=n>cust_products</span> <span class=o>=</span> <span class=n>cust_data</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span>
+            <span class=n>rnd</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>cust_products</span><span class=p>)</span>
+            <span class=n>cust_prd_amount</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+            <span class=k>for</span> <span class=n>product</span> <span class=ow>in</span> <span class=n>cust_products</span><span class=p>:</span>
+                <span class=n>base_amount</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>Mul</span><span class=p>((</span>
+                    <span class=n>customer_size</span><span class=p>,</span> <span class=n>prod_base_dem</span><span class=p>[</span><span class=n>product</span><span class=p>])))</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span>
+                <span class=n>cust_prd_amount</span><span class=o>.</span><span class=n>append</span><span class=p>((</span><span class=n>product</span><span class=p>,</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>Normal</span><span class=p>(</span>
+                    <span class=n>base_amount</span><span class=p>,</span> <span class=n>base_amount</span> <span class=o>/</span> <span class=mi>4</span><span class=p>))))</span>
+
+            <span class=n>use_dtu</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>dtu_dist</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span>
+            <span class=n>bod_mean</span> <span class=o>=</span> <span class=n>use_dtu</span> <span class=o>*</span> <span class=n>between_order_days</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span>
+            <span class=n>bod_sd</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=p>(</span>
+                <span class=n>use_dtu</span> <span class=o>*</span> <span class=n>between_order_jitter</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span> <span class=o>//</span> <span class=n>bojd</span><span class=p>))</span>
+            <span class=n>cust_beto</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span>
+                <span class=mi>0</span><span class=p>,</span> <span class=n>Normal</span><span class=p>(</span><span class=n>bod_mean</span><span class=p>,</span> <span class=n>bod_sd</span><span class=p>))</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+            <span class=n>tld_mean</span> <span class=o>=</span> <span class=n>use_dtu</span> <span class=o>*</span> <span class=n>to_deadline_days</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span>
+            <span class=n>tld_sd</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span>
+                <span class=mi>1</span><span class=p>,</span> <span class=p>(</span><span class=n>use_dtu</span> <span class=o>*</span> <span class=n>to_deadline_jitter</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>))</span> <span class=o>//</span> <span class=n>tdjd</span><span class=p>)</span>
+            <span class=n>cust_tdl</span><span class=p>:</span> <span class=n>IntDistribution</span> <span class=o>=</span> <span class=n>AtLeast</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>Normal</span><span class=p>(</span>
+                <span class=n>tld_mean</span><span class=p>,</span> <span class=n>tld_sd</span><span class=p>))</span><span class=o>.</span><span class=n>simplify</span><span class=p>()</span>
+            <span class=n>output</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>Customer</span><span class=p>(</span><span class=n>cust_id</span><span class=p>,</span> <span class=n>cust_demands</span><span class=p>,</span> <span class=p>(</span>
+                <span class=n>use_dtu</span> <span class=o>*</span> <span class=n>time_offset</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>))</span> <span class=o>//</span> <span class=n>tod</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>(</span>
+                <span class=n>cust_prd_amount</span><span class=p>),</span> <span class=n>cust_beto</span><span class=p>,</span> <span class=n>cust_tdl</span><span class=p>))</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__do_set_customers</span><span class=p>(</span><span class=n>output</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__do_set_customers</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>customers</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Customer</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the customers.</span>
+
+<span class=sd>        :param customers: the customers</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__customers</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Customers already set."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__demands</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Cannot set customers after demands are set."</span><span class=p>)</span>
+
+        <span class=n>customers</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>customers</span><span class=p>)</span>
+        <span class=n>n_customers</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>customers</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>n_customers</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Number of customers invalid."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_customers</span><span class=p>(</span><span class=n>n_customers</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span> <span class=o>!=</span> <span class=n>n_customers</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Cannot set </span><span class=si>{</span><span class=n>n_customers</span><span class=si>}</span><span class=s2> customers, "</span>
+                             <span class=sa>f</span><span class=s2>"must use </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>cust</span> <span class=ow>in</span> <span class=n>customers</span><span class=p>:</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>cust</span><span class=p>,</span> <span class=n>Customer</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>cust</span><span class=p>,</span> <span class=s2>"customer"</span><span class=p>,</span> <span class=n>Customer</span><span class=p>)</span>
+        <span class=n>all_cust</span> <span class=o>=</span> <span class=nb>set</span><span class=p>(</span><span class=n>customers</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>all_cust</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_customers</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Customer appears twice?"</span><span class=p>)</span>
+
+        <span class=n>prods</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=n>custs</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=n>n_demands</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>for</span> <span class=n>cust</span> <span class=ow>in</span> <span class=n>customers</span><span class=p>:</span>
+            <span class=n>prods</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=n>itemgetter</span><span class=p>(</span><span class=mi>0</span><span class=p>),</span> <span class=n>cust</span><span class=o>.</span><span class=n>demands_products</span><span class=p>))</span>
+            <span class=n>custs</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>cust</span><span class=o>.</span><span class=n>id</span><span class=p>)</span>
+            <span class=n>n_demands</span> <span class=o>+=</span> <span class=n>cust</span><span class=o>.</span><span class=n>n_demands</span>
+
+        <span class=k>if</span> <span class=n>n_customers</span> <span class=o>!=</span> <span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=n>custs</span><span class=p>)</span> <span class=o>-</span> <span class=nb>min</span><span class=p>(</span><span class=n>custs</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Missing customers?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_demands</span><span class=p>(</span><span class=n>n_demands</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>n_demands</span> <span class=o>!=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Inconsistent number of demands."</span><span class=p>)</span>
+
+        <span class=n>n_products</span> <span class=o>=</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>prods</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>n_products</span> <span class=o>!=</span> <span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=n>prods</span><span class=p>)</span> <span class=o>-</span> <span class=nb>min</span><span class=p>(</span><span class=n>prods</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Missing products?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_products</span><span class=p>(</span><span class=n>n_products</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Inconsistent number of products."</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__customers</span> <span class=o>=</span> <span class=n>customers</span>
+
+<div class=viewcode-block id=InstanceGenerator.customers>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.customers>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>customers</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Customer</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the customer settings.</span>
+
+<span class=sd>        :return: the customer settings</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__customers</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_customers</span><span class=p>()</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__customers</span></div>
+
+
+<div class=viewcode-block id=InstanceGenerator.set_demands>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.set_demands>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_demands</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>demands</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Demand</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the demands.</span>
+
+<span class=sd>        You can either set the demands directly, by providing `demands`.</span>
+<span class=sd>        Or they can be randomly sampled.</span>
+
+<span class=sd>        :param demands: the demands</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=n>demands</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__infos</span><span class=p>[</span><span class=n>INFO_DEMANDS</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_FIXED</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__do_set_demands</span><span class=p>(</span><span class=n>demands</span><span class=p>)</span>
+            <span class=k>return</span>
+
+        <span class=n>rnd</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Generator</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__rnd</span><span class=p>()</span>
+        <span class=n>customers</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Customer</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>customers</span><span class=p>()</span>
+
+        <span class=c1>#: Now we can sample the customer orders and their associated</span>
+        <span class=c1>#: time windows.</span>
+        <span class=n>orders</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=k>for</span> <span class=n>customer</span> <span class=ow>in</span> <span class=n>customers</span><span class=p>:</span>
+            <span class=n>n_demands</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>customer</span><span class=o>.</span><span class=n>n_demands</span>
+            <span class=n>prod_dist</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=n>IntDistribution</span><span class=p>]</span> <span class=o>=</span> <span class=p>{</span>
+                <span class=n>xxx</span><span class=p>[</span><span class=mi>0</span><span class=p>]:</span> <span class=n>xxx</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=k>for</span> <span class=n>xxx</span> <span class=ow>in</span> <span class=n>customer</span><span class=o>.</span><span class=n>demands_products</span><span class=p>}</span>
+            <span class=n>products</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>prod_dist</span><span class=o>.</span><span class=n>keys</span><span class=p>())</span>
+            <span class=n>cust_orders</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[[</span><span class=mi>0</span><span class=p>]</span> <span class=o>*</span> <span class=mi>6</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_demands</span><span class=p>)]</span>
+            <span class=n>prod_src</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>list</span><span class=p>(</span><span class=n>products</span><span class=p>)</span>
+
+            <span class=k>for</span> <span class=n>order</span> <span class=ow>in</span> <span class=n>cust_orders</span><span class=p>:</span>
+                <span class=n>psl</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>prod_src</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>psl</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=n>prod_src</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>products</span><span class=p>)</span>
+                    <span class=n>psl</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>prod_src</span><span class=p>)</span>
+                <span class=n>order</span><span class=p>[</span><span class=n>DEMAND_PRODUCT</span><span class=p>]</span> <span class=o>=</span> <span class=n>prod_src</span><span class=o>.</span><span class=n>pop</span><span class=p>(</span><span class=n>rnd</span><span class=o>.</span><span class=n>integers</span><span class=p>(</span><span class=n>psl</span><span class=p>))</span>
+                <span class=n>order</span><span class=p>[</span><span class=n>DEMAND_CUSTOMER</span><span class=p>]</span> <span class=o>=</span> <span class=n>customer</span><span class=o>.</span><span class=n>id</span>
+            <span class=n>rnd</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>cust_orders</span><span class=p>)</span>
+
+            <span class=n>time</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>customer</span><span class=o>.</span><span class=n>time_offset</span>
+            <span class=k>for</span> <span class=n>order</span> <span class=ow>in</span> <span class=n>cust_orders</span><span class=p>:</span>
+                <span class=n>use_prod</span> <span class=o>=</span> <span class=n>order</span><span class=p>[</span><span class=n>DEMAND_PRODUCT</span><span class=p>]</span>
+                <span class=n>order</span><span class=p>[</span><span class=n>DEMAND_AMOUNT</span><span class=p>]</span> <span class=o>=</span> <span class=n>prod_dist</span><span class=p>[</span><span class=n>use_prod</span><span class=p>]</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span>
+                <span class=n>time</span> <span class=o>+=</span> <span class=n>customer</span><span class=o>.</span><span class=n>between_order_times</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>)</span>
+                <span class=n>order</span><span class=p>[</span><span class=n>DEMAND_TIME</span><span class=p>]</span> <span class=o>=</span> <span class=n>time</span>
+                <span class=n>order</span><span class=p>[</span><span class=n>DEMAND_DEADLINE</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span>
+                    <span class=n>time</span> <span class=o>+</span> <span class=n>customer</span><span class=o>.</span><span class=n>until_deadline</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>rnd</span><span class=p>))</span>
+            <span class=n>orders</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>cust_orders</span><span class=p>)</span>
+
+        <span class=c1># Now we got all the orders</span>
+        <span class=n>rnd</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>orders</span><span class=p>)</span>
+        <span class=n>orders</span><span class=o>.</span><span class=n>sort</span><span class=p>(</span><span class=n>key</span><span class=o>=</span><span class=n>itemgetter</span><span class=p>(</span><span class=n>DEMAND_TIME</span><span class=p>))</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__do_set_demands</span><span class=p>(</span><span class=n>Demand</span><span class=p>(</span>
+            <span class=n>release_time</span><span class=o>=</span><span class=n>order</span><span class=p>[</span><span class=n>DEMAND_TIME</span><span class=p>],</span>
+            <span class=n>deadline</span><span class=o>=</span><span class=n>order</span><span class=p>[</span><span class=n>DEMAND_DEADLINE</span><span class=p>],</span>
+            <span class=n>demand_id</span><span class=o>=</span><span class=n>did</span><span class=p>,</span>
+            <span class=n>customer_id</span><span class=o>=</span><span class=n>order</span><span class=p>[</span><span class=n>DEMAND_CUSTOMER</span><span class=p>],</span>
+            <span class=n>product_id</span><span class=o>=</span><span class=n>order</span><span class=p>[</span><span class=n>DEMAND_PRODUCT</span><span class=p>],</span>
+            <span class=n>amount</span><span class=o>=</span><span class=n>order</span><span class=p>[</span><span class=n>DEMAND_AMOUNT</span><span class=p>])</span> <span class=k>for</span> <span class=n>did</span><span class=p>,</span> <span class=n>order</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>orders</span><span class=p>))</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__do_set_demands</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>demands</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Demand</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the demands.</span>
+
+<span class=sd>        :param demands: the demands</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__demands</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Demands already set."</span><span class=p>)</span>
+
+        <span class=n>demands</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>demands</span><span class=p>)</span>
+        <span class=n>n_demands</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>demands</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>n_demands</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Number of demands invalid."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_demands</span><span class=p>(</span><span class=n>n_demands</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span> <span class=o>!=</span> <span class=n>n_demands</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Cannot set </span><span class=si>{</span><span class=n>n_demands</span><span class=si>}</span><span class=s2> demands, "</span>
+                             <span class=sa>f</span><span class=s2>"must use </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>__n_demands</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=n>demands</span><span class=p>:</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>d</span><span class=p>,</span> <span class=n>Demand</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>d</span><span class=p>,</span> <span class=s2>"demand"</span><span class=p>,</span> <span class=n>Demand</span><span class=p>)</span>
+        <span class=n>alld</span> <span class=o>=</span> <span class=nb>set</span><span class=p>(</span><span class=n>demands</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>alld</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_demands</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Demand appears twice?"</span><span class=p>)</span>
+
+        <span class=n>prods</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=n>custs</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=k>for</span> <span class=n>demand</span> <span class=ow>in</span> <span class=n>demands</span><span class=p>:</span>
+            <span class=n>prods</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>demand</span><span class=o>.</span><span class=n>product_id</span><span class=p>)</span>
+            <span class=n>custs</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>demand</span><span class=o>.</span><span class=n>customer_id</span><span class=p>)</span>
+
+        <span class=n>n_customers</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>custs</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=n>custs</span><span class=p>)</span> <span class=o>-</span> <span class=nb>min</span><span class=p>(</span><span class=n>custs</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_customers</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Missing customers?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_customers</span><span class=p>(</span><span class=n>n_customers</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>n_customers</span> <span class=o>!=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_customers</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Invalid number of customers!"</span><span class=p>)</span>
+
+        <span class=n>n_products</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>prods</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=n>prods</span><span class=p>)</span> <span class=o>-</span> <span class=nb>min</span><span class=p>(</span><span class=n>prods</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Missing products?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_n_products</span><span class=p>(</span><span class=n>n_products</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>n_products</span> <span class=o>!=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__n_products</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Invalid number of products!"</span><span class=p>)</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__demands</span> <span class=o>=</span> <span class=n>demands</span>
+
+<div class=viewcode-block id=InstanceGenerator.demands>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.generator.InstanceGenerator.demands>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>demands</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the demands of the scenario.</span>
+
+<span class=sd>        :return: the demands</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__demands</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>set_demands</span><span class=p>()</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>__demands</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.70 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.generator</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>
