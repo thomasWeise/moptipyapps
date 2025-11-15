@@ -49,18 +49,18 @@ These times are cyclic, meaning that at time step 60 to 79, it will again need
 10 time units, and so on.
 Of course, production times are only specified for machines that a product is
 actually routed through.
->>> m0_p0 = [10, 20, 11, 40,  8, 60]
->>> m0_p1 = [12, 20,  7, 40, 11, 70]
+>>> m0_p0 = [10.0, 20.0, 11.0, 40.0,  8.0, 60.0]
+>>> m0_p1 = [12.0, 20.0,  7.0, 40.0, 11.0, 70.0]
 >>> m0_p2 = []
 >>> m1_p0 = []
->>> m1_p1 = [20, 50, 30, 120,  7, 200]
->>> m1_p2 = [21, 50, 29, 130,  8, 190]
->>> m2_p0 = [ 8, 20,  9, 60]
->>> m2_p1 = [10, 90]
->>> m2_p2 = [12, 70,  30, 120]
->>> m3_p0 = [70, 200,  3, 220]
->>> m3_p1 = [60, 220,  5, 260]
->>> m3_p2 = [30, 210, 10, 300]
+>>> m1_p1 = [20.0, 50.0, 30.0, 120.0,  7.0, 200.0]
+>>> m1_p2 = [21.0, 50.0, 29.0, 130.0,  8.0, 190.0]
+>>> m2_p0 = [ 8.0, 20.0,  9.0, 60.0]
+>>> m2_p1 = [10.0, 90.0]
+>>> m2_p2 = [12.0, 70.0,  30.0, 120.0]
+>>> m3_p0 = [70.0, 200.0,  3.0, 220.0]
+>>> m3_p1 = [60.0, 220.0,  5.0, 260.0]
+>>> m3_p2 = [30.0, 210.0, 10.0, 300.0]
 >>> machine_product_unit_times = [[m0_p0, m0_p1, m0_p2],
 ...                               [m1_p0, m1_p1, m1_p2],
 ...                               [m2_p0, m2_p1, m2_p2],
@@ -93,24 +93,27 @@ From all of this data, we can create the instance.
 ((0, 3, 2), (0, 2, 1, 3), (1, 2, 3))
 
 >>> instance.demands
-(Demand(release_time=1240, deadline=3000, demand_id=0, customer_id=0, \
-product_id=1, amount=20), Demand(release_time=2300, deadline=4000, \
+(Demand(arrival=1240.0, deadline=3000.0, demand_id=0, customer_id=0, \
+product_id=1, amount=20), Demand(arrival=2300.0, deadline=4000.0, \
 demand_id=1, customer_id=1, product_id=0, amount=10), \
-Demand(release_time=4234, deadline=27080, demand_id=5, customer_id=3, \
-product_id=0, amount=19), Demand(release_time=5410, deadline=16720, \
+Demand(arrival=4234.0, deadline=27080.0, demand_id=5, customer_id=3, \
+product_id=0, amount=19), Demand(arrival=5410.0, deadline=16720.0, \
 demand_id=4, customer_id=4, product_id=2, amount=23), \
-Demand(release_time=7300, deadline=9000, demand_id=3, customer_id=3, \
-product_id=1, amount=12), Demand(release_time=8300, deadline=11000, \
+Demand(arrival=7300.0, deadline=9000.0, demand_id=3, customer_id=3, \
+product_id=1, amount=12), Demand(arrival=8300.0, deadline=11000.0, \
 demand_id=2, customer_id=2, product_id=2, amount=7))
 
 >>> instance.warehous_at_t0
 (10, 0, 6)
 
 >>> instance.machine_product_unit_times
-(((10, 20, 11, 40, 8, 60), (12, 20, 7, 40, 11, 70), ()),\
- ((), (20, 50, 30, 120, 7, 200), (21, 50, 29, 130, 8, 190)),\
- ((8, 20, 9, 60), (10, 90), (12, 70, 30, 120)),\
- ((70, 200, 3, 220), (60, 220, 5, 260), (30, 210, 10, 300)))
+((array([10., 20., 11., 40.,  8., 60.]), \
+array([12., 20.,  7., 40., 11., 70.]), array([], dtype=float64)), (\
+array([], dtype=float64), array([ 20.,  50.,  30., 120.,   7., 200.]), \
+array([ 21.,  50.,  29., 130.,   8., 190.])), (array([ 8., 20.,  9., 60.]), \
+array([10., 90.]), array([ 12.,  70.,  30., 120.])), (\
+array([ 70., 200.,   3., 220.]), array([ 60., 220.,   5., 260.]), array(\
+[ 30., 210.,  10., 300.])))
 
 >>> dict(instance.infos)
 {'source': 'manually created', 'creation_date': '2025-11-09'}
@@ -140,7 +143,18 @@ True
 True
 >>> i2.warehous_at_t0 == instance.warehous_at_t0
 True
->>> i2.machine_product_unit_times == instance.machine_product_unit_times
+>>> eq: bool = True
+>>> for i in range(i2.n_machines):
+...     ma1 = i2.machine_product_unit_times[i]
+...     ma2 = instance.machine_product_unit_times[i]
+...     for j in range(i2.n_products):
+...         pr1 = ma1[j]
+...         pr2 = ma2[j]
+...         if not np.array_equal(pr1, pr2):
+...             eq = False
+>>> eq
+True
+
 True
 >>> i2.infos == instance.infos
 True
@@ -148,6 +162,7 @@ True
 
 from dataclasses import dataclass
 from itertools import batched
+from math import isfinite
 from string import ascii_letters, digits
 from typing import (
     Callable,
@@ -160,6 +175,7 @@ from typing import (
 )
 
 import numba  # type: ignore
+import numpy as np
 from moptipy.api.component import Component
 from moptipy.utils.logger import (
     COMMENT_START,
@@ -168,13 +184,14 @@ from moptipy.utils.logger import (
 from moptipy.utils.strings import sanitize_name
 from pycommons.ds.immutable_map import immutable_mapping
 from pycommons.io.csv import CSV_SEPARATOR
+from pycommons.math.int_math import try_int
 from pycommons.types import check_int_range, check_to_int_range, type_error
 
 #: The maximum for the number of machines, products, or customers.
-_MAX_DIM: Final[int] = 1_000_000
+_MAX_DIM: Final[int] = 1_000_000_000
 
 #: No value bigger than this is permitted in any tuple anywhere.
-_INNER_MAX_DIM: Final[int] = min(366 * 24 * 3600 * _MAX_DIM, 2 ** 31 - 1)
+_INNER_MAX_DIM: Final[int] = 2_147_483_647
 
 #: the index of the demand ID
 DEMAND_ID: Final[int] = 0
@@ -185,19 +202,30 @@ DEMAND_PRODUCT: Final[int] = 2
 #: the index of the demanded amount
 DEMAND_AMOUNT: Final[int] = 3
 #: the index of the demand release time
-DEMAND_TIME: Final[int] = 4
+DEMAND_ARRIVAL: Final[int] = 4
 #: the index of the demand deadline
 DEMAND_DEADLINE: Final[int] = 5
 
 
 @dataclass(order=True, frozen=True)
-class Demand(Iterable[int]):
-    """The record for demands."""
+class Demand(Iterable[int | float]):
+    """
+    The record for demands.
 
-    #: the release time, i.e., when the demand enters the system
-    release_time: int
+    >>> Demand(arrival=0.6, deadline=0.8, demand_id=1,
+    ...        customer_id=2, product_id=6, amount=12)
+    Demand(arrival=0.6, deadline=0.8, demand_id=1, customer_id=2,\
+ product_id=6, amount=12)
+    >>> Demand(arrival=16, deadline=28, demand_id=1,
+    ...        customer_id=2, product_id=6, amount=12)
+    Demand(arrival=16.0, deadline=28.0, demand_id=1, customer_id=2,\
+ product_id=6, amount=12)
+    """
+
+    #: the arrival time, i.e., when the demand enters the system
+    arrival: float
     #: the deadline, i.e., when the customer expects the result
-    deadline: int
+    deadline: float
     #: the ID of the demand
     demand_id: int
     #: the customer ID
@@ -207,21 +235,75 @@ class Demand(Iterable[int]):
     #: the amount
     amount: int
 
-    def __post_init__(self) -> None:
-        """Perform some basic sanity checks."""
-        check_int_range(self.release_time, "release_time", 0, _INNER_MAX_DIM)
-        check_int_range(self.deadline, "deadline", 0, _INNER_MAX_DIM)
-        check_int_range(self.demand_id, "demand_id", 0, _MAX_DIM)
-        check_int_range(self.customer_id, "customer_id", 0, _MAX_DIM)
-        check_int_range(self.product_id, "product_id", 0, _MAX_DIM)
-        check_int_range(self.amount, "amount", 0, _MAX_DIM)
+    def __init__(self, arrival: int | float,
+                 deadline: int | float, demand_id: int,
+                 customer_id: int, product_id: int, amount: int) -> None:
+        """
+        Initialize the record.
 
-    def __getitem__(self, item: int) -> int:
+        :param arrival: the arrival time
+        :param deadline: the deadline
+        :param demand_id: the demand id
+        :param customer_id: the customer id
+        :param product_id: the product id
+        :param amount: the amount
+        """
+        if isinstance(arrival, int):
+            t: float = float(arrival)
+            if t != arrival:
+                raise ValueError(f"invalid arrival time {arrival}")
+            arrival = t
+        if not isinstance(arrival, float):
+            raise type_error(arrival, "arrival", float)
+        if not (isfinite(arrival) and (
+                0 < arrival < _INNER_MAX_DIM)):
+            raise ValueError(f"invalid arrival={arrival}")
+
+        if isinstance(deadline, int):
+            t = float(deadline)
+            if t != deadline:
+                raise ValueError(f"invalid deadline time {deadline}")
+            deadline = t
+        if not isinstance(deadline, float):
+            raise type_error(deadline, "deadline", float)
+        if not (isfinite(deadline) and (0 < deadline < _INNER_MAX_DIM)):
+            raise ValueError(f"invalid deadline={deadline}")
+
+        if deadline < arrival:
+            raise ValueError(
+                f"arrival={arrival} and deadline={deadline}")
+        object.__setattr__(self, "arrival", arrival)
+        object.__setattr__(self, "deadline", deadline)
+        object.__setattr__(self, "demand_id", check_int_range(
+            demand_id, "demand_id", 0, _MAX_DIM))
+        object.__setattr__(self, "customer_id", check_int_range(
+            customer_id, "customer_id", 0, _MAX_DIM))
+        object.__setattr__(self, "product_id", check_int_range(
+            product_id, "product_id", 0, _MAX_DIM))
+        object.__setattr__(self, "amount", check_int_range(
+            amount, "amount", 1, _MAX_DIM))
+
+    def __getitem__(self, item: int) -> int | float:
         """
         Access an element of this demand via an index.
 
         :param item: the index
         :return: the demand value at that index
+
+        >>> d = Demand(arrival=16, deadline=28, demand_id=1,
+        ...        customer_id=2, product_id=6, amount=12)
+        >>> d[0]
+        1
+        >>> d[1]
+        2
+        >>> d[2]
+        6
+        >>> d[3]
+        12
+        >>> d[4]
+        16
+        >>> d[5]
+        28
         """
         if item == DEMAND_ID:
             return self.demand_id
@@ -231,44 +313,54 @@ class Demand(Iterable[int]):
             return self.product_id
         if item == DEMAND_AMOUNT:
             return self.amount
-        if item == DEMAND_TIME:
-            return self.release_time
+        if item == DEMAND_ARRIVAL:
+            return try_int(self.arrival)
         if item == DEMAND_DEADLINE:
-            return self.deadline
+            return try_int(self.deadline)
         raise IndexError(
             f"index {item} out of bounds [0,{DEMAND_DEADLINE}].")
 
-    def __iter__(self) -> Iterator[int]:
+    def __iter__(self) -> Iterator[int | float]:
         """
         Iterate over the values in this demand.
 
         :return: the demand iterable
+
+        >>> d = Demand(arrival=16, deadline=28, demand_id=1,
+        ...        customer_id=2, product_id=6, amount=12)
+        >>> list(d)
+        [1, 2, 6, 12, 16, 28]
         """
         yield self.demand_id  # DEMAND_ID
         yield self.customer_id  # DEMAND_CUSTOMER
         yield self.product_id  # DEMAND_PRODUCT:
         yield self.amount  # DEMAND_AMOUNT:
-        yield self.release_time  # DEMAND_TIME
-        yield self.deadline  # DEMAND_DEADLINE
+        yield try_int(self.arrival)  # DEMAND_ARRIVAL
+        yield try_int(self.deadline)  # DEMAND_DEADLINE
 
     def __len__(self) -> int:
         """
         Get the length of the demand record.
 
         :returns `6`: always
+
+        >>> len(Demand(arrival=16, deadline=28, demand_id=1,
+        ...        customer_id=2, product_id=6, amount=12))
+        6
         """
         return 6
 
 
-def __to_tuple(source: Iterable[int],
-               pool: dict,
-               empty_ok: bool = False) -> tuple[int, ...]:
+def __to_tuple(source: Iterable[int | float],
+               pool: dict, empty_ok: bool = False,
+               type_var: type = int) -> tuple[int, ...]:
     """
     Convert an iterable of type integer to a tuple.
 
     :param source: the data source
-    :param empty_ok: are empty tuples OK?
     :param pool: the tuple pool
+    :param empty_ok: are empty tuples OK?
+    :param type_var: the type variable
     :return: the tuple
 
     >>> ppl = {}
@@ -284,24 +376,95 @@ def __to_tuple(source: Iterable[int],
     (1, 2, 3)
     >>> k1 is k2
     True
+
+    >>> k3 = __to_tuple([3.4, 2.3, 3.1], ppl, type_var=float)
+    >>> print(k3)
+    (3.4, 2.3, 3.1)
+    >>> k1 is k3
+    False
+
+    >>> k4 = __to_tuple([3.4, 2.3, 3.1], ppl, type_var=float)
+    >>> print(k4)
+    (3.4, 2.3, 3.1)
+    >>> k3 is k4
+    True
+
+    >>> try:
+    ...     __to_tuple([], ppl)
+    ... except Exception as e:
+    ...     print(e)
+    row has length 0.
+
+    >>> __to_tuple([], ppl, empty_ok=True)
+    ()
+
+    >>> try:
+    ...     __to_tuple([1, 2.0], ppl)
+    ... except Exception as e:
+    ...     print(e)
+    row[1] should be an instance of int but is float, namely 2.0.
+
+    >>> try:
+    ...     __to_tuple([1.1, 2.0, 4, 3.4], ppl, type_var=float)
+    ... except Exception as e:
+    ...     print(e)
+    row[2] should be an instance of float but is int, namely 4.
     """
     use_row = source if isinstance(source, tuple) else tuple(source)
     if (tuple.__len__(use_row) <= 0) and (not empty_ok):
         raise ValueError("row has length 0.")
     for j, v in enumerate(use_row):
-        if not isinstance(v, int):
-            raise type_error(v, f"row[{j}]", int)
-        if not 0 <= v <= _INNER_MAX_DIM:
+        if not isinstance(v, type_var):
+            raise type_error(v, f"row[{j}]", type_var)
+        if not (isfinite(v) and (0 <= v <= _INNER_MAX_DIM)):  # type: ignore
             raise ValueError(f"row[{j}]={v} not in 0..{_INNER_MAX_DIM}")
-    if use_row in pool:
-        return pool[use_row]
-    pool[use_row] = use_row
+
+    key: Final[str] = repr(use_row)
+    if key in pool:
+        return pool[key]
+    pool[key] = use_row
     return use_row
 
 
+def __to_npfloats(source: Iterable[int | float],  # pylint: disable=W1113
+                  pool: dict, empty_ok: bool = False,
+                  *_) -> np.ndarray:  # pylint: disable=W1113
+    """
+    Convert to numpy floats.
+
+    :param source: the source data
+    :param pool: the pool
+    :param empty_ok: are empty arrays OK?
+    :return: the arrays
+
+    >>> ppl = {}
+    >>> a = __to_npfloats([3.4, 2.3, 3.1], ppl)
+    >>> a
+    array([3.4, 2.3, 3.1])
+    >>> b = __to_npfloats([3.4, 2.3, 3.1], ppl)
+    >>> b is a
+    True
+
+    >>> c = __to_npfloats([], ppl, empty_ok=True)
+    >>> c
+    array([], dtype=float64)
+
+    >>> d = __to_npfloats([], ppl, empty_ok=True)
+    >>> d is c
+    True
+    """
+    res: np.ndarray = np.array(__to_tuple(
+        source, pool, empty_ok, float), np.float64)
+    key: Final[str] = repr(res)
+    if key in pool:
+        return pool[key]
+    pool[key] = res
+    return res
+
+
 def __to_nested_tuples(source: Iterable,
-                       pool: dict,
-                       empty_ok: bool = False,
+                       pool: dict, empty_ok: bool = False,
+                       type_var: type = int,
                        inner: Callable = __to_tuple) -> tuple:
     """
     Turn nested iterables of ints into nested tuples.
@@ -309,6 +472,7 @@ def __to_nested_tuples(source: Iterable,
     :param source: the source list
     :param pool: the tuple pool
     :param empty_ok: are empty tuples OK?
+    :param type_var: the type variable
     :param inner: the inner function
     :return: the tuple or array
 
@@ -334,18 +498,17 @@ def __to_nested_tuples(source: Iterable,
 
     >>> __to_nested_tuples([(), {}, []], ppl, True)
     ()
+
+    >>> __to_nested_tuples([(1.0, 2.4), (1.0, 2.2)], ppl, True, float)
+    ((1.0, 2.4), (1.0, 2.2))
     """
     if not isinstance(source, Iterable):
         raise type_error(source, "source", Iterable)
-    dest: list[tuple] = []
+    dest: list = []
     ins: int = 0
-    for i, row in enumerate(source):
-        use_row: tuple = inner(row, pool, empty_ok)
+    for row in source:
+        use_row = inner(row, pool, empty_ok, type_var)
         ins += len(use_row)
-        for j in range(i):
-            if dest[j] == use_row:
-                use_row = dest[j]
-                break
         dest.append(use_row)
 
     if (ins <= 0) and empty_ok:  # if all inner tuples are empty,
@@ -355,24 +518,26 @@ def __to_nested_tuples(source: Iterable,
     if (n_rows <= 0) and (not empty_ok):
         raise ValueError("Got empty set of rows!")
 
-    ret_val: tuple[tuple, ...] = tuple(dest)
-    ret_val = cast("tuple[tuple, ...]", source) if source == ret_val \
-        else ret_val
-    if ret_val in pool:
-        return pool[ret_val]
-    pool[ret_val] = ret_val
+    ret_val: tuple = tuple(dest)
+    key: Final[str] = repr(ret_val)
+    if key in pool:
+        return pool[key]
+    pool[key] = ret_val
     return ret_val
 
 
-def __to_tuples(source: Iterable[Iterable[int]],
-                pool: dict, empty_ok: bool = False) \
-        -> tuple[tuple[int, ...], ...]:
+def __to_tuples(source: Iterable[Iterable],
+                pool: dict, empty_ok: bool = False, type_var=int,
+                inner: Callable = __to_tuple) \
+        -> tuple[tuple, ...]:
     """
     Turn 2D nested iterables into 2D nested tuples.
 
     :param source: the source
     :param pool: the tuple pool
     :param empty_ok: are empty tuples OK?
+    :param type_var: the type variable
+    :param inner: the inner callable
     :return: the nested tuples
 
     >>> ppl = {}
@@ -391,29 +556,50 @@ def __to_tuples(source: Iterable[Iterable[int]],
     >>> k1[0] is k2[2]
     True
     """
-    return __to_nested_tuples(source, pool, empty_ok, __to_tuple)
+    return __to_nested_tuples(source, pool, empty_ok, type_var, inner)
 
 
-def __to_tuples3(source: Iterable[Iterable[Iterable[int]]],
-                 pool: dict, empty_ok: bool) \
-        -> tuple[tuple[tuple[int, ...], ...], ...]:
+def __to_2d_npfloat(source: Iterable[Iterable],  # pylint: disable=W1113
+                    pool: dict, empty_ok: bool = False,
+                    *_)  -> tuple[np.ndarray, ...]:  # pylint: disable=W1113
+    """
+    Turn 2D nested iterables into 2D nested tuples.
+
+    :param source: the source
+    :param pool: the tuple pool
+    :param empty_ok: are empty tuples OK?
+    :param inner: the inner callable
+    :return: the nested tuples
+
+    >>> ppl = {}
+    >>> k2 = __to_2d_npfloat([(1.0, 2.0), (1.0, 2.0, 4.0),  (1.0, 0.2)], ppl)
+    >>> print(k2)
+    (array([1., 2.]), array([1., 2., 4.]), array([1. , 0.2]))
+    """
+    return __to_nested_tuples(source, pool, empty_ok, float, __to_npfloats)
+
+
+def __to_3d_npfloat(source: Iterable[Iterable[Iterable]],
+                    pool: dict, empty_ok: bool) \
+        -> tuple[tuple[np.ndarray, ...], ...]:
     """
     Turn 3D nested iterables into 3D nested tuples.
 
     :param source: the source
     :param pool: the tuple pool
     :param empty_ok: are empty tuples OK?
-    :param key: the sort key
     :return: the nested tuples
 
     >>> ppl = {}
-    >>> k1 = __to_tuples3([[[3, 2], [44, 5], [2]], [[2], [5, 7]]], ppl, False)
+    >>> k1 = __to_3d_npfloat([[[3.0, 2.0], [44.0, 5.0], [2.0]],
+    ...                        [[2.0], [5.0, 7.0]]], ppl, False)
     >>> print(k1)
-    (((3, 2), (44, 5), (2,)), ((2,), (5, 7)))
+    ((array([3., 2.]), array([44.,  5.]), array([2.])), \
+(array([2.]), array([5., 7.])))
     >>> k1[0][2] is k1[1][0]
     True
     """
-    return __to_nested_tuples(source, pool, empty_ok, __to_tuples)
+    return __to_nested_tuples(source, pool, empty_ok, float, __to_2d_npfloat)
 
 
 def _make_routes(
@@ -465,29 +651,46 @@ def _make_routes(
 
 
 def __to_demand(
-        source: Iterable[int], pool: dict, _) -> Demand:
+        source: Iterable[int | float],
+        pool: dict, *_) -> Demand:
     """
     Convert an integer source to a tuple or a demand.
 
     :param source: the source
     :param pool: the pool
     :return: the Demand
+
+    >>> ppl = {}
+    >>> d1 = __to_demand([1, 2, 3, 20, 10, 100], ppl)
+    >>> d1
+    Demand(arrival=10.0, deadline=100.0, demand_id=1, \
+customer_id=2, product_id=3, amount=20)
+    >>> d2 = __to_demand([1, 2, 3, 20, 10, 100], ppl)
+    >>> d1 is d2
+    True
     """
     if isinstance(source, Demand):
         return cast("Demand", source)
-    tup: tuple[int, ...] = __to_tuple(source, pool, False)
+    tup: tuple[int | float, ...] = tuple(source)
     dl: int = tuple.__len__(tup)
     if dl != 6:
         raise ValueError(f"Expected 6 values, got {dl}.")
-    return Demand(
-        demand_id=tup[DEMAND_ID], customer_id=tup[DEMAND_CUSTOMER],
-        product_id=tup[DEMAND_PRODUCT], amount=tup[DEMAND_AMOUNT],
-        release_time=tup[DEMAND_TIME],
-        deadline=tup[DEMAND_DEADLINE])
+    ret: Demand = Demand(
+        demand_id=cast("int", tup[DEMAND_ID]),
+        customer_id=cast("int", tup[DEMAND_CUSTOMER]),
+        product_id=cast("int", tup[DEMAND_PRODUCT]),
+        amount=cast("int", tup[DEMAND_AMOUNT]),
+        arrival=tup[DEMAND_ARRIVAL], deadline=tup[DEMAND_DEADLINE])
+
+    key: Final[str] = repr(ret)
+    if key in pool:
+        return pool[key]
+    pool[key] = ret
+    return ret
 
 
 def _make_demands(n_products: int, n_customers: int, n_demands: int,
-                  source: Iterable[Iterable[int]], pool: dict) \
+                  source: Iterable[Iterable[int | float]], pool: dict) \
         -> tuple[Demand, ...]:
     """
     Create the demand records, sorted by release time.
@@ -507,19 +710,18 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
     ...     [2, 5, 2, 6, 17, 27],
     ...     [1, 6, 7, 12, 17, 21],
     ...     [3, 7, 3, 23, 5, 21]], ppl)
-    (Demand(release_time=5, deadline=21, demand_id=3, customer_id=7, \
-product_id=3, amount=23), Demand(release_time=17, deadline=21, demand_id=1, \
-customer_id=6, product_id=7, amount=12), Demand(release_time=17, \
-deadline=27, demand_id=2, customer_id=5, product_id=2, amount=6), \
-Demand(release_time=20, deadline=21, demand_id=0, customer_id=2, \
-product_id=1, amount=4))
+    (Demand(arrival=5.0, deadline=21.0, demand_id=3, customer_id=7,\
+ product_id=3, amount=23), Demand(arrival=17.0, deadline=21.0, demand_id=1,\
+ customer_id=6, product_id=7, amount=12), Demand(arrival=17.0, deadline=27.0,\
+ demand_id=2, customer_id=5, product_id=2, amount=6), Demand(arrival=20.0,\
+ deadline=21.0, demand_id=0, customer_id=2, product_id=1, amount=4))
     """
     check_int_range(n_products, "n_products", 1, _MAX_DIM)
     check_int_range(n_customers, "n_customers", 1, _MAX_DIM)
     check_int_range(n_demands, "n_demands", 1, _MAX_DIM)
 
     temp: tuple[Demand, ...] = __to_nested_tuples(
-        source, pool, False, __to_demand)
+        source, pool, False, inner=__to_demand)
     n_dem: int = tuple.__len__(temp)
     if n_dem != n_demands:
         raise ValueError(f"Expected {n_demands} demands, got {n_dem}?")
@@ -553,12 +755,12 @@ product_id=1, amount=4))
         if not (0 < amount < _MAX_DIM):
             raise ValueError(f"demand[{i}].amount = {amount}.")
 
-        release_time: int = demand.release_time
-        if not (0 < release_time < _MAX_DIM):
-            raise ValueError(f"demand[{i}].release_time = {release_time}.")
+        arrival: float = demand.arrival
+        if not (isfinite(arrival) and (0 < arrival < _MAX_DIM)):
+            raise ValueError(f"demand[{i}].arrival = {arrival}.")
 
-        deadline: int = demand.deadline
-        if not (release_time <= deadline < _MAX_DIM):
+        deadline: float = demand.deadline
+        if not (isfinite(deadline) and arrival <= deadline < _MAX_DIM):
             raise ValueError(f"demand[{i}].deadline = {deadline}.")
         dest.append(demand)
 
@@ -598,9 +800,9 @@ def _make_in_warehouse(n_products: int, source: Iterable[int],
 
 def _make_machine_product_unit_times(
         n_products: int, n_machines: int,
-        routes: tuple[tuple[int, ...], ...],
-        source: Iterable[Iterable[Iterable[int]]],
-        pool: dict) -> tuple[tuple[tuple[int, ...], ...], ...]:
+        routes: tuple[tuple[float, ...], ...],
+        source: Iterable[Iterable[Iterable[float]]],
+        pool: dict) -> tuple[tuple[np.ndarray, ...], ...]:
     """
     Create the structure for the work times per product unit per machine.
 
@@ -622,23 +824,29 @@ def _make_machine_product_unit_times(
     >>> print(rts)
     ((0, 1), (0,), (1, 0))
 
-    >>> mpt = _make_machine_product_unit_times(3, 2, rts, [
-    ...     [[1, 2, 3, 5], [2, 4, 7, 18, 4, 52], [1, 10, 2, 30]],
-    ...     [[2, 20, 3, 40], [], [4, 56, 34, 444]]], ppl)
-    >>> print(mpt)
-    (((1, 2, 3, 5), (2, 4, 7, 18, 4, 52), (1, 10, 2, 30)), \
-((2, 20, 3, 40), (), (4, 56, 34, 444)))
+    >>> mpt1 = _make_machine_product_unit_times(3, 2, rts, [
+    ...     [[1.0, 2.0, 3.0, 5.0], [1.0, 2.0, 3.0, 5.0],
+    ...      [1.0, 10.0, 2.0, 30.0]],
+    ...     [[2.0, 20.0, 3.0, 40.0], [], [4.0, 56.0, 34.0, 444.0]]], ppl)
+    >>> print(mpt1)
+    ((array([1., 2., 3., 5.]), array([1., 2., 3., 5.]), \
+array([ 1., 10.,  2., 30.])), (array([ 2., 20.,  3., 40.]), \
+array([], dtype=float64), array([  4.,  56.,  34., 444.])))
+    >>> mpt1[0][0] is mpt1[0][1]
+    True
 
-    >>> mpt = _make_machine_product_unit_times(3, 2, rts, [
-    ...     [[1, 2, 3, 5], [1, 2, 3, 5], [1, 10, 2, 30]],
-    ...     [[2, 20, 3, 40], [], [4, 56, 34, 444]]], ppl)
-    >>> print(mpt)
-    (((1, 2, 3, 5), (1, 2, 3, 5), (1, 10, 2, 30)), ((2, 20, 3, 40), \
-(), (4, 56, 34, 444)))
-    >>> mpt[0][0] is mpt[0][1]
+    >>> mpt2 = _make_machine_product_unit_times(3, 2, rts, [
+    ...     [[1.0, 2.0, 3.0, 5.0], [1.0, 2.0, 3.0, 5.0],
+    ...      [1.0, 10.0, 2.0, 30.0]],
+    ...     [[2.0, 20.0, 3.0, 40.0], [], [4.0, 56.0, 34.0, 444.0]]], ppl)
+    >>> print(mpt2)
+    ((array([1., 2., 3., 5.]), array([1., 2., 3., 5.]), \
+array([ 1., 10.,  2., 30.])), (array([ 2., 20.,  3., 40.]), \
+array([], dtype=float64), array([  4.,  56.,  34., 444.])))
+    >>> mpt1 is mpt2
     True
     """
-    ret: tuple[tuple[tuple[int, ...], ...], ...] = __to_tuples3(
+    ret: tuple[tuple[np.ndarray, ...], ...] = __to_3d_npfloat(
         source, pool, True)
 
     if tuple.__len__(routes) != n_products:
@@ -662,7 +870,7 @@ def _make_machine_product_unit_times(
                              f"but have {n_products} products")
         for pid, product in enumerate(machine):
             needs_times: bool = mid in routes[pid]
-            d3: int = tuple.__len__(product)
+            d3: int = np.ndarray.__len__(product)
             if (not needs_times) and (d3 > 0):
                 raise ValueError(
                     f"product {pid} does not pass through machine {mid}, "
@@ -682,11 +890,10 @@ def _make_machine_product_unit_times(
                                      f"but got {time} for product {pid} on "
                                      f"machine {mid} at position {pt}")
                 unit_time, end = time
-                duration = end - last_end
-                if not (0 < unit_time <= duration < _MAX_DIM):
+                if not ((unit_time > 0) and (last_end < end < _MAX_DIM)):
                     raise ValueError(
-                        f"Invalid unit time {unit_time} and duration "
-                        f"{duration} for product {pid} on machine {mid}")
+                        f"Invalid unit time {unit_time} and end time "
+                        f"{end} for product {pid} on machine {mid}")
                 last_end = end
 
     return ret
@@ -734,9 +941,9 @@ class Instance(Component):
             n_products: int, n_customers: int, n_machines: int,
             n_demands: int,
             routes: Iterable[Iterable[int]],
-            demands: Iterable[Iterable[int]],
+            demands: Iterable[Iterable[int | float]],
             warehous_at_t0: Iterable[int],
-            machine_product_unit_times: Iterable[Iterable[Iterable[int]]],
+            machine_product_unit_times: Iterable[Iterable[Iterable[float]]],
             infos: Iterable[tuple[str, str]] | Mapping[
                 str, str] | None = None) \
             -> None:
@@ -787,7 +994,7 @@ class Instance(Component):
         self.n_demands: Final[int] = check_int_range(
             n_demands, "n_demands", 1, _MAX_DIM)
 
-        pool: Final[dict] = {}
+        pool: dict = {}  # the pool for resolving tuples
 
         #: the product routes, i.e., the machines through which each product
         #: must pass
@@ -822,8 +1029,8 @@ class Instance(Component):
         #: Once the real time surpasses the end time of the last of these
         #: production specs, the production specs are recycled and begin
         #: again.
-        self.machine_product_unit_times: Final[tuple[tuple[tuple[
-            int, ...], ...], ...]] = _make_machine_product_unit_times(
+        self.machine_product_unit_times: Final[tuple[tuple[
+            np.ndarray, ...], ...]] = _make_machine_product_unit_times(
             n_products, n_machines, self.routes, machine_product_unit_times,
             pool)
 
@@ -955,7 +1162,7 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
            f"was issued by the customer with ID {fd.customer_id} for "
            f"{fd.amount} units of the product with ID "
            f"{fd.product_id}. The order comes into the "
-           f"system at time unit {fd.release_time} and the customer expects "
+           f"system at time unit {fd.arrival} and the customer expects "
            f"the product to be ready at time unit {fd.demand_id}.")
     for demand in srt:
         it = iter(demand)
@@ -978,11 +1185,11 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
     yield (f"{COMMENT_START} For each machine, we now specify the production "
            f"times for each product that passes through the machine.")
     empty_pdx: tuple[int, int] | None = None
-    filled_pdx: tuple[int, int, tuple[int, ...]] | None = None
+    filled_pdx: tuple[int, int, np.ndarray] | None = None
     need: int = 2
     for mid, machine in enumerate(instance.machine_product_unit_times):
         for pid, product in enumerate(machine):
-            pdl: int = tuple.__len__(product)
+            pdl: int = np.ndarray.__len__(product)
             if (pdl <= 0) and (empty_pdx is None):
                 empty_pdx = mid, pid
                 need -= 1
@@ -1004,17 +1211,18 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
                f"{filled_pdx[1]} passes through machine {filled_pdx[0]}.")
         yield (f"{COMMENT_START} There, it needs {filled_pdx[2][0]} time "
                f"units per product unit from t=0 to t={filled_pdx[2][1]}.")
-        if tuple.__len__(filled_pdx[2]) > 2:
+        if np.ndarray.__len__(filled_pdx[2]) > 2:
             yield (f"{COMMENT_START} After that, it needs {filled_pdx[2][2]}"
                    " time units per product unit until t="
                    f"{filled_pdx[2][3]}.")
     for mid, machine in enumerate(instance.machine_product_unit_times):
         for pid, product in enumerate(machine):
-            if tuple.__len__(product) <= 0:
+            if np.ndarray.__len__(product) <= 0:
                 continue
+            flat = map(str, map(try_int, map(float, product)))
             yield (f"{KEY_PRODUCTION_TIME}{KEY_IDX_START}{mid}{CSV_SEPARATOR}"
                    f"{pid}{KEY_IDX_END}{KEY_VALUE_SEPARATOR}"
-                   f"{CSV_SEPARATOR.join(map(str, product))}")
+                   f"{CSV_SEPARATOR.join(flat)}")
 
     n_infos: Final[int] = len(instance.infos)
     if n_infos > 0:
@@ -1074,9 +1282,9 @@ def from_stream(stream: Iterable[str]) -> Instance:
     n_machines: int | None = None
     n_demands: int | None = None
     routes: list[list[int]] | None = None
-    demands: list[list[int]] | None = None
+    demands: list[list[int | float]] | None = None
     in_warehouse: list[int] | None = None
-    machine_product_times: list[list[list[int]]] | None = None
+    machine_product_times: list[list[list[float]]] | None = None
     infos: dict[str, str] = {}
 
     for line_idx, oline in enumerate(stream):
@@ -1183,7 +1391,7 @@ def from_stream(stream: Iterable[str]) -> Instance:
 
                 demand_id: int = check_to_int_range(
                     __get_key_index(key), KEY_DEMAND, 0, n_demands - 1)
-                dlst: list[int] = demands[demand_id]
+                dlst: list[int | float] = demands[demand_id]
                 if list.__len__(dlst) != 1:
                     raise __pe(f"Already gave {KEY_DEMAND}{KEY_IDX_START}"
                                f"{demand_id}{KEY_IDX_END}", oline, line_idx)
@@ -1211,14 +1419,14 @@ def from_stream(stream: Iterable[str]) -> Instance:
                         [[[] for _ in range(n_products)]
                          for __ in range(n_machines)]
 
-                mpd: list[int] = machine_product_times[
+                mpd: list[float] = machine_product_times[
                     machine_id][product_id]
                 if list.__len__(mpd) > 0:
                     raise __pe(f"Already gave {KEY_PRODUCTION_TIME}"
                                f"{KEY_IDX_START}{machine_id}{CSV_SEPARATOR}"
                                f"{product_id}{KEY_IDX_END}", oline, line_idx)
                 mpd.extend(
-                    map(int, str.split(value, CSV_SEPARATOR)))
+                    map(float, str.split(value, CSV_SEPARATOR)))
             else:
                 infos[key] = value
 
@@ -1253,61 +1461,8 @@ def from_stream(stream: Iterable[str]) -> Instance:
 
 
 @numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def __round_time(value: int | float) -> int:
-    """
-    Round a production time.
-
-    Production times are always rounded up (ceil), except if they are very
-    very close to the nearest integer. "Very very close" here means that,
-    if a predicted time differs only by 1/16834th (= 2**⁻14) from the
-    next-smaller integer, it is rounded down. Production times can never be
-    zero.
-
-    If the original value be `v` and the result of this function is `r`, then
-    it is guaranteed that `0 < r` and that `floor(v) <= r <= `floor(v) + 1`
-    for any `v > 0`. For `v <= 1`, `r = 1`.
-
-    :param value: the value `v`
-    :return: the rounded value `r`.
-
-    >>> __round_time(10.0)
-    10
-    >>> __round_time(10)
-    10
-    >>> __round_time(10.000001)
-    10
-    >>> __round_time(10.00006103515625)
-    11
-    >>> __round_time(10.0000610351562)
-    10
-    >>> __round_time(10.02)
-    11
-    >>> __round_time(10.9999)
-    11
-    >>> __round_time(0)
-    1
-    >>> __round_time(0.0)
-    1
-    >>> __round_time(0.00006103515625)
-    1
-    >>> __round_time(0.0000610351562)
-    1
-    >>> __round_time(0.9)
-    1
-    >>> __round_time(1.01)
-    2
-    """
-    fl: int = int(value)
-    if fl < 1:
-        return 1
-    if (fl >= value) or ((value - fl) < 0.00006103515625):
-        return fl
-    return fl + 1
-
-
-@numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)
-def compute_finish_time(start_time: int, amount: int,
-                        production_times: tuple[int, ...]) -> int:
+def compute_finish_time(start_time: float, amount: int,
+                        production_times: np.ndarray) -> float:
     """
     Compute the time when one job is finished.
 
@@ -1322,24 +1477,24 @@ def compute_finish_time(start_time: int, amount: int,
 
     Here, the production time is 10 time units / 1 product unit, valid until
     end time 100.
-    >>> compute_finish_time(0, 1, (10, 100))
-    10
+    >>> compute_finish_time(0.0, 1, np.array((10.0, 100.0), np.float64))
+    10.0
 
     Here, the production time is 10 time units / 1 product unit, valid until
     end time 100. We begin producing at time unit 250. Since the production
     periods are cyclic, this is OK: we would be halfway through the third
     production period when the request comes in. It will consume 10 time units
     and be done at time unit 260.
-    >>> compute_finish_time(250, 1, (10, 100))
-    260
+    >>> compute_finish_time(250.0, 1, np.array((10.0, 100.0)))
+    260.0
 
     Here, the end time of the production time validity is at time unit 100.
     However, we begin producing 1 product unit at time step 90. This unit will
     use 10 time units, meaning that its production is exactly finished when
     the production time validity ends.
     It will be finished at time step 100.
-    >>> compute_finish_time(90, 1, (10, 100))
-    100
+    >>> compute_finish_time(90.0, 1, np.array((10.0, 100.0)))
+    100.0
 
     Here, the end time of the production time validity is at time unit 100.
     However, we begin producing 1 product unit at time step 95. This unit would
@@ -1350,16 +1505,16 @@ def compute_finish_time(start_time: int, amount: int,
     time units per production unit. The remaining 0.5 units will be produced
     in 5 time units, meaning that the overall production is finished at time
     step 105.
-    >>> compute_finish_time(95, 1, (10, 100))
-    105
+    >>> compute_finish_time(95.0, 1, np.array((10.0, 100.0)))
+    105.0
 
     Now we have two production periods. The production begins again at time
     step 95. 0.5 units are finished until the production period ends at time
     step 100. Then, the second production period begins, requiring 20 time
     units per product unit. We thus need 10 time units to finish the remaining
     0.5 product unit, completing the job at time unit 110.
-    >>> compute_finish_time(95, 1, (10, 100, 20, 200))
-    110
+    >>> compute_finish_time(95.0, 1, np.array((10.0, 100.0, 20.0, 200.0)))
+    110.0
 
     Now things get more complex. We want to do 10 units of product.
     We can finish 0.5 units until the first period ends after 5 time steps.
@@ -1367,8 +1522,9 @@ def compute_finish_time(start_time: int, amount: int,
     the period ends at time 140. This leaves 7.5 units of product to be done
     in the third period, where each unit needs 50 time units. Thus, we end
     up needing 5 + 40 + 7.5*50 time units, which add to the starting time.
-    >>> compute_finish_time(95, 10, (10, 100, 20, 140, 50, 5000))
-    515
+    >>> compute_finish_time(95.0, 10, np.array((
+    ...     10.0, 100.0, 20.0, 140.0, 50.0, 5000.0)))
+    515.0
     >>> 95 + (0.5*10 + 2*20 + 7.5*50)
     515.0
 
@@ -1378,42 +1534,45 @@ def compute_finish_time(start_time: int, amount: int,
     cycle wraps over. Luckily, we can complete the remaining 6.3 units of
     product in the first period, where each product unit needs only 10 time
     units.
-    >>> compute_finish_time(95, 10, (10, 100, 20, 140, 50, 200))
-    263
+    >>> compute_finish_time(95.0, 10, np.array((
+    ...     10.0, 100.0, 20.0, 140.0, 50.0, 200.0)))
+    263.0
     >>> 95 + (0.5*10 + 2*20 + 1.2*50 + 6.3*10)
     263.0
 
-    Here we illustrate that production times are rounded to the nearest larger
-    integer. If we encounter a situation such that the production would need
-    246.6666 time units, we return 247. The only exception for this "rounding
-    up" strategy is if the result is very very close to the nearest integer.
-    For example, 10.00006103515625 would be rounded to 11, whereas
-    10.0000610351562 will be rounded to 10. (0.00006103515625 = 1/16384
-    = 2**⁻14).
-    >>> compute_finish_time(95, 10, (10, 100, 20, 140, 50, 200, 3, 207))
-    247
+    It is also possible to yield fractional production times.
+    >>> compute_finish_time(95.0, 10, np.array((
+    ...     10.0, 100.0, 20.0, 140.0, 50.0, 200.0,  3.0, 207.0)))
+    246.66666666666666
     >>> 95 + (0.5*10 + 2*20 + 1.2*50 + (7/3)*3 + (6.3-(7/3))*10)
     246.66666666666666
+
+    Production unit times may extend beyond the intervals.
+    >>> compute_finish_time(0.0, 5, np.array((1000.0, 100.0, 10.0, 110.0)))
+    545.0
+    >>> (0.1*1000.0 + 1*10 + 0.1*1000.0 + 1*10 + 0.1*1000.0 + 1*10 +
+    ...     0.1*1000.0 + 1*10 + 0.1*1000.0 + 0.5*10)
+    545.0
     """
-    time_mod: Final[int] = production_times[-1]
+    time_mod: Final[float] = production_times[-1]
     low_end: Final[int] = len(production_times)
     total: Final[int] = low_end // 2
 
     # First, we need to find the segment in the production cycle
     # where the production begins. We use a binary search for that.
     remaining: int | float = amount
-    seg_start: int = start_time % time_mod
+    seg_start: float = start_time % time_mod
     low: int = 0
     high: int = total
     while low < high:
         mid: int = ((low + high) // 2)
-        th: int = production_times[mid * 2 + 1]
+        th: float = production_times[mid * 2 + 1]
         if th <= seg_start:
             low = mid + 1
         else:
             high = mid - 1
     low *= 2
-    max_time: int = production_times[low + 1]
+    max_time: float = production_times[low + 1]
     if max_time <= seg_start:
         low += 2
 
@@ -1421,15 +1580,15 @@ def compute_finish_time(start_time: int, amount: int,
     # been produced.
     while True:
         max_time = production_times[low + 1]
-        unit_time: int = production_times[low]
+        unit_time: float = production_times[low]
         seg_end = seg_start + (unit_time * remaining)
         if seg_end <= max_time:
-            return __round_time(start_time + seg_end - seg_start)
+            return float(start_time + seg_end - seg_start)
         duration = max_time - seg_start
         start_time += duration
         remaining -= (duration / unit_time)
         if remaining <= 0:
-            return __round_time(start_time)
+            return float(start_time)
         low += 2
         if low >= low_end:
             low = 0
