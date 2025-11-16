@@ -47,7 +47,7 @@ from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_4
 from moptipyapps.dynamic_control.systems.three_coupled_oscillators import (
     THREE_COUPLED_OSCILLATORS,
 )
-from moptipyapps.shared import moptipyapps_argparser
+from moptipyapps.utils.shared import moptipyapps_argparser
 
 
 def make_instances() -> Iterable[Callable[[], SystemModel]]:

@@ -13,7 +13,7 @@ of methods:
   simulator to notify you about an event in the simulation. You can overwrite
   these methods to implement the logic of your production scheduling method.
 - Methods that start with `act_*` are actions that you can invoke inside the
-  `event_*` methods. The tell the simulator or machines what to do.
+  `event_*` methods. The tell the simulator or stations what to do.
 
 ## We have the following `ctrl_*` methods:**
 
@@ -40,42 +40,42 @@ of methods:
 ## Examples
 
 Here we have a very easy production scheduling instance.
-There is 1 product that passes through 2 machines.
-First it passes through machine 0, then through machine 1.
-The per-unit production time is always 10 time units on machine 0 and 30 time
-units on machine 2.
+There is 1 product that passes through 2 stations.
+First it passes through station 0, then through station 1.
+The per-unit production time is always 10 time units on station 0 and 30 time
+units on station 2.
 There is one customer demand, for 10 units of this product, which enters the
 system at time unit 20.
 The warehouse is initially empty.
 >>> instance = Instance(
-...     name="test1", n_products=1, n_customers=1, n_machines=2, n_demands=1,
+...     name="test1", n_products=1, n_customers=1, n_stations=2, n_demands=1,
 ...     routes=[[0, 1]],
 ...     demands=[[0, 0, 0, 10, 20, 100]],
 ...     warehous_at_t0=[0],
-...     machine_product_unit_times=[[[10.0, 10000.0]],
+...     station_product_unit_times=[[[10.0, 10000.0]],
 ...                                 [[30.0, 10000.0]]])
 
 The simulation will see that the customer demand for 10 units of product 0
 appears at time unit 20.
-It will issue a production order for these 10 units at machine 0.
-Since machine 0 is not occupied, it can immediately begin with the production.
+It will issue a production order for these 10 units at station 0.
+Since station 0 is not occupied, it can immediately begin with the production.
 It will finish the production after 10*10 time units, i.e., at time unit 120.
-The product is then routed to machine 1, which is also idle and can
+The product is then routed to station 1, which is also idle and can
 immediately begin producing.
 It needs 10*30 time units, meaning that it finishes after 300 time units.
 The demanded product amount is completed after 420 time units and the demand 0
 can be fulfilled.
->>> simulation = Simulation(instance, PrintingListener())
+>>> simulation = Simulation(instance, PrintingListener(print_time=False))
 >>> simulation.ctrl_run()
 start
 T=20.0: EVENT product=0, amount=0, in_warehouse=0, in_production=0, \
 1 pending demands
-T=20.0: EVENT machine=0, 1 jobs queued
-T=20.0: beginning to produce 10 units of product 0 on machine 0
-T=120.0: finished producing 10 units of product 0 on machine 0
-T=120.0: EVENT machine=1, 1 jobs queued
-T=120.0: beginning to produce 10 units of product 0 on machine 1
-T=420.0: finished producing 10 units of product 0 on machine 1
+T=20.0: EVENT station=0, 1 jobs queued
+T=20.0: beginning to produce 10 units of product 0 on station 0
+T=120.0: finished producing 10 units of product 0 on station 0
+T=120.0: EVENT station=1, 1 jobs queued
+T=120.0: beginning to produce 10 units of product 0 on station 1
+T=420.0: finished producing 10 units of product 0 on station 1
 T=420.0: EVENT product=0, amount=10, in_warehouse=0, in_production=0, \
 1 pending demands
 T=420.0: demand 0 for 10 units of product 0 satisfied
@@ -83,11 +83,11 @@ T=420.0: finished
 
 
 >>> instance = Instance(
-...     name="test2", n_products=2, n_customers=1, n_machines=2, n_demands=2,
+...     name="test2", n_products=2, n_customers=1, n_stations=2, n_demands=2,
 ...     routes=[[0, 1], [1, 0]],
 ...     demands=[[0, 0, 1, 10, 20, 90], [1, 0, 0, 5, 22, 200]],
 ...     warehous_at_t0=[2, 1],
-...     machine_product_unit_times=[[[10.0, 50.0, 15.0, 100.0],
+...     station_product_unit_times=[[[10.0, 50.0, 15.0, 100.0],
 ...                                  [ 5.0, 20.0,  7.0,  35.0, 4.0, 50.0]],
 ...                                 [[ 5.0, 24.0,  7.0,  80.0],
 ...                                  [ 3.0, 21.0,  6.0,  50.0,]]])
@@ -95,7 +95,7 @@ T=420.0: finished
 >>> instance.name
 'test2'
 
->>> simulation = Simulation(instance, PrintingListener())
+>>> simulation = Simulation(instance, PrintingListener(print_time=False))
 >>> simulation.ctrl_run()
 start
 T=0.0: EVENT product=0, amount=2, in_warehouse=0, in_production=0, \
@@ -106,24 +106,24 @@ T=0.0: EVENT product=1, amount=1, in_warehouse=0, in_production=0, \
 T=0.0: 1 units of product 1 in warehouse
 T=20.0: EVENT product=1, amount=0, in_warehouse=1, in_production=0, \
 1 pending demands
-T=20.0: EVENT machine=1, 1 jobs queued
-T=20.0: beginning to produce 9 units of product 1 on machine 1
+T=20.0: EVENT station=1, 1 jobs queued
+T=20.0: beginning to produce 9 units of product 1 on station 1
 T=22.0: EVENT product=0, amount=0, in_warehouse=2, in_production=0, \
 1 pending demands
-T=22.0: EVENT machine=0, 1 jobs queued
-T=22.0: beginning to produce 3 units of product 0 on machine 0
-T=53.0: finished producing 3 units of product 0 on machine 0
-T=61.5: finished producing 9 units of product 1 on machine 1
-T=61.5: EVENT machine=1, 1 jobs queued
-T=61.5: beginning to produce 3 units of product 0 on machine 1
-T=61.5: EVENT machine=0, 1 jobs queued
-T=61.5: beginning to produce 9 units of product 1 on machine 0
-T=81.78571428571429: finished producing 3 units of product 0 on machine 1
+T=22.0: EVENT station=0, 1 jobs queued
+T=22.0: beginning to produce 3 units of product 0 on station 0
+T=53.0: finished producing 3 units of product 0 on station 0
+T=61.5: finished producing 9 units of product 1 on station 1
+T=61.5: EVENT station=1, 1 jobs queued
+T=61.5: beginning to produce 3 units of product 0 on station 1
+T=61.5: EVENT station=0, 1 jobs queued
+T=61.5: beginning to produce 9 units of product 1 on station 0
+T=81.78571428571429: finished producing 3 units of product 0 on station 1
 T=81.78571428571429: EVENT product=0, amount=3, in_warehouse=2, \
 in_production=0, 1 pending demands
 T=81.78571428571429: demand 1 for 5 units of product 0 satisfied
 T=81.78571428571429: 0 units of product 0 in warehouse
-T=107.03571428571428: finished producing 9 units of product 1 on machine 0
+T=107.03571428571428: finished producing 9 units of product 1 on station 0
 T=107.03571428571428: EVENT product=1, amount=9, in_warehouse=1, \
 in_production=0, 1 pending demands
 T=107.03571428571428: demand 0 for 10 units of product 1 satisfied
@@ -142,24 +142,24 @@ T=0.0: EVENT product=1, amount=1, in_warehouse=0, in_production=0, \
 T=0.0: 1 units of product 1 in warehouse
 T=20.0: EVENT product=1, amount=0, in_warehouse=1, in_production=0, \
 1 pending demands
-T=20.0: EVENT machine=1, 1 jobs queued
-T=20.0: beginning to produce 9 units of product 1 on machine 1
+T=20.0: EVENT station=1, 1 jobs queued
+T=20.0: beginning to produce 9 units of product 1 on station 1
 T=22.0: EVENT product=0, amount=0, in_warehouse=2, in_production=0, \
 1 pending demands
-T=22.0: EVENT machine=0, 1 jobs queued
-T=22.0: beginning to produce 3 units of product 0 on machine 0
-T=53.0: finished producing 3 units of product 0 on machine 0
-T=61.5: finished producing 9 units of product 1 on machine 1
-T=61.5: EVENT machine=1, 1 jobs queued
-T=61.5: beginning to produce 3 units of product 0 on machine 1
-T=61.5: EVENT machine=0, 1 jobs queued
-T=61.5: beginning to produce 9 units of product 1 on machine 0
-T=81.78571428571429: finished producing 3 units of product 0 on machine 1
+T=22.0: EVENT station=0, 1 jobs queued
+T=22.0: beginning to produce 3 units of product 0 on station 0
+T=53.0: finished producing 3 units of product 0 on station 0
+T=61.5: finished producing 9 units of product 1 on station 1
+T=61.5: EVENT station=1, 1 jobs queued
+T=61.5: beginning to produce 3 units of product 0 on station 1
+T=61.5: EVENT station=0, 1 jobs queued
+T=61.5: beginning to produce 9 units of product 1 on station 0
+T=81.78571428571429: finished producing 3 units of product 0 on station 1
 T=81.78571428571429: EVENT product=0, amount=3, in_warehouse=2, \
 in_production=0, 1 pending demands
 T=81.78571428571429: demand 1 for 5 units of product 0 satisfied
 T=81.78571428571429: 0 units of product 0 in warehouse
-T=107.03571428571428: finished producing 9 units of product 1 on machine 0
+T=107.03571428571428: finished producing 9 units of product 1 on station 0
 T=107.03571428571428: EVENT product=1, amount=9, in_warehouse=1, \
 in_production=0, 1 pending demands
 T=107.03571428571428: demand 0 for 10 units of product 1 satisfied
@@ -169,7 +169,8 @@ T=107.03571428571428: finished
 
 from dataclasses import dataclass, field
 from heapq import heappop, heappush
-from typing import Callable, Final
+from time import time_ns
+from typing import Any, Callable, Final
 
 import numpy as np
 from pycommons.types import type_error
@@ -203,8 +204,8 @@ class Job:
     amount: int
     #: the time when the job was issued
     issue_time: float = -1.0
-    #: the time when the job arrived at the queue of the current machine.
-    machine_time: float = -1.0
+    #: the time when the job arrived at the queue of the current station.
+    station_time: float = -1.0
     #: the current job step, starts at 0.
     step: int = -1
 
@@ -227,22 +228,22 @@ class Listener:
         """
 
     def produce_at_begin(
-            self, time: float, machine_id: int, job: Job) -> None:
+            self, time: float, station_id: int, job: Job) -> None:
         """
-        Report the start of the production of a certain product at a machine.
+        Report the start of the production of a certain product at a station.
 
         :param time: the current time
-        :param machine_id: the machine ID
+        :param station_id: the station ID
         :param job: the production job
         """
 
     def produce_at_end(
-            self, time: float, machine_id: int, job: Job) -> None:
+            self, time: float, station_id: int, job: Job) -> None:
         """
-        Report the completion of the production of a product at a machine.
+        Report the completion of the production of a product at a station.
 
         :param time: the current time
-        :param machine_id: the machine ID
+        :param station_id: the station ID
         :param job: the production job
         """
 
@@ -271,19 +272,19 @@ class Listener:
         :param pending_demands: the pending orders for the product
         """
 
-    def event_machine(self, time: float, machine_id: int,
+    def event_station(self, time: float, station_id: int,
                       queue: tuple[Job, ...]) -> None:
         """
-        Get notified right before :meth:`Simulation.event_machine`.
+        Get notified right before :meth:`Simulation.event_station`.
 
-        If this event happens, the machine is not busy. It could process a job
+        If this event happens, the station is not busy. It could process a job
         and there is at least one job that it could process. You can now
         select the job to be executed from the `queue` and pass it to
         :meth:`~Simulation.act_exec_job`.
 
         :param time: the current time
-        :param machine_id: the machine ID
-        :param queue: the job queue for this machine
+        :param station_id: the station ID
+        :param queue: the job queue for this station
         """
 
     def finished(self, time: float) -> None:
@@ -313,9 +314,9 @@ class Simulation:
         self.instance: Final[Instance] = instance
         #: the product routes
         self.__routes: Final[tuple[tuple[int, ...], ...]] = instance.routes
-        #: the machine-product-unit-times
+        #: the station-product-unit-times
         self.__mput: Final[tuple[tuple[np.ndarray, ...], ...]] = (
-            instance.machine_product_unit_times)
+            instance.station_product_unit_times)
 
         #: the start event function
         self.__l_start: Final[Callable[[], None]] = listener.start
@@ -326,11 +327,11 @@ class Simulation:
         self.__l_demand_satisfied: Final[Callable[[float, Demand], None]] \
             = listener.demand_satisfied
         #: the listener to be notified if the production of a certain
-        #: product begins at a certain machine.
+        #: product begins at a certain station.
         self.__l_produce_at_begin: Final[Callable[[
             float, int, Job], None]] = listener.produce_at_begin
         #: the listener to be notified if the production of a certain
-        #: product end at a certain machine.
+        #: product end at a certain station.
         self.__l_produce_at_end: Final[Callable[[
             float, int, Job], None]] = listener.produce_at_end
         #: the listener to notify about simulation end
@@ -339,9 +340,9 @@ class Simulation:
         self.__l_event_product: Final[Callable[[
             float, int, int, int, int, tuple[Demand, ...]], None]] = \
             listener.event_product
-        #: the listener to notify about machine events
-        self.__l_event_machine: Final[Callable[[
-            float, int, tuple[Job, ...]], None]] = listener.event_machine
+        #: the listener to notify about station events
+        self.__l_event_station: Final[Callable[[
+            float, int, tuple[Job, ...]], None]] = listener.event_station
 
         #: the current time
         self.__time: float = 0.0
@@ -355,11 +356,11 @@ class Simulation:
             0 for _ in range(instance.n_products)]
         #: the internal warehouse
         self.__warehouse: Final[list[int]] = [0] * instance.n_products
-        #: the machine queues.
+        #: the station queues.
         self.__mq: Final[list[list[Job]]] = [
-            [] for _ in range(instance.n_machines)]
-        #: whether the machines are busy
-        self.__mbusy: Final[list[bool]] = [False] * instance.n_machines
+            [] for _ in range(instance.n_stations)]
+        #: whether the stations are busy
+        self.__mbusy: Final[list[bool]] = [False] * instance.n_stations
 
     def ctrl_reset(self) -> None:
         """
@@ -376,7 +377,7 @@ class Simulation:
             self.__in_production[i] = 0
         for mq in self.__mq:
             mq.clear()
-        for i in range(self.instance.n_machines):
+        for i in range(self.instance.n_stations):
             self.__mbusy[i] = False
 
     def ctrl_run(self) -> None:
@@ -486,46 +487,46 @@ class Simulation:
 
         # Order the production of the product units required to satisfy all
         # demands.
-        product_needed -= total
+        product_needed -= total + in_production
         if product_needed > 0:
             self.act_produce(product_id, product_needed)
 
-    def event_machine(self,
+    def event_station(self,
                       time: float,  # pylint: disable=W0613
-                      machine_id: int,  # pylint: disable=W0613
+                      station_id: int,  # pylint: disable=W0613
                       queue: tuple[Job, ...]) -> None:
         """
-        Process an event for a given machine.
+        Process an event for a given station.
 
-        If this event happens, the machine is not busy. It could process a job
+        If this event happens, the station is not busy. It could process a job
         and there is at least one job that it could process. You can now
         select the job to be executed from the `queue` and pass it to
         :meth:`~Simulation.act_exec_job`.
 
         :param time: the current time
-        :param machine_id: the machine ID
-        :param queue: the job queue for this machine
+        :param station_id: the station ID
+        :param queue: the job queue for this station
         """
         self.act_exec_job(queue[0])
 
     def act_exec_job(self, job: Job) -> None:
         """
-        Execute the job on its current machine.
+        Execute the job on its current station.
 
         :param job: the job to be executed
         """
         product_id: Final[int] = job.product_id
-        machine_id: Final[int] = self.__routes[product_id][job.step]
+        station_id: Final[int] = self.__routes[product_id][job.step]
         time: Final[float] = self.__time
-        queue: list[Job] = self.__mq[machine_id]
+        queue: list[Job] = self.__mq[station_id]
         del queue[queue.index(job)]  # force exception if job is not there
 
-        if self.__mbusy[machine_id]:
-            raise ValueError("Cannot execute job on busy machine.")
-        self.__mbusy[machine_id] = True
-        self.__l_produce_at_begin(time, machine_id, job)
+        if self.__mbusy[station_id]:
+            raise ValueError("Cannot execute job on busy station.")
+        self.__mbusy[station_id] = True
+        self.__l_produce_at_begin(time, station_id, job)
         end_time: float = compute_finish_time(
-            time, job.amount, self.__mput[machine_id][product_id])
+            time, job.amount, self.__mput[station_id][product_id])
         heappush(self.__queue, _Event(end_time, self.__job_step, (job, )))
 
     def act_store_in_warehouse(self, product_id: int, amount: int) -> None:
@@ -614,9 +615,9 @@ class Simulation:
         Move a job a step forward.
 
         If this job just enters the system, it gets enqueued at its first
-        machine. If it was already running on a machine, then that machine
+        station. If it was already running on a station, then that station
         becomes idle and can process the next job. Our job now either moves to
-        the next machine and enters the queue of that machine OR, if it has
+        the next station and enters the queue of that station OR, if it has
         been completed, its produced product amount can enter the warehouse.
 
         :param job: the job
@@ -626,15 +627,15 @@ class Simulation:
         time: Final[float] = self.__time
 
         job_step: int = job.step
-        if job_step >= 0:  # The job was running on a machine.
-            old_machine_id: Final[int] = routes[job_step]
-            self.__l_produce_at_end(time, old_machine_id, job)
-            self.__mbusy[old_machine_id] = False
-            old_mq: Final[list[Job]] = self.__mq[old_machine_id]
+        if job_step >= 0:  # The job was running on a station.
+            old_station_id: Final[int] = routes[job_step]
+            self.__l_produce_at_end(time, old_station_id, job)
+            self.__mbusy[old_station_id] = False
+            old_mq: Final[list[Job]] = self.__mq[old_station_id]
             if list.__len__(old_mq) > 0:
                 tupo: Final[tuple[Job, ...]] = tuple(old_mq)
-                self.__l_event_machine(time, old_machine_id, tupo)
-                self.event_machine(time, old_machine_id, tupo)
+                self.__l_event_station(time, old_station_id, tupo)
+                self.event_station(time, old_station_id, tupo)
         else:
             self.__in_production[product_id] += job.amount
 
@@ -646,63 +647,107 @@ class Simulation:
             return
 
         object.__setattr__(job, "step", job_step)
-        object.__setattr__(job, "machine_time", time)
+        object.__setattr__(job, "station_time", time)
 
-        new_machine_id: Final[int] = routes[job_step]
-        queue: list[Job] = self.__mq[new_machine_id]
+        new_station_id: Final[int] = routes[job_step]
+        queue: list[Job] = self.__mq[new_station_id]
         queue.append(job)
-        if not self.__mbusy[new_machine_id]:
+        if not self.__mbusy[new_station_id]:
             tupq: Final[tuple[Job, ...]] = tuple(queue)
-            self.__l_event_machine(time, new_machine_id, tupq)
-            self.event_machine(time, new_machine_id, tupq)
+            self.__l_event_station(time, new_station_id, tupq)
+            self.event_station(time, new_station_id, tupq)
 
 
 class PrintingListener(Listener):
     """A listener that just prints simulation events."""
 
+    def __init__(self, output: Callable[[str], Any] = print,
+                 print_time: bool = True) -> None:
+        """
+        Initialize the printing listener.
+
+        :param output: the output callable
+        :param print_time: shall we print the time?
+        """
+        if not callable(output):
+            raise type_error(output, "output", call=True)
+        if not isinstance(print_time, bool):
+            raise type_error(print_time, "print_time", bool)
+        #: the output callable
+        self.__output: Final[Callable[[str], Any]] = output
+        #: shall we print the time at the end?
+        self.__print_time: Final[bool] = print_time
+        #: the internal start time
+        self.__start_time_ns: int | None = None
+
     def start(self) -> None:
         """Print that the simulation begins."""
-        print("start")  # noqa: T201
+        self.__start_time_ns = time_ns()
+        self.__output("start")
 
     def product_in_warehouse(
             self, time: float, product_id: int, amount: int) -> None:
         """Print the product amount in the warehouse."""
-        print(f"T={time}: {amount} units of product "  # noqa: T201
-              f"{product_id} in warehouse")
+        self.__output(f"T={time}: {amount} units of product "
+                      f"{product_id} in warehouse")
 
     def produce_at_begin(
-            self, time: float, machine_id: int, job: Job) -> None:
-        """Print that the production at a given machine begun."""
-        print(f"T={time}: beginning to produce {job.amount} "  # noqa: T201
-              f"units of product {job.product_id} on machine {machine_id}")
+            self, time: float, station_id: int, job: Job) -> None:
+        """Print that the production at a given station begun."""
+        self.__output(f"T={time}: beginning to produce {job.amount} units "
+                      f"of product {job.product_id} on station {station_id}")
 
-    def produce_at_end(self, time: float, machine_id: int, job: Job) -> None:
-        """Print that the production at a given machine ended."""
-        print(f"T={time}: finished producing {job.amount} "  # noqa: T201
-              f"units of product {job.product_id} on machine {machine_id}")
+    def produce_at_end(self, time: float, station_id: int, job: Job) -> None:
+        """Print that the production at a given station ended."""
+        self.__output(f"T={time}: finished producing {job.amount} units of "
+                      f"product {job.product_id} on station {station_id}")
 
     def demand_satisfied(self, time: float, demand: Demand) -> None:
         """Print that a demand was satisfied."""
-        print(f"T={time}: demand {demand.demand_id} for "  # noqa: T201
-              f"{demand.amount} units of product {demand.product_id} "
-              "satisfied")
+        self.__output(f"T={time}: demand {demand.demand_id} for "
+                      f"{demand.amount} units of product {demand.product_id} "
+                      "satisfied")
 
     def event_product(self, time: float,
                       product_id: int, amount: int,
                       in_warehouse: int, in_production: int,
                       pending_demands: tuple[Demand, ...]) -> None:
         """Print the prouct event."""
-        print(f"T={time}: EVENT product={product_id}, "  # noqa: T201
-              f"amount={amount}, in_warehouse={in_warehouse}, "
-              f"in_production={in_production}, "
-              f"{tuple.__len__(pending_demands)} pending demands")
+        self.__output(f"T={time}: EVENT product={product_id}, amount={amount}"
+                      f", in_warehouse={in_warehouse}, in_production="
+                      f"{in_production}, {tuple.__len__(pending_demands)} "
+                      "pending demands")
 
-    def event_machine(self, time: float, machine_id: int,
+    def event_station(self, time: float, station_id: int,
                       queue: tuple[Job, ...]) -> None:
-        """Print the machine event."""
-        print(f"T={time}: EVENT machine={machine_id}, "  # noqa: T201
-              f"{tuple.__len__(queue)} jobs queued")
+        """Print the station event."""
+        self.__output(f"T={time}: EVENT station={station_id}, "
+                      f"{tuple.__len__(queue)} jobs queued")
 
     def finished(self, time: float) -> None:
         """Print that the simulation has finished."""
-        print(f"T={time}: finished")  # noqa: T201
+        end: Final[int] = time_ns()
+        self.__output(f"T={time}: finished")
+        if self.__print_time and self.__start_time_ns is not None:
+            required: float = (end - self.__start_time_ns) / 1_000_000_000
+            self.__output(f"Simulation time: {required}s")
+
+
+def warmup() -> None:
+    """
+    Perform a warm-up for our simulator.
+
+    The simulator uses some code implemented in numba etc., which may need to
+    be jitted before the actual execution.
+
+    >>> warmup()
+    """
+    instance = Instance(
+        name="warmup", n_products=2, n_customers=1, n_stations=2, n_demands=2,
+        routes=[[0, 1], [1, 0]],
+        demands=[[0, 0, 1, 10, 20, 90], [1, 0, 0, 5, 22, 200]],
+        warehous_at_t0=[2, 1],
+        station_product_unit_times=[
+            [[10.0, 50.0, 15.0, 100.0], [5.0, 20.0, 7.0, 35.0, 4.0, 50.0]],
+            [[5.0, 24.0, 7.0, 80.0], [3.0, 21.0, 6.0, 50.0]]])
+    Simulation(instance, Listener()).ctrl_run()

@@ -76,8 +76,8 @@ from moptipy.api.objective import Objective
 from moptipy.utils.logger import KeyValueLogSection
 from pycommons.types import type_error
 
-from moptipyapps.shared import SCOPE_INSTANCE
 from moptipyapps.tsp.instance import Instance
+from moptipyapps.utils.shared import SCOPE_INSTANCE
 
 
 @numba.njit(cache=True, inline="always", fastmath=False, boundscheck=False)

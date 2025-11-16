@@ -46,11 +46,11 @@ from moptipy.operators.permutations.op1_swap2 import Op1Swap2
 from moptipy.spaces.permutations import Permutations
 from pycommons.io.path import Path
 
-from moptipyapps.shared import moptipyapps_argparser
 from moptipyapps.ttp.errors import Errors
 from moptipyapps.ttp.game_encoding import GameEncoding
 from moptipyapps.ttp.game_plan_space import GamePlanSpace
 from moptipyapps.ttp.instance import Instance
+from moptipyapps.utils.shared import moptipyapps_argparser
 
 
 def make_instances() -> Iterable[Callable[[], Instance]]:

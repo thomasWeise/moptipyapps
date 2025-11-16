@@ -1,9 +1,15 @@
 """
 Some utilities for random sampling.
 
-The goal that we follow with class :class:`IntDistribution` is to have
+The goal that we follow with class :class:`Distribution` is to have
 clearly defined integer-producing random distributions. We want to be
 able to say exactly how to generate some random numbers.
+
+A distribution can be sampled using the method :meth:`~Distribution.sample`.
+Each distribution has a mean value, which either may be an exact value or
+an approximate result, that can be obtained via :meth:`~Distribution.mean`.
+Sometimes, distributions can be simplified, which is supported by
+:meth:`~Distribution.simplify`.
 
 >>> from moptipy.utils.nputils import rand_generator
 >>> from statistics import mean
@@ -140,6 +146,23 @@ In(lb=1, ub=10, d=Gamma(k=3, theta=0.26))
  1.320740351247919, 1.0407411942999665]
 >>> mean(x) / interval.mean()
 1.0256329849020747
+
+>>> erlang2 = Gamma.from_k_and_mean(3, 10)
+>>> erlang2
+Erlang(k=3, theta=3.3333333333333335)
+>>> erlang2.mean()
+10
+>>> x = [erlang2.sample(rnd) for _ in range(200)]
+>>> x[:20]
+[10.087506399523226, 12.928131914870168, 12.330250639007767,\
+ 5.305123692562998, 21.085037136404374, 6.6603691824173135,\
+ 2.961302890492059, 9.810557147180853, 8.051620919921454,\
+ 8.750329405836668, 3.9511445189935763, 5.570300668751883,\
+ 16.70132947692463, 7.831425379483914, 11.154757962484842,\
+ 8.78943102381046, 8.395847820234795, 16.42251602814587,\
+ 17.1628992966332, 9.684008648356015]
+>>> mean(x) / erlang2.mean()
+1.022444624140316
 """
 
 from dataclasses import dataclass
@@ -160,7 +183,9 @@ class Distribution:
 
     def sample(self, random: Generator) -> int | float:
         """
-        Sample a random number folling this distribution generator.
+        Sample a random number following this distribution generator.
+
+        Each call to this function returns exactly one number.
 
         :param random: the random number generator
         :return: the number
@@ -171,6 +196,12 @@ class Distribution:
         """
         Try to simplify this distribution.
 
+        Some distributions can trivially be simplified. For example, if you
+        have applied a range limit (:class:`In`) to a constant distribution
+        (class:`Const`), then this can be simplified to just the constant.
+        If such simplification is possible, this method returns the simplified
+        distribution. Otherwise, it just returns the distribution itself.
+
         :returns: a simplified version of this distribution
         """
         if not isinstance(self, Distribution):
@@ -180,6 +211,12 @@ class Distribution:
     def mean(self) -> int | float:
         """
         Get the mean or approximate mean of the distribution.
+
+        Some distribution overwrite this method to produce an exact computed
+        expected value or mean. This default implementation just computes the
+        arithmetic mean of 10'000 samples of the distribution. This serves as
+        baseline approximation for any case where a closed form mathematical
+        definition of the expected value is not available.
 
         :return: the mean or approximated mean
         """
@@ -358,6 +395,22 @@ class Gamma(Distribution):
             raise ValueError(f"beta cannot be {beta}.")
         return cls(alpha, 1 / beta).simplify()
 
+    @classmethod
+    def from_k_and_mean(cls, k: int | float, mean: int | float) \
+            -> "Distribution":
+        """
+        Create the Gamma distribution from the value of `k` and a mean.
+
+        :param k: the shape parameter
+        :param mean: the mean
+        :return: the distribution
+        """
+        k = try_int(k)
+        mean = try_int(mean)
+        if (mean <= 0) or (k <= 0):
+            raise ValueError(f"Invalid values k={k}, mean={mean}.")
+        return Gamma(k, mean / k).simplify()
+
 
 class Erlang(Gamma):
     """The Erlang distribution."""
@@ -531,6 +584,8 @@ class AtLeast(Distribution):
         if isinstance(dd, In):
             idd: In = cast("In", dd)
             return In(max(idd.lb, self.lb), idd.ub, idd.d).simplify()
+        if (self.lb <= 0) and (isinstance(dd, Exponential | Gamma | Erlang)):
+            return dd
         return self
 
     def sample(self, random: Generator) -> int | float:

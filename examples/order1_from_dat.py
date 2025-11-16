@@ -74,7 +74,7 @@ from moptipyapps.order1d.distances import swap_distance
 from moptipyapps.order1d.instance import Instance
 from moptipyapps.order1d.space import OrderingSpace
 from moptipyapps.qap.objective import QAPObjective
-from moptipyapps.shared import moptipyapps_argparser
+from moptipyapps.utils.shared import moptipyapps_argparser
 
 #: the impact of rank differences
 POWER: Final[float] = 2.0
@@ -146,8 +146,9 @@ def get_tags(data: tuple[str, int, int, np.ndarray]) \
     :param data: the data
     :return: the tags
     """
+    sep: Final[str] = ","
     return (data[0], str(data[1]), str(data[2]),
-            f"\"[{','.join(str(a + 1) for a in data[3])}]\"")
+            f'"[{sep.join(str(a + 1) for a in data[3])}]"')
 
 
 def get_distance(a: tuple[str, int, int, np.ndarray],

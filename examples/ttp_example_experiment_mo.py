@@ -26,12 +26,12 @@ from moptipy.operators.permutations.op2_gap import (
 from moptipy.spaces.permutations import Permutations
 from pycommons.io.path import Path
 
-from moptipyapps.shared import moptipyapps_argparser
 from moptipyapps.ttp.errors import Errors
 from moptipyapps.ttp.game_encoding import GameEncoding
 from moptipyapps.ttp.game_plan_space import GamePlanSpace
 from moptipyapps.ttp.instance import Instance
 from moptipyapps.ttp.plan_length import GamePlanLength
+from moptipyapps.utils.shared import moptipyapps_argparser
 
 
 def make_instances() -> Iterable[Callable[[], Instance]]:

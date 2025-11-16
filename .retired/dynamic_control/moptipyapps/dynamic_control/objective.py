@@ -28,7 +28,7 @@ from pycommons.types import type_error
 
 from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.ode import diff_from_ode, j_from_ode, run_ode
-from moptipyapps.shared import SCOPE_INSTANCE
+from moptipyapps.utils.shared import SCOPE_INSTANCE
 
 
 class FigureOfMerit(Objective):

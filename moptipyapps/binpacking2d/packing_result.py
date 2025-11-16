@@ -67,7 +67,7 @@ from moptipyapps.binpacking2d.objectives.bin_count_and_small import (
     BinCountAndSmall,
 )
 from moptipyapps.binpacking2d.packing import Packing
-from moptipyapps.shared import (
+from moptipyapps.utils.shared import (
     moptipyapps_argparser,
     motipyapps_footer_bottom_comments,
 )

@@ -53,7 +53,7 @@ from moptipyapps.binpacking2d.packing_result import (
 )
 from moptipyapps.binpacking2d.packing_result import from_csv as pr_from_csv
 from moptipyapps.binpacking2d.packing_result import from_logs as pr_from_logs
-from moptipyapps.shared import (
+from moptipyapps.utils.shared import (
     moptipyapps_argparser,
     motipyapps_footer_bottom_comments,
 )

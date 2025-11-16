@@ -24,7 +24,7 @@ from moptipyapps.binpacking2d.encodings.ibl_encoding_1 import (
 from moptipyapps.binpacking2d.instance import Instance
 from moptipyapps.binpacking2d.packing_result import DEFAULT_OBJECTIVES
 from moptipyapps.binpacking2d.packing_space import PackingSpace
-from moptipyapps.shared import moptipyapps_argparser
+from moptipyapps.utils.shared import moptipyapps_argparser
 
 #: the maximum number of FEs
 MAX_FES: Final[int] = 1_000_000

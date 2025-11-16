@@ -36,7 +36,7 @@ from moptipyapps.binpacking2d.packing import (
     IDX_TOP_Y,
     Packing,
 )
-from moptipyapps.shared import SCOPE_INSTANCE
+from moptipyapps.utils.shared import SCOPE_INSTANCE
 
 
 class PackingSpace(Space):

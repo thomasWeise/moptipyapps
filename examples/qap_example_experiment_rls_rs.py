@@ -14,7 +14,7 @@ from pycommons.io.path import Path
 
 from moptipyapps.qap.instance import Instance
 from moptipyapps.qap.objective import QAPObjective
-from moptipyapps.shared import moptipyapps_argparser
+from moptipyapps.utils.shared import moptipyapps_argparser
 
 
 def make_instances() -> Iterable[Callable[[], Instance]]:

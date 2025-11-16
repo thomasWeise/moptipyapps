@@ -13,9 +13,9 @@ from moptipy.api.space import Space
 from moptipy.utils.logger import CSV_SEPARATOR, KeyValueLogSection
 from pycommons.types import type_error
 
-from moptipyapps.shared import SCOPE_INSTANCE
 from moptipyapps.ttp.game_plan import GamePlan
 from moptipyapps.ttp.instance import Instance
+from moptipyapps.utils.shared import SCOPE_INSTANCE
 
 
 class GamePlanSpace(Space):

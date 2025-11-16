@@ -49,7 +49,7 @@ from moptipy.utils.logger import KeyValueLogSection
 from pycommons.types import type_error
 
 from moptipyapps.qap.instance import Instance
-from moptipyapps.shared import SCOPE_INSTANCE
+from moptipyapps.utils.shared import SCOPE_INSTANCE
 
 
 @numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)

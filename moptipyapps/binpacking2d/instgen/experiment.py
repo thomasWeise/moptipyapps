@@ -13,7 +13,7 @@ from moptipyapps.binpacking2d.instgen.errors_and_hardness import (
     ErrorsAndHardness,
 )
 from moptipyapps.binpacking2d.instgen.problem import Problem
-from moptipyapps.shared import moptipyapps_argparser
+from moptipyapps.utils.shared import moptipyapps_argparser
 
 #: the maximum number of FEs
 MAX_FES: Final[int] = 10_000

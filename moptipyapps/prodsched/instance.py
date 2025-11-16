@@ -15,13 +15,13 @@ The number of products be 3.
 The number of customers be 5.
 >>> n_customers = 5
 
-The number of machines be 4.
->>> n_machines = 4
+The number of stations be 4.
+>>> n_stations = 4
 
 There will be 6 customer demands.
 >>> n_demands = 6
 
-Each product may take a different route through different machines.
+Each product may take a different route through different stations.
 >>> route_p0 = [0, 3, 2]
 >>> route_p1 = [0, 2, 1, 3]
 >>> route_p2 = [1, 2, 3]
@@ -40,14 +40,14 @@ release time, and deadline.
 There is a fixed amount of each product in the warehouse at time step 0.
 >>> warehous_at_t0 = [10, 0, 6]
 
-Each machine requires a certain working time for each unit of each product.
+Each station requires a certain working time for each unit of each product.
 This production time may vary over time.
-For example, maybe machine 0 needs 10 time units for 1 unit of product 0 from
+For example, maybe station 0 needs 10 time units for 1 unit of product 0 from
 time step 0 to time step 19, then 11 time units from time step 20 to 39, then
 8 time units from time step 40 to 59.
 These times are cyclic, meaning that at time step 60 to 79, it will again need
 10 time units, and so on.
-Of course, production times are only specified for machines that a product is
+Of course, production times are only specified for stations that a product is
 actually routed through.
 >>> m0_p0 = [10.0, 20.0, 11.0, 40.0,  8.0, 60.0]
 >>> m0_p1 = [12.0, 20.0,  7.0, 40.0, 11.0, 70.0]
@@ -61,7 +61,7 @@ actually routed through.
 >>> m3_p0 = [70.0, 200.0,  3.0, 220.0]
 >>> m3_p1 = [60.0, 220.0,  5.0, 260.0]
 >>> m3_p2 = [30.0, 210.0, 10.0, 300.0]
->>> machine_product_unit_times = [[m0_p0, m0_p1, m0_p2],
+>>> station_product_unit_times = [[m0_p0, m0_p1, m0_p2],
 ...                               [m1_p0, m1_p1, m1_p2],
 ...                               [m2_p0, m2_p1, m2_p2],
 ...                               [m3_p0, m3_p1, m3_p2]]
@@ -71,16 +71,16 @@ We can (but do not need to) provide additional information as key-value pairs.
 ...          "creation_date": "2025-11-09"}
 
 From all of this data, we can create the instance.
->>> instance = Instance(name, n_products, n_customers, n_machines, n_demands,
+>>> instance = Instance(name, n_products, n_customers, n_stations, n_demands,
 ...                     routes, demands, warehous_at_t0,
-...                     machine_product_unit_times, infos)
+...                     station_product_unit_times, infos)
 >>> instance.name
 'my_instance'
 
 >>> instance.n_customers
 5
 
->>> instance.n_machines
+>>> instance.n_stations
 4
 
 >>> instance.n_demands
@@ -106,7 +106,7 @@ demand_id=2, customer_id=2, product_id=2, amount=7))
 >>> instance.warehous_at_t0
 (10, 0, 6)
 
->>> instance.machine_product_unit_times
+>>> instance.station_product_unit_times
 ((array([10., 20., 11., 40.,  8., 60.]), \
 array([12., 20.,  7., 40., 11., 70.]), array([], dtype=float64)), (\
 array([], dtype=float64), array([ 20.,  50.,  30., 120.,   7., 200.]), \
@@ -125,13 +125,15 @@ We then load the independent instance `i2` from that stream.
 >>> i2 = from_stream(to_stream(instance))
 >>> i2 is instance
 False
+>>> i2 == instance
+True
 
 You can see that the loaded instance has the same data as the stored one.
 >>> i2.name == instance.name
 True
 >>> i2.n_customers == instance.n_customers
 True
->>> i2.n_machines == instance.n_machines
+>>> i2.n_stations == instance.n_stations
 True
 >>> i2.n_demands == instance.n_demands
 True
@@ -144,9 +146,9 @@ True
 >>> i2.warehous_at_t0 == instance.warehous_at_t0
 True
 >>> eq: bool = True
->>> for i in range(i2.n_machines):
-...     ma1 = i2.machine_product_unit_times[i]
-...     ma2 = instance.machine_product_unit_times[i]
+>>> for i in range(i2.n_stations):
+...     ma1 = i2.station_product_unit_times[i]
+...     ma2 = instance.station_product_unit_times[i]
 ...     for j in range(i2.n_products):
 ...         pr1 = ma1[j]
 ...         pr2 = ma2[j]
@@ -187,11 +189,11 @@ from pycommons.io.csv import CSV_SEPARATOR
 from pycommons.math.int_math import try_int
 from pycommons.types import check_int_range, check_to_int_range, type_error
 
-#: The maximum for the number of machines, products, or customers.
-_MAX_DIM: Final[int] = 1_000_000_000
+#: The maximum for the number of stations, products, or customers.
+MAX_ID: Final[int] = 1_000_000_000
 
 #: No value bigger than this is permitted in any tuple anywhere.
-_INNER_MAX_DIM: Final[int] = 2_147_483_647
+MAX_VALUE: Final[int] = 2_147_483_647
 
 #: the index of the demand ID
 DEMAND_ID: Final[int] = 0
@@ -256,7 +258,7 @@ class Demand(Iterable[int | float]):
         if not isinstance(arrival, float):
             raise type_error(arrival, "arrival", float)
         if not (isfinite(arrival) and (
-                0 < arrival < _INNER_MAX_DIM)):
+                0 < arrival < MAX_VALUE)):
             raise ValueError(f"invalid arrival={arrival}")
 
         if isinstance(deadline, int):
@@ -266,7 +268,7 @@ class Demand(Iterable[int | float]):
             deadline = t
         if not isinstance(deadline, float):
             raise type_error(deadline, "deadline", float)
-        if not (isfinite(deadline) and (0 < deadline < _INNER_MAX_DIM)):
+        if not (isfinite(deadline) and (0 < deadline < MAX_VALUE)):
             raise ValueError(f"invalid deadline={deadline}")
 
         if deadline < arrival:
@@ -275,13 +277,13 @@ class Demand(Iterable[int | float]):
         object.__setattr__(self, "arrival", arrival)
         object.__setattr__(self, "deadline", deadline)
         object.__setattr__(self, "demand_id", check_int_range(
-            demand_id, "demand_id", 0, _MAX_DIM))
+            demand_id, "demand_id", 0, MAX_ID))
         object.__setattr__(self, "customer_id", check_int_range(
-            customer_id, "customer_id", 0, _MAX_DIM))
+            customer_id, "customer_id", 0, MAX_ID))
         object.__setattr__(self, "product_id", check_int_range(
-            product_id, "product_id", 0, _MAX_DIM))
+            product_id, "product_id", 0, MAX_ID))
         object.__setattr__(self, "amount", check_int_range(
-            amount, "amount", 1, _MAX_DIM))
+            amount, "amount", 1, MAX_ID))
 
     def __getitem__(self, item: int) -> int | float:
         """
@@ -353,7 +355,7 @@ class Demand(Iterable[int | float]):
 
 def __to_tuple(source: Iterable[int | float],
                pool: dict, empty_ok: bool = False,
-               type_var: type = int) -> tuple[int, ...]:
+               type_var: type = int) -> tuple:
     """
     Convert an iterable of type integer to a tuple.
 
@@ -416,8 +418,8 @@ def __to_tuple(source: Iterable[int | float],
     for j, v in enumerate(use_row):
         if not isinstance(v, type_var):
             raise type_error(v, f"row[{j}]", type_var)
-        if not (isfinite(v) and (0 <= v <= _INNER_MAX_DIM)):  # type: ignore
-            raise ValueError(f"row[{j}]={v} not in 0..{_INNER_MAX_DIM}")
+        if not (isfinite(v) and (0 <= v <= MAX_VALUE)):  # type: ignore
+            raise ValueError(f"row[{j}]={v} not in 0..{MAX_VALUE}")
 
     key: Final[str] = repr(use_row)
     if key in pool:
@@ -561,7 +563,7 @@ def __to_tuples(source: Iterable[Iterable],
 
 def __to_2d_npfloat(source: Iterable[Iterable],  # pylint: disable=W1113
                     pool: dict, empty_ok: bool = False,
-                    *_)  -> tuple[np.ndarray, ...]:  # pylint: disable=W1113
+                    *_) -> tuple[np.ndarray, ...]:  # pylint: disable=W1113
     """
     Turn 2D nested iterables into 2D nested tuples.
 
@@ -603,17 +605,17 @@ def __to_3d_npfloat(source: Iterable[Iterable[Iterable]],
 
 
 def _make_routes(
-        n_products: int, n_machines: int,
+        n_products: int, n_stations: int,
         source: Iterable[Iterable[int]],
         pool: dict) -> tuple[tuple[int, ...], ...]:
     """
-    Create the routes through machines for the products.
+    Create the routes through stations for the products.
 
-    Each product passes through a set of machines. It can pass through each
-    machine at most once. It can only pass through valid machines.
+    Each product passes through a set of stations. It can pass through each
+    station at most once. It can only pass through valid stations.
 
     :param n_products: the number of products
-    :param n_machines: the number of machines
+    :param n_stations: the number of stations
     :param source: the source data
     :param pool: the tuple pool
     :return: the routes, a tuple of tuples
@@ -629,8 +631,8 @@ def _make_routes(
     >>> k[0] is k[1]
     True
     """
-    check_int_range(n_products, "n_products", 1, _MAX_DIM)
-    check_int_range(n_machines, "n_machines", 1, _MAX_DIM)
+    check_int_range(n_products, "n_products", 1, MAX_ID)
+    check_int_range(n_stations, "n_stations", 1, MAX_ID)
     dest: tuple[tuple[int, ...], ...] = __to_tuples(source, pool)
 
     n_rows: Final[int] = tuple.__len__(dest)
@@ -638,15 +640,13 @@ def _make_routes(
         raise ValueError(f"{n_products} products, but {n_rows} routes.")
     for i, route in enumerate(dest):
         stations: int = tuple.__len__(route)
-        if not (0 < stations <= n_machines):
+        if stations <= 0:
             raise ValueError(
-                f"len(row[{i}])={stations}, but n_machines={n_machines}")
-        if set.__len__(set(route)) != stations:
-            raise ValueError(f"{route} contains duplicates.")
+                f"len(row[{i}])={stations} but n_stations={n_stations}")
         for j, v in enumerate(route):
-            if not (0 <= v < n_machines):
+            if not (0 <= v < n_stations):
                 raise ValueError(
-                    f"row[{i},{j}]={v}, but n_machines={n_machines}")
+                    f"row[{i},{j}]={v}, but n_stations={n_stations}")
     return dest
 
 
@@ -716,9 +716,9 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
  demand_id=2, customer_id=5, product_id=2, amount=6), Demand(arrival=20.0,\
  deadline=21.0, demand_id=0, customer_id=2, product_id=1, amount=4))
     """
-    check_int_range(n_products, "n_products", 1, _MAX_DIM)
-    check_int_range(n_customers, "n_customers", 1, _MAX_DIM)
-    check_int_range(n_demands, "n_demands", 1, _MAX_DIM)
+    check_int_range(n_products, "n_products", 1, MAX_ID)
+    check_int_range(n_customers, "n_customers", 1, MAX_ID)
+    check_int_range(n_demands, "n_demands", 1, MAX_ID)
 
     temp: tuple[Demand, ...] = __to_nested_tuples(
         source, pool, False, inner=__to_demand)
@@ -727,8 +727,8 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
         raise ValueError(f"Expected {n_demands} demands, got {n_dem}?")
 
     used_ids: set[int] = set()
-    min_id: int = 1000 * _MAX_DIM
-    max_id: int = -1000 * _MAX_DIM
+    min_id: int = 1000 * MAX_ID
+    max_id: int = -1000 * MAX_ID
     dest: list[Demand] = []
 
     for i, demand in enumerate(temp):
@@ -752,15 +752,15 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
                              f"but n_products={n_products}")
 
         amount: int = demand.amount
-        if not (0 < amount < _MAX_DIM):
+        if not (0 < amount < MAX_ID):
             raise ValueError(f"demand[{i}].amount = {amount}.")
 
         arrival: float = demand.arrival
-        if not (isfinite(arrival) and (0 < arrival < _MAX_DIM)):
+        if not (isfinite(arrival) and (0 < arrival < MAX_ID)):
             raise ValueError(f"demand[{i}].arrival = {arrival}.")
 
         deadline: float = demand.deadline
-        if not (isfinite(deadline) and arrival <= deadline < _MAX_DIM):
+        if not (isfinite(deadline) and arrival <= deadline < MAX_ID):
             raise ValueError(f"demand[{i}].deadline = {deadline}.")
         dest.append(demand)
 
@@ -793,38 +793,38 @@ def _make_in_warehouse(n_products: int, source: Iterable[int],
         raise ValueError(f"We have {n_products} products, "
                          f"but the warehouse list length is {rl}.")
     for p, v in enumerate(ret):
-        if not (0 <= v <= _MAX_DIM):
+        if not (0 <= v <= MAX_ID):
             raise ValueError(f"Got {v} units of product {p} in warehouse?")
     return ret
 
 
-def _make_machine_product_unit_times(
-        n_products: int, n_machines: int,
+def _make_station_product_unit_times(
+        n_products: int, n_stations: int,
         routes: tuple[tuple[float, ...], ...],
         source: Iterable[Iterable[Iterable[float]]],
         pool: dict) -> tuple[tuple[np.ndarray, ...], ...]:
     """
-    Create the structure for the work times per product unit per machine.
+    Create the structure for the work times per product unit per station.
 
-    Here we have for each machine, for each product, a sequence of per-unit
+    Here we have for each station, for each product, a sequence of per-unit
     production settings. Each such "production settings" is a tuple with a
     per-unit production time and an end time index until which it is valid.
     Production times cycle, so if we produce something after the last end
     time index, we begin again at production time index 0.
 
     :param n_products: the number of products
-    :param n_machines: the number of machines
-    :param routes: the routes of the products through the machines
+    :param n_stations: the number of stations
+    :param routes: the routes of the products through the stations
     :param source: the source array
     :param pool: the tuple pool
-    :return: the machine unit times
+    :return: the station unit times
 
     >>> ppl = {}
     >>> rts = _make_routes(3, 2, [[0, 1], [0], [1, 0]], ppl)
     >>> print(rts)
     ((0, 1), (0,), (1, 0))
 
-    >>> mpt1 = _make_machine_product_unit_times(3, 2, rts, [
+    >>> mpt1 = _make_station_product_unit_times(3, 2, rts, [
     ...     [[1.0, 2.0, 3.0, 5.0], [1.0, 2.0, 3.0, 5.0],
     ...      [1.0, 10.0, 2.0, 30.0]],
     ...     [[2.0, 20.0, 3.0, 40.0], [], [4.0, 56.0, 34.0, 444.0]]], ppl)
@@ -835,7 +835,7 @@ array([], dtype=float64), array([  4.,  56.,  34., 444.])))
     >>> mpt1[0][0] is mpt1[0][1]
     True
 
-    >>> mpt2 = _make_machine_product_unit_times(3, 2, rts, [
+    >>> mpt2 = _make_station_product_unit_times(3, 2, rts, [
     ...     [[1.0, 2.0, 3.0, 5.0], [1.0, 2.0, 3.0, 5.0],
     ...      [1.0, 10.0, 2.0, 30.0]],
     ...     [[2.0, 20.0, 3.0, 40.0], [], [4.0, 56.0, 34.0, 444.0]]], ppl)
@@ -853,47 +853,47 @@ array([], dtype=float64), array([  4.,  56.,  34., 444.])))
         raise ValueError("invalid routes!")
 
     d1: int = tuple.__len__(ret)
-    if d1 != n_machines:
+    if d1 != n_stations:
         raise ValueError(
-            f"Got {d1} machine-times, but {n_machines} machines.")
-    for mid, machine in enumerate(ret):
-        d2: int = tuple.__len__(machine)
+            f"Got {d1} station-times, but {n_stations} stations.")
+    for mid, station in enumerate(ret):
+        d2: int = tuple.__len__(station)
         if d2 <= 0:
             for pid, r in enumerate(routes):
                 if mid in r:
                     raise ValueError(
-                        f"Machine {mid} in route for product {pid}, "
+                        f"Station {mid} in route for product {pid}, "
                         "but has no production time")
             continue
         if d2 != n_products:
-            raise ValueError(f"got {d2} products for machine {mid}, "
+            raise ValueError(f"got {d2} products for station {mid}, "
                              f"but have {n_products} products")
-        for pid, product in enumerate(machine):
+        for pid, product in enumerate(station):
             needs_times: bool = mid in routes[pid]
             d3: int = np.ndarray.__len__(product)
             if (not needs_times) and (d3 > 0):
                 raise ValueError(
-                    f"product {pid} does not pass through machine {mid}, "
+                    f"product {pid} does not pass through station {mid}, "
                     "so there must not be production times!")
             if needs_times and (d3 <= 0):
                 raise ValueError(
-                    f"product {pid} does pass through machine {mid}, "
+                    f"product {pid} does pass through station {mid}, "
                     "so there must be production times!")
             if (d3 % 2) != 0:
                 raise ValueError(
-                    f"production times for {pid} does pass through machine "
+                    f"production times for {pid} does pass through station "
                     f"{mid}, must be of even length, but got length {d3}.")
             last_end = 0
             for pt, time in enumerate(batched(product, 2)):
                 if tuple.__len__(time) != 2:
                     raise ValueError(f"production times must be 2-tuples, "
                                      f"but got {time} for product {pid} on "
-                                     f"machine {mid} at position {pt}")
+                                     f"station {mid} at position {pt}")
                 unit_time, end = time
-                if not ((unit_time > 0) and (last_end < end < _MAX_DIM)):
+                if not ((unit_time > 0) and (last_end < end < MAX_ID)):
                     raise ValueError(
                         f"Invalid unit time {unit_time} and end time "
-                        f"{end} for product {pid} on machine {mid}")
+                        f"{end} for product {pid} on station {mid}")
                 last_end = end
 
     return ret
@@ -938,12 +938,12 @@ class Instance(Component):
 
     def __init__(
             self, name: str,
-            n_products: int, n_customers: int, n_machines: int,
+            n_products: int, n_customers: int, n_stations: int,
             n_demands: int,
             routes: Iterable[Iterable[int]],
             demands: Iterable[Iterable[int | float]],
             warehous_at_t0: Iterable[int],
-            machine_product_unit_times: Iterable[Iterable[Iterable[float]]],
+            station_product_unit_times: Iterable[Iterable[Iterable[float]]],
             infos: Iterable[tuple[str, str]] | Mapping[
                 str, str] | None = None) \
             -> None:
@@ -953,21 +953,21 @@ class Instance(Component):
         :param name: the instance name
         :param n_products: the number of products
         :param n_customers: the number of customers
-        :param n_machines: the number of machines
+        :param n_stations: the number of stations
         :param n_demands: the number of demand records
-        :param routes: for each product, the sequence of machines that it has
+        :param routes: for each product, the sequence of stations that it has
             to pass
         :param demands: a sequences of demands of the form (
             customer_id, product_id, product_amount, release_time) OR a
             sequence of :class:`Demand` records.
         :param warehous_at_t0: the amount of products in the warehouse at time
             0 for each product
-        :param machine_product_unit_times: for each machine and each product
+        :param station_product_unit_times: for each station and each product
             the per-unit-production time schedule, in the form of
             "per_unit_time, duration", where duration is the number of time
             units for which the per_unit_time is value
-        :param machine_product_unit_times: the cycling unit times for each
-            product on each machine, each with a validity duration
+        :param station_product_unit_times: the cycling unit times for each
+            product on each station, each with a validity duration
         :param infos: additional infos to be stored with the instance.
             These are key-value pairs with keys that are not used by the
             instance. They have no impact on the instance performance, but may
@@ -983,23 +983,23 @@ class Instance(Component):
 
         #: the number of products in the scenario
         self.n_products: Final[int] = check_int_range(
-            n_products, "n_products", 1, _MAX_DIM)
+            n_products, "n_products", 1, MAX_ID)
         #: the number of customers in the scenario
         self.n_customers: Final[int] = check_int_range(
-            n_customers, "n_customers", 1, _MAX_DIM)
-        #: the number of machines or workstations in the scenario
-        self.n_machines: Final[int] = check_int_range(
-            n_machines, "n_machines", 1, _MAX_DIM)
+            n_customers, "n_customers", 1, MAX_ID)
+        #: the number of stations or workstations in the scenario
+        self.n_stations: Final[int] = check_int_range(
+            n_stations, "n_stations", 1, MAX_ID)
         #: the number of demands in the scenario
         self.n_demands: Final[int] = check_int_range(
-            n_demands, "n_demands", 1, _MAX_DIM)
+            n_demands, "n_demands", 1, MAX_ID)
 
         pool: dict = {}  # the pool for resolving tuples
 
-        #: the product routes, i.e., the machines through which each product
+        #: the product routes, i.e., the stations through which each product
         #: must pass
         self.routes: Final[tuple[tuple[int, ...], ...]] = _make_routes(
-            n_products, n_machines, routes, pool)
+            n_products, n_stations, routes, pool)
         #: The demands: Each demand is a tuple of demand_id, customer_id,
         #: product_id, amount, release_time, and deadline.
         #: The customer makes their order at time step release_time.
@@ -1016,12 +1016,12 @@ class Instance(Component):
         self.warehous_at_t0: Final[tuple[int, ...]] = _make_in_warehouse(
             n_products, warehous_at_t0, pool)
 
-        #: The per-machine unit production times for each product.
-        #: Each machine can have different production times per product.
+        #: The per-station unit production times for each product.
+        #: Each station can have different production times per product.
         #: Let's say that this is tuple `A`.
         #: For each product, it has a tuple `B` at the index of the product
         #: id.
-        #: If the product does not pass through the machine, `B` is empty.
+        #: If the product does not pass through the station, `B` is empty.
         #: Otherwise, it holds one or multiple tuples `C`.
         #: Each tuple `C` consists of two numbers:
         #: A per-unit-production time for the product.
@@ -1029,9 +1029,9 @@ class Instance(Component):
         #: Once the real time surpasses the end time of the last of these
         #: production specs, the production specs are recycled and begin
         #: again.
-        self.machine_product_unit_times: Final[tuple[tuple[
-            np.ndarray, ...], ...]] = _make_machine_product_unit_times(
-            n_products, n_machines, self.routes, machine_product_unit_times,
+        self.station_product_unit_times: Final[tuple[tuple[
+            np.ndarray, ...], ...]] = _make_station_product_unit_times(
+            n_products, n_stations, self.routes, station_product_unit_times,
             pool)
 
         #: Additional information about the nature of the instance can be
@@ -1047,6 +1047,73 @@ class Instance(Component):
         """
         return self.name
 
+    def _tuple(self) -> tuple:
+        """
+        Convert this object to a tuple.
+
+        :return: the tuple
+
+        >>> Instance(name="test1", n_products=1, n_customers=1, n_stations=2,
+        ...         n_demands=1, routes=[[0, 1]],
+        ...         demands=[[0, 0, 0, 10, 20, 100]],
+        ...         warehous_at_t0=[0],
+        ...     station_product_unit_times=[[[10.0, 10000.0]],
+        ...                                 [[30.0, 10000.0]]])._tuple()
+        ('test1', 2, 1, 1, 1, (Demand(arrival=20.0, deadline=100.0,\
+ demand_id=0, customer_id=0, product_id=0, amount=10),), ((0, 1),),\
+ (0,), (), ((10.0, 10000.0), (30.0, 10000.0)))
+        """
+        return (self.name, self.n_stations, self.n_products,
+                self.n_demands, self.n_customers, self.demands,
+                self.routes, self.warehous_at_t0, tuple(self.infos.items()),
+                tuple(tuple(float(x) for x in a2) for a1 in
+                      self.station_product_unit_times for a2 in a1))
+
+    def __eq__(self, other):
+        """
+        Compare this object with another object.
+
+        :param other: the other object
+        :return: `NotImplemented` if the other object is not an `Instance`,
+            otherwise the equality comparison result.
+
+        >>> i1 = Instance(name="test1", n_products=1, n_customers=1,
+        ...         n_stations=2, n_demands=1, routes=[[0, 1]],
+        ...         demands=[[0, 0, 0, 10, 20, 100]],
+        ...         warehous_at_t0=[0],
+        ...     station_product_unit_times=[[[10.0, 10000.0]],
+        ...                                 [[30.0, 10000.0]]])
+        >>> i2 = Instance(name="test1", n_products=1, n_customers=1,
+        ...         n_stations=2, n_demands=1, routes=[[0, 1]],
+        ...         demands=[[0, 0, 0, 10, 20, 100]],
+        ...         warehous_at_t0=[0],
+        ...     station_product_unit_times=[[[10.0, 10000.0]],
+        ...                                 [[30.0, 10000.0]]])
+        >>> i1 == i2
+        True
+        >>> i3 = Instance(name="test1", n_products=1, n_customers=1,
+        ...          n_stations=2, n_demands=1, routes=[[0, 1]],
+        ...         demands=[[0, 0, 0, 10, 20, 100]],
+        ...         warehous_at_t0=[0],
+        ...     station_product_unit_times=[[[10.0, 10000.1]],
+        ...                                 [[30.0, 10000.0]]])
+        >>> i1 == i3
+        False
+        """
+        if other is None:
+            return False
+        if not isinstance(other, Instance):
+            return NotImplemented
+        return self._tuple() == cast("Instance", other)._tuple()
+
+    def __hash__(self) -> int:
+        """
+        Get the hash code of this object.
+
+        :return: the hash code of this object
+        """
+        return hash(self._tuple())
+
 
 #: the instance name key
 KEY_NAME: Final[str] = "name"
@@ -1054,8 +1121,8 @@ KEY_NAME: Final[str] = "name"
 KEY_N_PRODUCTS: Final[str] = "n_products"
 #: the key for the number of customers
 KEY_N_CUSTOMERS: Final[str] = "n_customers"
-#: the key for the number of machines
-KEY_N_MACHINES: Final[str] = "n_machines"
+#: the key for the number of stations
+KEY_N_STATIONS: Final[str] = "n_stations"
 #: the number of demands in the scenario
 KEY_N_DEMANDS: Final[str] = "n_demands"
 #: the start of a key index
@@ -1076,7 +1143,7 @@ _KEY_VALUE_SPLIT: Final[str] = str.strip(KEY_VALUE_SEPARATOR)
 
 #: the forbidden keys
 __FORBIDDEN_INFO_KEYS: Final[Callable[[str], bool]] = {
-    KEY_NAME, KEY_N_PRODUCTS, KEY_N_CUSTOMERS, KEY_N_MACHINES,
+    KEY_NAME, KEY_N_PRODUCTS, KEY_N_CUSTOMERS, KEY_N_STATIONS,
     KEY_N_DEMANDS, KEY_ROUTE, KEY_DEMAND, KEY_IN_WAREHOUSE,
     KEY_PRODUCTION_TIME}.__contains__
 
@@ -1117,10 +1184,10 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
     yield (f"{COMMENT_START} (Valid customer indices are in 0.."
            f"{instance.n_customers - 1}.)")
     yield COMMENT_START
-    yield f"{COMMENT_START} the number of machines in the instance, > 0"
-    yield f"{KEY_N_MACHINES}{KEY_VALUE_SEPARATOR}{instance.n_machines}"
-    yield (f"{COMMENT_START} (Valid machine indices are in 0.."
-           f"{instance.n_machines - 1}.)")
+    yield f"{COMMENT_START} the number of stations in the instance, > 0"
+    yield f"{KEY_N_STATIONS}{KEY_VALUE_SEPARATOR}{instance.n_stations}"
+    yield (f"{COMMENT_START} (Valid station indices are in 0.."
+           f"{instance.n_stations - 1}.)")
     yield COMMENT_START
     yield (f"{COMMENT_START} the number of orders (demands) issued by the "
            f"customers, > 0")
@@ -1129,16 +1196,16 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
            f"{instance.n_demands - 1}.)")
 
     yield COMMENT_START
-    yield (f"{COMMENT_START} For each machine, we now specify the indices of "
-           f"the machines by which it will be processed, in the order in "
+    yield (f"{COMMENT_START} For each station, we now specify the indices of "
+           f"the stations by which it will be processed, in the order in "
            f"which it will be processed by them.")
     yield (f"{COMMENT_START} {KEY_ROUTE}{KEY_IDX_START}0"
            f"{KEY_IDX_END} is the production route by the first product, "
            "which has index 0.")
     route_0: tuple[int, ...] = instance.routes[0]
     yield (f"{COMMENT_START} This product is processed by "
-           f"{tuple.__len__(route_0)} machines, namely first by the "
-           f"machine with index {int(route_0[0])} and last by the machine "
+           f"{tuple.__len__(route_0)} stations, namely first by the "
+           f"station with index {int(route_0[0])} and last by the station "
            f"with index {int(route_0[-1])}.")
     for p, route in enumerate(instance.routes):
         yield (f"{KEY_ROUTE}{KEY_IDX_START}{p}{KEY_IDX_END}"
@@ -1182,13 +1249,13 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
            f"{CSV_SEPARATOR.join(map(str, instance.warehous_at_t0))}")
 
     yield COMMENT_START
-    yield (f"{COMMENT_START} For each machine, we now specify the production "
-           f"times for each product that passes through the machine.")
+    yield (f"{COMMENT_START} For each station, we now specify the production "
+           f"times for each product that passes through the station.")
     empty_pdx: tuple[int, int] | None = None
     filled_pdx: tuple[int, int, np.ndarray] | None = None
     need: int = 2
-    for mid, machine in enumerate(instance.machine_product_unit_times):
-        for pid, product in enumerate(machine):
+    for mid, station in enumerate(instance.station_product_unit_times):
+        for pid, product in enumerate(station):
             pdl: int = np.ndarray.__len__(product)
             if (pdl <= 0) and (empty_pdx is None):
                 empty_pdx = mid, pid
@@ -1204,19 +1271,19 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
             break
     if empty_pdx is not None:
         yield (f"{COMMENT_START} For example, product {empty_pdx[1]} does "
-               f"not pass through machine {empty_pdx[0]}, so it is not "
+               f"not pass through station {empty_pdx[0]}, so it is not "
                "listed here.")
     if filled_pdx is not None:
         yield (f"{COMMENT_START} For example, one unit of product "
-               f"{filled_pdx[1]} passes through machine {filled_pdx[0]}.")
+               f"{filled_pdx[1]} passes through station {filled_pdx[0]}.")
         yield (f"{COMMENT_START} There, it needs {filled_pdx[2][0]} time "
                f"units per product unit from t=0 to t={filled_pdx[2][1]}.")
         if np.ndarray.__len__(filled_pdx[2]) > 2:
             yield (f"{COMMENT_START} After that, it needs {filled_pdx[2][2]}"
                    " time units per product unit until t="
                    f"{filled_pdx[2][3]}.")
-    for mid, machine in enumerate(instance.machine_product_unit_times):
-        for pid, product in enumerate(machine):
+    for mid, station in enumerate(instance.station_product_unit_times):
+        for pid, product in enumerate(station):
             if np.ndarray.__len__(product) <= 0:
                 continue
             flat = map(str, map(try_int, map(float, product)))
@@ -1279,12 +1346,12 @@ def from_stream(stream: Iterable[str]) -> Instance:
     name: str | None = None
     n_products: int | None = None
     n_customers: int | None = None
-    n_machines: int | None = None
+    n_stations: int | None = None
     n_demands: int | None = None
     routes: list[list[int]] | None = None
     demands: list[list[int | float]] | None = None
     in_warehouse: list[int] | None = None
-    machine_product_times: list[list[list[float]]] | None = None
+    station_product_times: list[list[list[float]]] | None = None
     infos: dict[str, str] = {}
 
     for line_idx, oline in enumerate(stream):
@@ -1307,13 +1374,13 @@ def from_stream(stream: Iterable[str]) -> Instance:
                                f"cannot be set to {value!r}", oline, line_idx)
                 name = value
 
-            elif key == KEY_N_MACHINES:
-                if n_machines is not None:
+            elif key == KEY_N_STATIONS:
+                if n_stations is not None:
                     raise __pe(
-                        f"{KEY_N_MACHINES} already defined as {n_machines!r},"
+                        f"{KEY_N_STATIONS} already defined as {n_stations!r},"
                         f" cannot be set to {value!r}", oline, line_idx)
-                n_machines = check_to_int_range(
-                    value, KEY_N_MACHINES, 1, 1_000_000)
+                n_stations = check_to_int_range(
+                    value, KEY_N_STATIONS, 1, 1_000_000)
 
             elif key == KEY_N_PRODUCTS:
                 if n_products is not None:
@@ -1358,8 +1425,8 @@ def from_stream(stream: Iterable[str]) -> Instance:
                 if n_products is None:
                     raise __pe(f"Must define {KEY_N_PRODUCTS} before "
                                f"{KEY_ROUTE}.", oline, line_idx)
-                if n_machines is None:
-                    raise ValueError(f"Must define {KEY_N_MACHINES} before "
+                if n_stations is None:
+                    raise ValueError(f"Must define {KEY_N_STATIONS} before "
                                      f"{KEY_ROUTE}.", oline, line_idx)
                 if routes is None:
                     routes = [[] for _ in range(n_products)]
@@ -1395,35 +1462,39 @@ def from_stream(stream: Iterable[str]) -> Instance:
                 if list.__len__(dlst) != 1:
                     raise __pe(f"Already gave {KEY_DEMAND}{KEY_IDX_START}"
                                f"{demand_id}{KEY_IDX_END}", oline, line_idx)
-                dlst.extend(map(int, str.split(value, CSV_SEPARATOR)))
-                if list.__len__(dlst) <= 5:
-                    raise __pe(f"Demand {demand_id} is too short: {dlst}",
-                               oline, line_idx)
+                str_lst = str.split(value, CSV_SEPARATOR)
+                if list.__len__(str_lst) != 5:
+                    raise __pe(
+                        f"Demand {demand_id} must have 5 entries, but got: "
+                        f"{str_lst!r}", oline, line_idx)
+                dlst.extend((int(str_lst[0]), int(str_lst[1]),
+                             int(str_lst[2]), float(str_lst[3]),
+                             float(str_lst[4])))
 
             elif str.startswith(key, KEY_PRODUCTION_TIME):
                 if n_products is None:
                     raise __pe(f"Must define {KEY_N_PRODUCTS} before "
                                f"{KEY_PRODUCTION_TIME}", oline, line_idx)
-                if n_machines is None:
-                    raise __pe(f"Must define {KEY_N_MACHINES} before"
+                if n_stations is None:
+                    raise __pe(f"Must define {KEY_N_STATIONS} before"
                                f" {KEY_PRODUCTION_TIME}", oline, line_idx)
-                machine, product = str.split(
+                station, product = str.split(
                     __get_key_index(key), CSV_SEPARATOR)
-                machine_id: int = check_to_int_range(
-                    machine, "machine", 0, n_machines - 1)
+                station_id: int = check_to_int_range(
+                    station, "station", 0, n_stations - 1)
                 product_id = check_to_int_range(
                     product, "product", 0, n_products - 1)
 
-                if machine_product_times is None:
-                    machine_product_times = \
+                if station_product_times is None:
+                    station_product_times = \
                         [[[] for _ in range(n_products)]
-                         for __ in range(n_machines)]
+                         for __ in range(n_stations)]
 
-                mpd: list[float] = machine_product_times[
-                    machine_id][product_id]
+                mpd: list[float] = station_product_times[
+                    station_id][product_id]
                 if list.__len__(mpd) > 0:
                     raise __pe(f"Already gave {KEY_PRODUCTION_TIME}"
-                               f"{KEY_IDX_START}{machine_id}{CSV_SEPARATOR}"
+                               f"{KEY_IDX_START}{station_id}{CSV_SEPARATOR}"
                                f"{product_id}{KEY_IDX_END}", oline, line_idx)
                 mpd.extend(
                     map(float, str.split(value, CSV_SEPARATOR)))
@@ -1438,9 +1509,9 @@ def from_stream(stream: Iterable[str]) -> Instance:
     if n_customers is None:
         raise ValueError("Did not specify instance n_customers"
                          f" ({KEY_N_CUSTOMERS}).")
-    if n_machines is None:
-        raise ValueError("Did not specify instance n_machines"
-                         f" ({KEY_N_MACHINES}).")
+    if n_stations is None:
+        raise ValueError("Did not specify instance n_stations"
+                         f" ({KEY_N_STATIONS}).")
     if n_demands is None:
         raise ValueError("Did not specify instance n_demands"
                          f" ({KEY_N_DEMANDS}).")
@@ -1451,12 +1522,12 @@ def from_stream(stream: Iterable[str]) -> Instance:
     if in_warehouse is None:
         raise ValueError("Did not specify instance warehouse values"
                          f" ({KEY_IN_WAREHOUSE}).")
-    if machine_product_times is None:
-        raise ValueError("Did not specify per-machine product production"
+    if station_product_times is None:
+        raise ValueError("Did not specify per-station product production"
                          f"times ({KEY_PRODUCTION_TIME}).")
 
-    return Instance(name, n_products, n_customers, n_machines, n_demands,
-                    routes, demands, in_warehouse, machine_product_times,
+    return Instance(name, n_products, n_customers, n_stations, n_demands,
+                    routes, demands, in_warehouse, station_product_times,
                     infos)
 
 
@@ -1473,7 +1544,6 @@ def compute_finish_time(start_time: float, amount: int,
     :param amount: the number of units to be produced
     :param production_times: the production times array
     :return: the end time
-
 
     Here, the production time is 10 time units / 1 product unit, valid until
     end time 100.

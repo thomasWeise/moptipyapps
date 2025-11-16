@@ -41,8 +41,8 @@ from moptipy.utils.nputils import DEFAULT_INT
 from numpy.random import Generator
 from pycommons.types import type_error
 
-from moptipyapps.shared import SCOPE_INSTANCE
 from moptipyapps.tsp.instance import Instance
+from moptipyapps.utils.shared import SCOPE_INSTANCE
 
 
 @numba.njit(nogil=True, cache=True, inline="always", fastmath=False,

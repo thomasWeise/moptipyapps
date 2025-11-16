@@ -36,7 +36,7 @@ from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.objective import FigureOfMeritLE
 from moptipyapps.dynamic_control.systems.lorenz import LORENZ_111
 from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_111
-from moptipyapps.shared import moptipyapps_argparser
+from moptipyapps.utils.shared import moptipyapps_argparser
 
 
 def make_instances() -> Iterable[Callable[[], Instance]]:
