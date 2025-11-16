@@ -253,7 +253,7 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
     :return: the instance
     """
     generator: str = str(__file__)
-    idx: int = str.find(generator, "moptipyapps")
+    idx: int = str.rfind(generator, "moptipyapps")
     if idx >= 0:
         generator = str.removesuffix(generator[idx:].replace("/", "."), ".py")
     else:
