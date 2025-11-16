@@ -92,7 +92,6 @@ from numpy.random import Generator
 from pycommons.math.int_math import try_int
 from pycommons.types import check_int_range, type_error
 
-from moptipyapps.version import __version__
 from moptipyapps.prodsched.instance import (
     KEY_IDX_END,
     KEY_IDX_START,
@@ -107,6 +106,7 @@ from moptipyapps.utils.sampling import (
     Uniform,
     distribution,
 )
+from moptipyapps.version import __version__
 
 #: the "now" function
 __DTN: Final[Callable[[], datetime.datetime]] = datetime.datetime.now
