@@ -78,7 +78,7 @@ if __name__ == "__main__":
         "run simulations.")
     parser.add_argument(
         "dest", help="the directory to store the data",
-        type=Path, nargs="?", default="./instances/")
+        type=Path, nargs="?", default="./production_scheduling/")
     parser.add_argument(
         "n_instances", help="the number of instances to generate",
         type=int, nargs="?", default=10)
