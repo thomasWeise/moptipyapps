@@ -42,7 +42,7 @@ instances such as those used in the paper [1] by Thürer et al.
 >>> d = dict(inst.infos)
 >>> del d["info_generated_on"]
 >>> d
-{'info_generator': 'moptipyapps.moptipyapps.prodsched.mfc_generator',\
+{'info_generator': 'moptipyapps.prodsched.mfc_generator',\
  'info_rand_seed_src': 'USER_PROVIDED',\
  'info_rand_seed': '0x7b',\
  'info_name_src': 'SAMPLED',\
