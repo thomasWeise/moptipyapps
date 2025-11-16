@@ -41,6 +41,7 @@ instances such as those used in the paper [1] by Thürer et al.
 
 >>> d = dict(inst.infos)
 >>> del d["info_generated_on"]
+>>> del d["info_generator_version"]
 >>> d
 {'info_generator': 'moptipyapps.prodsched.mfc_generator',\
  'info_rand_seed_src': 'USER_PROVIDED',\
@@ -91,6 +92,7 @@ from numpy.random import Generator
 from pycommons.math.int_math import try_int
 from pycommons.types import check_int_range, type_error
 
+from moptipyapps.version import __version__
 from moptipyapps.prodsched.instance import (
     KEY_IDX_END,
     KEY_IDX_START,
@@ -118,6 +120,8 @@ INFO_PRODUCT_INTERARRIVAL_TIME_DIST: Final[str] = \
 
 #: The generator key
 INFO_GENERATOR: Final[str] = "info_generator"
+#: The generator version
+INFO_GENERATOR_VERSION: Final[str] = "info_generator_version"
 #: When was the instance generated?
 INFO_GENERATED_ON: Final[str] = "info_generated_on"
 #: The information key for interarrival times
@@ -260,6 +264,7 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
         generator = "mfc_generator"
     infos: Final[dict[str, str]] = {
         INFO_GENERATOR: generator,
+        INFO_GENERATOR_VERSION: __version__,
         INFO_GENERATED_ON: str(__DTN()),
     }
 
