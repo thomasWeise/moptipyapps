@@ -184,6 +184,7 @@ from moptipy.utils.logger import (
     KEY_VALUE_SEPARATOR,
 )
 from moptipy.utils.strings import sanitize_name
+from pycommons.ds.cache import repr_cache
 from pycommons.ds.immutable_map import immutable_mapping
 from pycommons.io.csv import CSV_SEPARATOR
 from pycommons.math.int_math import try_int
@@ -354,18 +355,18 @@ class Demand(Iterable[int | float]):
 
 
 def __to_tuple(source: Iterable[int | float],
-               pool: dict, empty_ok: bool = False,
+               cache: Callable, empty_ok: bool = False,
                type_var: type = int) -> tuple:
     """
     Convert an iterable of type integer to a tuple.
 
     :param source: the data source
-    :param pool: the tuple pool
+    :param cache: the cache
     :param empty_ok: are empty tuples OK?
     :param type_var: the type variable
     :return: the tuple
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> k1 = __to_tuple([1, 2, 3], ppl)
     >>> print(k1)
     (1, 2, 3)
@@ -421,25 +422,21 @@ def __to_tuple(source: Iterable[int | float],
         if not (isfinite(v) and (0 <= v <= MAX_VALUE)):  # type: ignore
             raise ValueError(f"row[{j}]={v} not in 0..{MAX_VALUE}")
 
-    key: Final[str] = repr(use_row)
-    if key in pool:
-        return pool[key]
-    pool[key] = use_row
-    return use_row
+    return cache(use_row)
 
 
 def __to_npfloats(source: Iterable[int | float],  # pylint: disable=W1113
-                  pool: dict, empty_ok: bool = False,
+                  cache: Callable, empty_ok: bool = False,
                   *_) -> np.ndarray:  # pylint: disable=W1113
     """
     Convert to numpy floats.
 
     :param source: the source data
-    :param pool: the pool
+    :param cache: the cache
     :param empty_ok: are empty arrays OK?
     :return: the arrays
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> a = __to_npfloats([3.4, 2.3, 3.1], ppl)
     >>> a
     array([3.4, 2.3, 3.1])
@@ -455,30 +452,25 @@ def __to_npfloats(source: Iterable[int | float],  # pylint: disable=W1113
     >>> d is c
     True
     """
-    res: np.ndarray = np.array(__to_tuple(
-        source, pool, empty_ok, float), np.float64)
-    key: Final[str] = repr(res)
-    if key in pool:
-        return pool[key]
-    pool[key] = res
-    return res
+    return cache(np.array(__to_tuple(
+        source, cache, empty_ok, float), np.float64))
 
 
 def __to_nested_tuples(source: Iterable,
-                       pool: dict, empty_ok: bool = False,
+                       cache: Callable, empty_ok: bool = False,
                        type_var: type = int,
                        inner: Callable = __to_tuple) -> tuple:
     """
     Turn nested iterables of ints into nested tuples.
 
     :param source: the source list
-    :param pool: the tuple pool
+    :param cache: the cache
     :param empty_ok: are empty tuples OK?
     :param type_var: the type variable
     :param inner: the inner function
     :return: the tuple or array
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> k1 = __to_nested_tuples([(1, 2), [3, 2]], ppl)
     >>> print(k1)
     ((1, 2), (3, 2))
@@ -509,7 +501,7 @@ def __to_nested_tuples(source: Iterable,
     dest: list = []
     ins: int = 0
     for row in source:
-        use_row = inner(row, pool, empty_ok, type_var)
+        use_row = inner(row, cache, empty_ok, type_var)
         ins += len(use_row)
         dest.append(use_row)
 
@@ -520,29 +512,24 @@ def __to_nested_tuples(source: Iterable,
     if (n_rows <= 0) and (not empty_ok):
         raise ValueError("Got empty set of rows!")
 
-    ret_val: tuple = tuple(dest)
-    key: Final[str] = repr(ret_val)
-    if key in pool:
-        return pool[key]
-    pool[key] = ret_val
-    return ret_val
+    return cache(tuple(dest))
 
 
 def __to_tuples(source: Iterable[Iterable],
-                pool: dict, empty_ok: bool = False, type_var=int,
+                cache: Callable, empty_ok: bool = False, type_var=int,
                 inner: Callable = __to_tuple) \
         -> tuple[tuple, ...]:
     """
     Turn 2D nested iterables into 2D nested tuples.
 
     :param source: the source
-    :param pool: the tuple pool
+    :param cache: the cache
     :param empty_ok: are empty tuples OK?
     :param type_var: the type variable
     :param inner: the inner callable
     :return: the nested tuples
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> k1 = __to_tuples([(1, 2), [3, 2]], ppl)
     >>> print(k1)
     ((1, 2), (3, 2))
@@ -558,41 +545,41 @@ def __to_tuples(source: Iterable[Iterable],
     >>> k1[0] is k2[2]
     True
     """
-    return __to_nested_tuples(source, pool, empty_ok, type_var, inner)
+    return __to_nested_tuples(source, cache, empty_ok, type_var, inner)
 
 
 def __to_2d_npfloat(source: Iterable[Iterable],  # pylint: disable=W1113
-                    pool: dict, empty_ok: bool = False,
+                    cache: Callable, empty_ok: bool = False,
                     *_) -> tuple[np.ndarray, ...]:  # pylint: disable=W1113
     """
     Turn 2D nested iterables into 2D nested tuples.
 
     :param source: the source
-    :param pool: the tuple pool
+    :param cache: the cache
     :param empty_ok: are empty tuples OK?
     :param inner: the inner callable
     :return: the nested tuples
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> k2 = __to_2d_npfloat([(1.0, 2.0), (1.0, 2.0, 4.0),  (1.0, 0.2)], ppl)
     >>> print(k2)
     (array([1., 2.]), array([1., 2., 4.]), array([1. , 0.2]))
     """
-    return __to_nested_tuples(source, pool, empty_ok, float, __to_npfloats)
+    return __to_nested_tuples(source, cache, empty_ok, float, __to_npfloats)
 
 
 def __to_3d_npfloat(source: Iterable[Iterable[Iterable]],
-                    pool: dict, empty_ok: bool) \
+                    cache: Callable, empty_ok: bool) \
         -> tuple[tuple[np.ndarray, ...], ...]:
     """
     Turn 3D nested iterables into 3D nested tuples.
 
     :param source: the source
-    :param pool: the tuple pool
+    :param cache: the cache
     :param empty_ok: are empty tuples OK?
     :return: the nested tuples
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> k1 = __to_3d_npfloat([[[3.0, 2.0], [44.0, 5.0], [2.0]],
     ...                        [[2.0], [5.0, 7.0]]], ppl, False)
     >>> print(k1)
@@ -601,13 +588,13 @@ def __to_3d_npfloat(source: Iterable[Iterable[Iterable]],
     >>> k1[0][2] is k1[1][0]
     True
     """
-    return __to_nested_tuples(source, pool, empty_ok, float, __to_2d_npfloat)
+    return __to_nested_tuples(source, cache, empty_ok, float, __to_2d_npfloat)
 
 
 def _make_routes(
         n_products: int, n_stations: int,
         source: Iterable[Iterable[int]],
-        pool: dict) -> tuple[tuple[int, ...], ...]:
+        cache: Callable) -> tuple[tuple[int, ...], ...]:
     """
     Create the routes through stations for the products.
 
@@ -617,10 +604,10 @@ def _make_routes(
     :param n_products: the number of products
     :param n_stations: the number of stations
     :param source: the source data
-    :param pool: the tuple pool
+    :param cache: the cache
     :return: the routes, a tuple of tuples
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> _make_routes(2, 3, ((1, 2), (1, 0)), ppl)
     ((1, 2), (1, 0))
 
@@ -633,7 +620,7 @@ def _make_routes(
     """
     check_int_range(n_products, "n_products", 1, MAX_ID)
     check_int_range(n_stations, "n_stations", 1, MAX_ID)
-    dest: tuple[tuple[int, ...], ...] = __to_tuples(source, pool)
+    dest: tuple[tuple[int, ...], ...] = __to_tuples(source, cache)
 
     n_rows: Final[int] = tuple.__len__(dest)
     if n_rows != n_products:
@@ -652,15 +639,15 @@ def _make_routes(
 
 def __to_demand(
         source: Iterable[int | float],
-        pool: dict, *_) -> Demand:
+        cache: Callable, *_) -> Demand:
     """
     Convert an integer source to a tuple or a demand.
 
     :param source: the source
-    :param pool: the pool
+    :param cache: the cache
     :return: the Demand
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> d1 = __to_demand([1, 2, 3, 20, 10, 100], ppl)
     >>> d1
     Demand(arrival=10.0, deadline=100.0, demand_id=1, \
@@ -675,22 +662,16 @@ customer_id=2, product_id=3, amount=20)
     dl: int = tuple.__len__(tup)
     if dl != 6:
         raise ValueError(f"Expected 6 values, got {dl}.")
-    ret: Demand = Demand(
+    return cache(Demand(
         demand_id=cast("int", tup[DEMAND_ID]),
         customer_id=cast("int", tup[DEMAND_CUSTOMER]),
         product_id=cast("int", tup[DEMAND_PRODUCT]),
         amount=cast("int", tup[DEMAND_AMOUNT]),
-        arrival=tup[DEMAND_ARRIVAL], deadline=tup[DEMAND_DEADLINE])
-
-    key: Final[str] = repr(ret)
-    if key in pool:
-        return pool[key]
-    pool[key] = ret
-    return ret
+        arrival=tup[DEMAND_ARRIVAL], deadline=tup[DEMAND_DEADLINE]))
 
 
 def _make_demands(n_products: int, n_customers: int, n_demands: int,
-                  source: Iterable[Iterable[int | float]], pool: dict) \
+                  source: Iterable[Iterable[int | float]], cache: Callable) \
         -> tuple[Demand, ...]:
     """
     Create the demand records, sorted by release time.
@@ -702,10 +683,10 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
     :param n_customers: the number of customers
     :param n_demands: the number of demands
     :param source: the source data
-    :param pool: the tuple pool
+    :param cache: the cache
     :return: the demand tuples
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> _make_demands(10, 10, 4, [[0, 2, 1, 4, 20, 21],
     ...     [2, 5, 2, 6, 17, 27],
     ...     [1, 6, 7, 12, 17, 21],
@@ -721,7 +702,7 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
     check_int_range(n_demands, "n_demands", 1, MAX_ID)
 
     temp: tuple[Demand, ...] = __to_nested_tuples(
-        source, pool, False, inner=__to_demand)
+        source, cache, False, inner=__to_demand)
     n_dem: int = tuple.__len__(temp)
     if n_dem != n_demands:
         raise ValueError(f"Expected {n_demands} demands, got {n_dem}?")
@@ -770,24 +751,24 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
     if ((max_id - min_id + 1) != n_demands) or (min_id != 0):
         raise ValueError(f"Invalid demand id range [{min_id}, {max_id}].")
     dest.sort()
-    return tuple(dest)
+    return cache(tuple(dest))
 
 
 def _make_in_warehouse(n_products: int, source: Iterable[int],
-                       pool: dict) \
+                       cache: Callable) \
         -> tuple[int, ...]:
     """
     Make the amount of product in the warehouse at time 0.
 
     :param n_products: the total number of products
     :param source: the data source
-    :param pool: the tuple pool
+    :param cache: the tuple cache
     :return: the amount of products in the warehouse
 
-    >>> _make_in_warehouse(3, [1, 2, 3], {})
+    >>> _make_in_warehouse(3, [1, 2, 3], repr_cache())
     (1, 2, 3)
     """
-    ret: tuple[int, ...] = __to_tuple(source, pool)
+    ret: tuple[int, ...] = __to_tuple(source, cache)
     rl: Final[int] = tuple.__len__(ret)
     if rl != n_products:
         raise ValueError(f"We have {n_products} products, "
@@ -802,7 +783,7 @@ def _make_station_product_unit_times(
         n_products: int, n_stations: int,
         routes: tuple[tuple[float, ...], ...],
         source: Iterable[Iterable[Iterable[float]]],
-        pool: dict) -> tuple[tuple[np.ndarray, ...], ...]:
+        cache: Callable) -> tuple[tuple[np.ndarray, ...], ...]:
     """
     Create the structure for the work times per product unit per station.
 
@@ -816,10 +797,10 @@ def _make_station_product_unit_times(
     :param n_stations: the number of stations
     :param routes: the routes of the products through the stations
     :param source: the source array
-    :param pool: the tuple pool
+    :param cache: the cache
     :return: the station unit times
 
-    >>> ppl = {}
+    >>> ppl = repr_cache()
     >>> rts = _make_routes(3, 2, [[0, 1], [0], [1, 0]], ppl)
     >>> print(rts)
     ((0, 1), (0,), (1, 0))
@@ -847,7 +828,7 @@ array([], dtype=float64), array([  4.,  56.,  34., 444.])))
     True
     """
     ret: tuple[tuple[np.ndarray, ...], ...] = __to_3d_npfloat(
-        source, pool, True)
+        source, cache, True)
 
     if tuple.__len__(routes) != n_products:
         raise ValueError("invalid routes!")
@@ -994,12 +975,12 @@ class Instance(Component):
         self.n_demands: Final[int] = check_int_range(
             n_demands, "n_demands", 1, MAX_ID)
 
-        pool: dict = {}  # the pool for resolving tuples
+        cache: Final[Callable] = repr_cache()  # the pool for resolving tuples
 
         #: the product routes, i.e., the stations through which each product
         #: must pass
         self.routes: Final[tuple[tuple[int, ...], ...]] = _make_routes(
-            n_products, n_stations, routes, pool)
+            n_products, n_stations, routes, cache)
         #: The demands: Each demand is a tuple of demand_id, customer_id,
         #: product_id, amount, release_time, and deadline.
         #: The customer makes their order at time step release_time.
@@ -1009,12 +990,12 @@ class Instance(Component):
         #: The deadline is always >= release time.
         #: Demand ids are unique.
         self.demands: Final[tuple[Demand, ...]] = _make_demands(
-            n_products, n_customers, n_demands, demands, pool)
+            n_products, n_customers, n_demands, demands, cache)
 
         #: The units of product in the warehouse at time step 0.
         #: For each product, we have either 0 or a positive amount of product.
         self.warehous_at_t0: Final[tuple[int, ...]] = _make_in_warehouse(
-            n_products, warehous_at_t0, pool)
+            n_products, warehous_at_t0, cache)
 
         #: The per-station unit production times for each product.
         #: Each station can have different production times per product.
@@ -1032,7 +1013,7 @@ class Instance(Component):
         self.station_product_unit_times: Final[tuple[tuple[
             np.ndarray, ...], ...]] = _make_station_product_unit_times(
             n_products, n_stations, self.routes, station_product_unit_times,
-            pool)
+            cache)
 
         #: Additional information about the nature of the instance can be
         #: stored here. This has no impact on the behavior of the instance,
@@ -1282,14 +1263,21 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
             yield (f"{COMMENT_START} After that, it needs {filled_pdx[2][2]}"
                    " time units per product unit until t="
                    f"{filled_pdx[2][3]}.")
+
+    cache: dict[str, str] = {}
     for mid, station in enumerate(instance.station_product_unit_times):
         for pid, product in enumerate(station):
             if np.ndarray.__len__(product) <= 0:
                 continue
-            flat = map(str, map(try_int, map(float, product)))
-            yield (f"{KEY_PRODUCTION_TIME}{KEY_IDX_START}{mid}{CSV_SEPARATOR}"
-                   f"{pid}{KEY_IDX_END}{KEY_VALUE_SEPARATOR}"
-                   f"{CSV_SEPARATOR.join(flat)}")
+            value: str = CSV_SEPARATOR.join(map(str, map(
+                try_int, map(float, product))))
+            key: str = (f"{KEY_PRODUCTION_TIME}{KEY_IDX_START}{mid}"
+                        f"{CSV_SEPARATOR}{pid}{KEY_IDX_END}")
+            if value in cache:
+                value = cache[value]
+            else:
+                cache[value] = key
+            yield f"{key}{KEY_VALUE_SEPARATOR}{value}"
 
     n_infos: Final[int] = len(instance.infos)
     if n_infos > 0:
@@ -1490,14 +1478,25 @@ def from_stream(stream: Iterable[str]) -> Instance:
                         [[[] for _ in range(n_products)]
                          for __ in range(n_stations)]
 
-                mpd: list[float] = station_product_times[
-                    station_id][product_id]
-                if list.__len__(mpd) > 0:
-                    raise __pe(f"Already gave {KEY_PRODUCTION_TIME}"
-                               f"{KEY_IDX_START}{station_id}{CSV_SEPARATOR}"
-                               f"{product_id}{KEY_IDX_END}", oline, line_idx)
-                mpd.extend(
-                    map(float, str.split(value, CSV_SEPARATOR)))
+                if str.startswith(value, KEY_PRODUCTION_TIME):
+                    station, product = str.split(
+                        __get_key_index(value), CSV_SEPARATOR)
+                    use_station_id: int = check_to_int_range(
+                        station, "station", 0, n_stations - 1)
+                    use_product_id = check_to_int_range(
+                        product, "product", 0, n_products - 1)
+                    station_product_times[station_id][product_id] = (
+                        station_product_times)[use_station_id][use_product_id]
+                else:
+                    mpd: list[float] = station_product_times[
+                        station_id][product_id]
+                    if list.__len__(mpd) > 0:
+                        raise __pe(
+                            f"Already gave {KEY_PRODUCTION_TIME}"
+                            f"{KEY_IDX_START}{station_id}{CSV_SEPARATOR}"
+                            f"{product_id}{KEY_IDX_END}", oline, line_idx)
+                    mpd.extend(
+                        map(float, str.split(value, CSV_SEPARATOR)))
             else:
                 infos[key] = value
 
