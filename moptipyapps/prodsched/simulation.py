@@ -256,7 +256,7 @@ class Listener:
         :param demand: the demand that was satisfied
         """
 
-    def event_product(self, time: float,
+    def event_product(self, time: float,  # pylint: disable=R0913,R0917
                       product_id: int, amount: int,
                       in_warehouse: int, in_production: int,
                       pending_demands: tuple[Demand, ...]) -> None:
@@ -295,7 +295,7 @@ class Listener:
         """
 
 
-class Simulation:
+class Simulation:  # pylint: disable=R0902
     """A simulator for production scheduling."""
 
     def __init__(self, instance: Instance, listener: Listener) -> None:
@@ -417,11 +417,10 @@ class Simulation:
 
         :param demand: the demand that was satisfied
         """
-        pd: Final[list[Demand]] = self.__pending_demands[demand.product_id]
-        del pd[pd.index(demand)]  # force exception if not contained
+        self.__pending_demands[demand.product_id].remove(demand)
         self.__l_demand_satisfied(self.__time, demand)
 
-    def event_product(self, time: float,  # pylint: disable=W0613
+    def event_product(self, time: float,  # pylint: disable=W0613,R0913,R0917
                       product_id: int, amount: int,
                       in_warehouse: int,
                       in_production: int,  # pylint: disable=W0613
@@ -518,8 +517,7 @@ class Simulation:
         product_id: Final[int] = job.product_id
         station_id: Final[int] = self.__routes[product_id][job.step]
         time: Final[float] = self.__time
-        queue: list[Job] = self.__mq[station_id]
-        del queue[queue.index(job)]  # force exception if job is not there
+        self.__mq[station_id].remove(job)  # exception if job is not there
 
         if self.__mbusy[station_id]:
             raise ValueError("Cannot execute job on busy station.")
@@ -708,7 +706,7 @@ class PrintingListener(Listener):
                       f"{demand.amount} units of product {demand.product_id} "
                       "satisfied")
 
-    def event_product(self, time: float,
+    def event_product(self, time: float,  # pylint: disable=R0913,R0917
                       product_id: int, amount: int,
                       in_warehouse: int, in_production: int,
                       pending_demands: tuple[Demand, ...]) -> None:

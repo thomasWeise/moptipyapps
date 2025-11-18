@@ -631,7 +631,7 @@ def _make_routes(
             raise ValueError(
                 f"len(row[{i}])={stations} but n_stations={n_stations}")
         for j, v in enumerate(route):
-            if not (0 <= v < n_stations):
+            if not 0 <= v < n_stations:
                 raise ValueError(
                     f"row[{i},{j}]={v}, but n_stations={n_stations}")
     return dest
@@ -714,7 +714,7 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
 
     for i, demand in enumerate(temp):
         d_id: int = demand.demand_id
-        if not (0 <= d_id < n_demands):
+        if not 0 <= d_id < n_demands:
             raise ValueError(f"demand[{i}].id = {d_id}")
         if d_id in used_ids:
             raise ValueError(f"demand[{i}].id {d_id} appears twice!")
@@ -723,17 +723,17 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
         max_id = max(max_id, d_id)
 
         c_id: int = demand.customer_id
-        if not (0 <= c_id < n_customers):
+        if not 0 <= c_id < n_customers:
             raise ValueError(f"demand[{i}].customer = {c_id}, "
                              f"but n_customers={n_customers}")
 
         p_id: int = demand.product_id
-        if not (0 <= p_id < n_products):
+        if not 0 <= p_id < n_products:
             raise ValueError(f"demand[{i}].product = {p_id}, "
                              f"but n_products={n_products}")
 
         amount: int = demand.amount
-        if not (0 < amount < MAX_ID):
+        if not 0 < amount < MAX_ID:
             raise ValueError(f"demand[{i}].amount = {amount}.")
 
         arrival: float = demand.arrival
@@ -774,7 +774,7 @@ def _make_in_warehouse(n_products: int, source: Iterable[int],
         raise ValueError(f"We have {n_products} products, "
                          f"but the warehouse list length is {rl}.")
     for p, v in enumerate(ret):
-        if not (0 <= v <= MAX_ID):
+        if not 0 <= v <= MAX_ID:
             raise ValueError(f"Got {v} units of product {p} in warehouse?")
     return ret
 
@@ -1302,7 +1302,7 @@ def __get_key_index(full_key: str) -> str:
     """
     start: int = str.index(full_key, KEY_IDX_START)
     end: int = str.index(full_key, KEY_IDX_END, start)
-    if not (0 < start < end < str.__len__(full_key)):
+    if not 0 < start < end < str.__len__(full_key):
         raise ValueError(f"Invalid key {full_key!r}.")
     idx: str = str.strip(full_key[start + 1:end])
     if str.__len__(idx) <= 0:
@@ -1634,7 +1634,7 @@ def compute_finish_time(start_time: float, amount: int,
     low: int = 0
     high: int = total
     while low < high:
-        mid: int = ((low + high) // 2)
+        mid: int = (low + high) // 2
         th: float = production_times[mid * 2 + 1]
         if th <= seg_start:
             low = mid + 1
