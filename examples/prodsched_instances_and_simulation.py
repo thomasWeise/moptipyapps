@@ -81,6 +81,6 @@ if __name__ == "__main__":
         type=Path, nargs="?", default="./production_scheduling/")
     parser.add_argument(
         "n_instances", help="the number of instances to generate",
-        type=int, nargs="?", default=10)
+        type=int, nargs="?", default=5)
     args: Final[argparse.Namespace] = parser.parse_args()
     run(args.dest, args.n_instances)

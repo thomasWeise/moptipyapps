@@ -22,13 +22,13 @@
 
 # `moptipy` provides the basic optimization infrastructure and the spaces and
 # tools that we use for optimization.
-moptipy == 0.9.151
+moptipy == 0.9.152
 
 # the common tools package
-pycommons == 0.8.71
+pycommons == 0.8.72
 
 # `numpy` is needed for its efficient data structures.
-numpy == 2.3.4
+numpy == 2.3.5
 
 # numba provides JIT compilers useful making vector/numpy operations efficient
 numba == 0.62.1
@@ -40,7 +40,7 @@ matplotlib == 3.10.7
 # They are also used to check the URLs in the README.md as part of the build
 # process, we check all the URLs in the README.md file..
 urllib3 == 2.5.0
-certifi == 2025.10.5
+certifi == 2025.11.12
 
 # defusedxml is used as safe alternative for XML parsing the TTP data
 defusedxml == 0.7.1

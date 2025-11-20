@@ -21,6 +21,12 @@ The number of stations be 4.
 There will be 6 customer demands.
 >>> n_demands = 6
 
+The end of the warmup period.
+>>> time_end_warmup = 10
+
+The end of the measurement period.
+>>> time_end_measure = 10000
+
 Each product may take a different route through different stations.
 >>> route_p0 = [0, 3, 2]
 >>> route_p1 = [0, 2, 1, 3]
@@ -72,6 +78,7 @@ We can (but do not need to) provide additional information as key-value pairs.
 
 From all of this data, we can create the instance.
 >>> instance = Instance(name, n_products, n_customers, n_stations, n_demands,
+...                     time_end_warmup, time_end_measure,
 ...                     routes, demands, warehous_at_t0,
 ...                     station_product_unit_times, infos)
 >>> instance.name
@@ -92,16 +99,25 @@ From all of this data, we can create the instance.
 >>> instance.routes
 ((0, 3, 2), (0, 2, 1, 3), (1, 2, 3))
 
+>>> instance.time_end_warmup
+10.0
+
+>>> instance.time_end_measure
+10000.0
+
 >>> instance.demands
-(Demand(arrival=1240.0, deadline=3000.0, demand_id=0, customer_id=0, \
-product_id=1, amount=20), Demand(arrival=2300.0, deadline=4000.0, \
-demand_id=1, customer_id=1, product_id=0, amount=10), \
-Demand(arrival=4234.0, deadline=27080.0, demand_id=5, customer_id=3, \
-product_id=0, amount=19), Demand(arrival=5410.0, deadline=16720.0, \
-demand_id=4, customer_id=4, product_id=2, amount=23), \
-Demand(arrival=7300.0, deadline=9000.0, demand_id=3, customer_id=3, \
-product_id=1, amount=12), Demand(arrival=8300.0, deadline=11000.0, \
-demand_id=2, customer_id=2, product_id=2, amount=7))
+(Demand(arrival=1240.0, deadline=3000.0, demand_id=0, customer_id=0,\
+ product_id=1, amount=20, measure=True),\
+ Demand(arrival=2300.0, deadline=4000.0, demand_id=1, customer_id=1,\
+ product_id=0, amount=10, measure=True),\
+ Demand(arrival=4234.0, deadline=27080.0, demand_id=5, customer_id=3,\
+ product_id=0, amount=19, measure=True),\
+ Demand(arrival=5410.0, deadline=16720.0, demand_id=4, customer_id=4,\
+ product_id=2, amount=23, measure=True),\
+ Demand(arrival=7300.0, deadline=9000.0, demand_id=3, customer_id=3,\
+ product_id=1, amount=12, measure=True),\
+ Demand(arrival=8300.0, deadline=11000.0, demand_id=2, customer_id=2,\
+ product_id=2, amount=7, measure=True))
 
 >>> instance.warehous_at_t0
 (10, 0, 6)
@@ -142,6 +158,10 @@ True
 >>> i2.routes == instance.routes
 True
 >>> i2.demands == instance.demands
+True
+>>> i2.time_end_warmup == instance.time_end_warmup
+True
+>>> i2.time_end_measure == instance.time_end_measure
 True
 >>> i2.warehous_at_t0 == instance.warehous_at_t0
 True
@@ -188,6 +208,7 @@ from pycommons.ds.cache import repr_cache
 from pycommons.ds.immutable_map import immutable_mapping
 from pycommons.io.csv import CSV_SEPARATOR
 from pycommons.math.int_math import try_int
+from pycommons.strings.string_conv import bool_to_str, float_to_str, num_to_str
 from pycommons.types import check_int_range, check_to_int_range, type_error
 
 #: The maximum for the number of stations, products, or customers.
@@ -216,13 +237,13 @@ class Demand(Iterable[int | float]):
     The record for demands.
 
     >>> Demand(arrival=0.6, deadline=0.8, demand_id=1,
-    ...        customer_id=2, product_id=6, amount=12)
+    ...        customer_id=2, product_id=6, amount=12, measure=True)
     Demand(arrival=0.6, deadline=0.8, demand_id=1, customer_id=2,\
- product_id=6, amount=12)
+ product_id=6, amount=12, measure=True)
     >>> Demand(arrival=16, deadline=28, demand_id=1,
-    ...        customer_id=2, product_id=6, amount=12)
+    ...        customer_id=2, product_id=6, amount=12, measure=False)
     Demand(arrival=16.0, deadline=28.0, demand_id=1, customer_id=2,\
- product_id=6, amount=12)
+ product_id=6, amount=12, measure=False)
     """
 
     #: the arrival time, i.e., when the demand enters the system
@@ -237,10 +258,13 @@ class Demand(Iterable[int | float]):
     product_id: int
     #: the amount
     amount: int
+    #: is this demand measurement relevant?
+    measure: bool
 
     def __init__(self, arrival: int | float,
                  deadline: int | float, demand_id: int,
-                 customer_id: int, product_id: int, amount: int) -> None:
+                 customer_id: int, product_id: int, amount: int,
+                 measure: bool) -> None:
         """
         Initialize the record.
 
@@ -250,6 +274,7 @@ class Demand(Iterable[int | float]):
         :param customer_id: the customer id
         :param product_id: the product id
         :param amount: the amount
+        :param measure: is this demand relevant for measurement?
         """
         if isinstance(arrival, int):
             t: float = float(arrival)
@@ -285,6 +310,25 @@ class Demand(Iterable[int | float]):
             product_id, "product_id", 0, MAX_ID))
         object.__setattr__(self, "amount", check_int_range(
             amount, "amount", 1, MAX_ID))
+        if not isinstance(measure, bool):
+            raise type_error(measure, "measure", bool)
+        object.__setattr__(self, "measure", measure)
+
+    def __str__(self) -> str:
+        """
+        Get a string representation of the demand.
+
+        :return: the string representation
+
+        >>> str(Demand(arrival=16, deadline=28.0, demand_id=1,
+        ...     customer_id=2, product_id=6, amount=12, measure=False))
+        'd(id: 1, p: 6, c: 2, am: 12, ar: 16, dl: 28, me: F)'
+        """
+        fts: Final[Callable] = float_to_str
+        return (f"d(id: {self.demand_id}, p: {self.product_id}, "
+                f"c: {self.customer_id}, am: {self.amount}, "
+                f"ar: {fts(self.arrival)}, dl: {fts(self.deadline)}, "
+                f"me: {bool_to_str(self.measure)})")
 
     def __getitem__(self, item: int) -> int | float:
         """
@@ -294,7 +338,7 @@ class Demand(Iterable[int | float]):
         :return: the demand value at that index
 
         >>> d = Demand(arrival=16, deadline=28, demand_id=1,
-        ...        customer_id=2, product_id=6, amount=12)
+        ...        customer_id=2, product_id=6, amount=12, measure=True)
         >>> d[0]
         1
         >>> d[1]
@@ -330,7 +374,7 @@ class Demand(Iterable[int | float]):
         :return: the demand iterable
 
         >>> d = Demand(arrival=16, deadline=28, demand_id=1,
-        ...        customer_id=2, product_id=6, amount=12)
+        ...        customer_id=2, product_id=6, amount=12, measure=True)
         >>> list(d)
         [1, 2, 6, 12, 16, 28]
         """
@@ -348,7 +392,7 @@ class Demand(Iterable[int | float]):
         :returns `6`: always
 
         >>> len(Demand(arrival=16, deadline=28, demand_id=1,
-        ...        customer_id=2, product_id=6, amount=12))
+        ...        customer_id=2, product_id=6, amount=12, measure=True))
         6
         """
         return 6
@@ -638,21 +682,22 @@ def _make_routes(
 
 
 def __to_demand(
-        source: Iterable[int | float],
-        cache: Callable, *_) -> Demand:
+        source: Iterable[int | float], time_end_warmup: float,
+        cache: Callable) -> Demand:
     """
     Convert an integer source to a tuple or a demand.
 
     :param source: the source
+    :param time_end_warmup: the end of the warmup time
     :param cache: the cache
     :return: the Demand
 
     >>> ppl = repr_cache()
-    >>> d1 = __to_demand([1, 2, 3, 20, 10, 100], ppl)
+    >>> d1 = __to_demand([1, 2, 3, 20, 10, 100], 10.0, ppl)
     >>> d1
     Demand(arrival=10.0, deadline=100.0, demand_id=1, \
-customer_id=2, product_id=3, amount=20)
-    >>> d2 = __to_demand([1, 2, 3, 20, 10, 100], ppl)
+customer_id=2, product_id=3, amount=20, measure=True)
+    >>> d2 = __to_demand([1, 2, 3, 20, 10, 100], 10.0, ppl)
     >>> d1 is d2
     True
     """
@@ -662,16 +707,20 @@ customer_id=2, product_id=3, amount=20)
     dl: int = tuple.__len__(tup)
     if dl != 6:
         raise ValueError(f"Expected 6 values, got {dl}.")
+    arrival: int | float = tup[DEMAND_ARRIVAL]
     return cache(Demand(
         demand_id=cast("int", tup[DEMAND_ID]),
         customer_id=cast("int", tup[DEMAND_CUSTOMER]),
         product_id=cast("int", tup[DEMAND_PRODUCT]),
         amount=cast("int", tup[DEMAND_AMOUNT]),
-        arrival=tup[DEMAND_ARRIVAL], deadline=tup[DEMAND_DEADLINE]))
+        arrival=arrival, deadline=tup[DEMAND_DEADLINE],
+        measure=time_end_warmup <= arrival))
 
 
 def _make_demands(n_products: int, n_customers: int, n_demands: int,
-                  source: Iterable[Iterable[int | float]], cache: Callable) \
+                  source: Iterable[Iterable[int | float]],
+                  time_end_warmup: float,
+                  time_end_measure: float, cache: Callable) \
         -> tuple[Demand, ...]:
     """
     Create the demand records, sorted by release time.
@@ -682,6 +731,8 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
     :param n_products: the number of products
     :param n_customers: the number of customers
     :param n_demands: the number of demands
+    :param time_end_warmup: the end of the warmup time
+    :param time_end_measure: the end of the measure time period
     :param source: the source data
     :param cache: the cache
     :return: the demand tuples
@@ -690,19 +741,26 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
     >>> _make_demands(10, 10, 4, [[0, 2, 1, 4, 20, 21],
     ...     [2, 5, 2, 6, 17, 27],
     ...     [1, 6, 7, 12, 17, 21],
-    ...     [3, 7, 3, 23, 5, 21]], ppl)
+    ...     [3, 7, 3, 23, 5, 21]], 10.0, 1000.0, ppl)
     (Demand(arrival=5.0, deadline=21.0, demand_id=3, customer_id=7,\
- product_id=3, amount=23), Demand(arrival=17.0, deadline=21.0, demand_id=1,\
- customer_id=6, product_id=7, amount=12), Demand(arrival=17.0, deadline=27.0,\
- demand_id=2, customer_id=5, product_id=2, amount=6), Demand(arrival=20.0,\
- deadline=21.0, demand_id=0, customer_id=2, product_id=1, amount=4))
+ product_id=3, amount=23, measure=False),\
+ Demand(arrival=17.0, deadline=21.0, demand_id=1, customer_id=6,\
+ product_id=7, amount=12, measure=True),\
+ Demand(arrival=17.0, deadline=27.0, demand_id=2, customer_id=5,\
+ product_id=2, amount=6, measure=True),\
+ Demand(arrival=20.0, deadline=21.0, demand_id=0, customer_id=2,\
+ product_id=1, amount=4, measure=True))
     """
     check_int_range(n_products, "n_products", 1, MAX_ID)
     check_int_range(n_customers, "n_customers", 1, MAX_ID)
     check_int_range(n_demands, "n_demands", 1, MAX_ID)
 
+    def __make_demand(ssss: Iterable[int | float],
+                      ccc: Callable, *_) -> Demand:
+        return __to_demand(ssss, time_end_warmup, ccc)
+
     temp: tuple[Demand, ...] = __to_nested_tuples(
-        source, cache, False, inner=__to_demand)
+        source, cache, False, inner=__make_demand)
     n_dem: int = tuple.__len__(temp)
     if n_dem != n_demands:
         raise ValueError(f"Expected {n_demands} demands, got {n_dem}?")
@@ -743,6 +801,10 @@ def _make_demands(n_products: int, n_customers: int, n_demands: int,
         deadline: float = demand.deadline
         if not (isfinite(deadline) and arrival <= deadline < MAX_ID):
             raise ValueError(f"demand[{i}].deadline = {deadline}.")
+
+        if arrival >= time_end_measure:
+            raise ValueError(f"Demand[{i}]={demand!r} has arrival after "
+                             "end of measurement period.")
         dest.append(demand)
 
     sl: int = set.__len__(used_ids)
@@ -921,6 +983,7 @@ class Instance(Component):
             self, name: str,
             n_products: int, n_customers: int, n_stations: int,
             n_demands: int,
+            time_end_warmup: int | float, time_end_measure: int | float,
             routes: Iterable[Iterable[int]],
             demands: Iterable[Iterable[int | float]],
             warehous_at_t0: Iterable[int],
@@ -936,6 +999,10 @@ class Instance(Component):
         :param n_customers: the number of customers
         :param n_stations: the number of stations
         :param n_demands: the number of demand records
+        :param time_end_warmup: the time unit when the warmup time ends and the
+            actual measurement begins
+        :param time_end_measure: the time unit when the actual measure time
+            ends
         :param routes: for each product, the sequence of stations that it has
             to pass
         :param demands: a sequences of demands of the form (
@@ -975,6 +1042,26 @@ class Instance(Component):
         self.n_demands: Final[int] = check_int_range(
             n_demands, "n_demands", 1, MAX_ID)
 
+        if not isinstance(time_end_warmup, int | float):
+            raise type_error(time_end_warmup, "time_end_warmup", (int, float))
+        time_end_warmup = float(time_end_warmup)
+        if not (isfinite(time_end_warmup) and (
+                0 <= time_end_warmup < MAX_VALUE)):
+            raise ValueError(f"Invalid time_end_warmup={time_end_warmup}.")
+        #: the end of the warmup time
+        self.time_end_warmup: Final[float] = time_end_warmup
+
+        if not isinstance(time_end_measure, int | float):
+            raise type_error(time_end_measure, "time_end_measure", (
+                int, float))
+        time_end_measure = float(time_end_measure)
+        if not (isfinite(time_end_measure) and (
+                time_end_warmup < time_end_measure < MAX_VALUE)):
+            raise ValueError(f"Invalid time_end_measure={time_end_measure} "
+                             f"for time_end_warmup={time_end_warmup}.")
+        #: the end of the measurement time
+        self.time_end_measure: Final[float] = time_end_measure
+
         cache: Final[Callable] = repr_cache()  # the pool for resolving tuples
 
         #: the product routes, i.e., the stations through which each product
@@ -990,7 +1077,8 @@ class Instance(Component):
         #: The deadline is always >= release time.
         #: Demand ids are unique.
         self.demands: Final[tuple[Demand, ...]] = _make_demands(
-            n_products, n_customers, n_demands, demands, cache)
+            n_products, n_customers, n_demands, demands, time_end_warmup,
+            time_end_measure, cache)
 
         #: The units of product in the warehouse at time step 0.
         #: For each product, we have either 0 or a positive amount of product.
@@ -1035,17 +1123,18 @@ class Instance(Component):
         :return: the tuple
 
         >>> Instance(name="test1", n_products=1, n_customers=1, n_stations=2,
-        ...         n_demands=1, routes=[[0, 1]],
-        ...         demands=[[0, 0, 0, 10, 20, 100]],
+        ...         n_demands=1, time_end_warmup=12, time_end_measure=30,
+        ...         routes=[[0, 1]], demands=[[0, 0, 0, 10, 20, 100]],
         ...         warehous_at_t0=[0],
         ...     station_product_unit_times=[[[10.0, 10000.0]],
         ...                                 [[30.0, 10000.0]]])._tuple()
-        ('test1', 2, 1, 1, 1, (Demand(arrival=20.0, deadline=100.0,\
- demand_id=0, customer_id=0, product_id=0, amount=10),), ((0, 1),),\
- (0,), (), ((10.0, 10000.0), (30.0, 10000.0)))
+        ('test1', 2, 1, 1, 1, 12.0, 30.0, (Demand(arrival=20.0,\
+ deadline=100.0, demand_id=0, customer_id=0, product_id=0, amount=10,\
+ measure=True),), ((0, 1),), (0,), (), ((10.0, 10000.0), (30.0, 10000.0)))
         """
         return (self.name, self.n_stations, self.n_products,
-                self.n_demands, self.n_customers, self.demands,
+                self.n_demands, self.n_customers, self.time_end_warmup,
+                self.time_end_measure, self.demands,
                 self.routes, self.warehous_at_t0, tuple(self.infos.items()),
                 tuple(tuple(float(x) for x in a2) for a1 in
                       self.station_product_unit_times for a2 in a1))
@@ -1059,13 +1148,17 @@ class Instance(Component):
             otherwise the equality comparison result.
 
         >>> i1 = Instance(name="test1", n_products=1, n_customers=1,
-        ...         n_stations=2, n_demands=1, routes=[[0, 1]],
+        ...         n_stations=2, n_demands=1,
+        ...         time_end_warmup=12, time_end_measure=30,
+        ...         routes=[[0, 1]],
         ...         demands=[[0, 0, 0, 10, 20, 100]],
         ...         warehous_at_t0=[0],
         ...     station_product_unit_times=[[[10.0, 10000.0]],
         ...                                 [[30.0, 10000.0]]])
         >>> i2 = Instance(name="test1", n_products=1, n_customers=1,
-        ...         n_stations=2, n_demands=1, routes=[[0, 1]],
+        ...         n_stations=2, n_demands=1,
+        ...         time_end_warmup=12, time_end_measure=30,
+        ...         routes=[[0, 1]],
         ...         demands=[[0, 0, 0, 10, 20, 100]],
         ...         warehous_at_t0=[0],
         ...     station_product_unit_times=[[[10.0, 10000.0]],
@@ -1073,7 +1166,9 @@ class Instance(Component):
         >>> i1 == i2
         True
         >>> i3 = Instance(name="test1", n_products=1, n_customers=1,
-        ...          n_stations=2, n_demands=1, routes=[[0, 1]],
+        ...         n_stations=2, n_demands=1,
+        ...         time_end_warmup=12, time_end_measure=30,
+        ...         routes=[[0, 1]],
         ...         demands=[[0, 0, 0, 10, 20, 100]],
         ...         warehous_at_t0=[0],
         ...     station_product_unit_times=[[[10.0, 10000.1]],
@@ -1106,6 +1201,10 @@ KEY_N_CUSTOMERS: Final[str] = "n_customers"
 KEY_N_STATIONS: Final[str] = "n_stations"
 #: the number of demands in the scenario
 KEY_N_DEMANDS: Final[str] = "n_demands"
+#: the end of the warmup period
+KEY_TIME_END_WARMUP: Final[str] = "time_end_warmup"
+#: the end of the measure period
+KEY_TIME_END_MEASURE: Final[str] = "time_end_measure"
 #: the start of a key index
 KEY_IDX_START: Final[str] = "["
 #: the end of a key index
@@ -1125,8 +1224,8 @@ _KEY_VALUE_SPLIT: Final[str] = str.strip(KEY_VALUE_SEPARATOR)
 #: the forbidden keys
 __FORBIDDEN_INFO_KEYS: Final[Callable[[str], bool]] = {
     KEY_NAME, KEY_N_PRODUCTS, KEY_N_CUSTOMERS, KEY_N_STATIONS,
-    KEY_N_DEMANDS, KEY_ROUTE, KEY_DEMAND, KEY_IN_WAREHOUSE,
-    KEY_PRODUCTION_TIME}.__contains__
+    KEY_N_DEMANDS, KEY_TIME_END_MEASURE, KEY_TIME_END_WARMUP,
+    KEY_ROUTE, KEY_DEMAND, KEY_IN_WAREHOUSE, KEY_PRODUCTION_TIME}.__contains__
 
 #: the allowed information key characters
 __ALLOWED_INFO_KEY_CHARS: Final[Callable[[str], bool]] = set(
@@ -1157,27 +1256,41 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
     yield COMMENT_START
     yield f"{COMMENT_START} the number of products in the instance, > 0"
     yield f"{KEY_N_PRODUCTS}{KEY_VALUE_SEPARATOR}{instance.n_products}"
-    yield (f"{COMMENT_START} (Valid product indices are in 0.."
-           f"{instance.n_products - 1}.)")
+    yield (f"{COMMENT_START} Valid product indices are in 0.."
+           f"{instance.n_products - 1}.")
     yield COMMENT_START
     yield f"{COMMENT_START} the number of customers in the instance, > 0"
     yield f"{KEY_N_CUSTOMERS}{KEY_VALUE_SEPARATOR}{instance.n_customers}"
-    yield (f"{COMMENT_START} (Valid customer indices are in 0.."
-           f"{instance.n_customers - 1}.)")
+    yield (f"{COMMENT_START} Valid customer indices are in 0.."
+           f"{instance.n_customers - 1}.")
     yield COMMENT_START
     yield f"{COMMENT_START} the number of stations in the instance, > 0"
     yield f"{KEY_N_STATIONS}{KEY_VALUE_SEPARATOR}{instance.n_stations}"
-    yield (f"{COMMENT_START} (Valid station indices are in 0.."
-           f"{instance.n_stations - 1}.)")
+    yield (f"{COMMENT_START} Valid station indices are in 0.."
+           f"{instance.n_stations - 1}.")
     yield COMMENT_START
-    yield (f"{COMMENT_START} the number of orders (demands) issued by the "
-           f"customers, > 0")
+    yield (f"{COMMENT_START} the number of customer orders (demands) issued "
+           f"by the customers, > 0")
     yield f"{KEY_N_DEMANDS}{KEY_VALUE_SEPARATOR}{instance.n_demands}"
-    yield (f"{COMMENT_START} (Valid demand/order indices are in 0.."
-           f"{instance.n_demands - 1}.)")
+    yield (f"{COMMENT_START} Valid demand/order indices are in 0.."
+           f"{instance.n_demands - 1}.")
+    yield COMMENT_START
+    yield (f"{COMMENT_START} end of the warmup period in the simulations, "
+           f">= 0")
+    wm: Final[str] = float_to_str(instance.time_end_warmup)
+    yield f"{KEY_TIME_END_WARMUP}{KEY_VALUE_SEPARATOR}{wm}"
+    yield (f"{COMMENT_START} The simulation will not measure anything "
+           f"during the first {wm} time units.")
+    yield COMMENT_START
+    yield (f"{COMMENT_START} end of the measurement period in the "
+           f"simulations, > {wm}")
+    meas: Final[str] = float_to_str(instance.time_end_measure)
+    yield f"{KEY_TIME_END_MEASURE}{KEY_VALUE_SEPARATOR}{meas}"
+    yield (f"{COMMENT_START} The simulation will only measure things during "
+           f" left-closed and right-open interval [{wm},{meas}).")
 
     yield COMMENT_START
-    yield (f"{COMMENT_START} For each station, we now specify the indices of "
+    yield (f"{COMMENT_START} For each product, we now specify the indices of "
            f"the stations by which it will be processed, in the order in "
            f"which it will be processed by them.")
     yield (f"{COMMENT_START} {KEY_ROUTE}{KEY_IDX_START}0"
@@ -1196,26 +1309,29 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
     yield COMMENT_START
     yield (f"{COMMENT_START} For each customer order/demand, we now "
            f"specify the following values:")
-    yield f"{COMMENT_START} the demand ID in square brackets"
-    yield f"{COMMENT_START} the ID of the customer who made the order"
-    yield f"{COMMENT_START} the ID of the product that the customer ordered"
-    yield (f"{COMMENT_START} the amount of the product that the customer"
-           "ordered")
-    yield f"{COMMENT_START} the release time of the order, > 0"
-    yield (f"{COMMENT_START} the deadline, i.e., when the customer expects "
-           f"the product, >= release_time")
+    yield f"{COMMENT_START} 1. the demand ID in square brackets"
+    yield f"{COMMENT_START} 2. the ID of the customer who made the order"
+    yield f"{COMMENT_START} 3. the ID of the product that the customer ordered"
+    yield (f"{COMMENT_START} 4. the amount of the product that the customer"
+           " ordered")
+    yield (f"{COMMENT_START} 5. the arrival time of the demand, > 0, i.e., "
+           f"the moment in time when the customer informed us that they want "
+           f"the product")
+    yield (f"{COMMENT_START} 6. the deadline, i.e., when the customer expects "
+           f"the product, >= arrival time")
     srt: list[Demand] = sorted(instance.demands, key=lambda d: d.demand_id)
     fd: Demand = srt[0]
-    yield (f"{COMMENT_START} for example, the demand with ID {fd.demand_id} "
+    yield (f"{COMMENT_START} For example, the demand with ID {fd.demand_id} "
            f"was issued by the customer with ID {fd.customer_id} for "
            f"{fd.amount} units of the product with ID "
-           f"{fd.product_id}. The order comes into the "
+           f"{fd.product_id}.")
+    yield (f"{COMMENT_START} The order comes into the "
            f"system at time unit {fd.arrival} and the customer expects "
-           f"the product to be ready at time unit {fd.demand_id}.")
+           f"the product to be ready at time unit {fd.deadline}.")
     for demand in srt:
         it = iter(demand)
         next(it)  # pylint: disable=R1708
-        row: str = CSV_SEPARATOR.join(map(str, it))
+        row: str = CSV_SEPARATOR.join(map(num_to_str, it))
         yield (f"{KEY_DEMAND}{KEY_IDX_START}{demand.demand_id}{KEY_IDX_END}"
                f"{KEY_VALUE_SEPARATOR}"
                f"{row}")
@@ -1269,7 +1385,7 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
         for pid, product in enumerate(station):
             if np.ndarray.__len__(product) <= 0:
                 continue
-            value: str = CSV_SEPARATOR.join(map(str, map(
+            value: str = CSV_SEPARATOR.join(map(num_to_str, map(
                 try_int, map(float, product))))
             key: str = (f"{KEY_PRODUCTION_TIME}{KEY_IDX_START}{mid}"
                         f"{CSV_SEPARATOR}{pid}{KEY_IDX_END}")
@@ -1283,9 +1399,14 @@ def to_stream(instance: Instance) -> Generator[str, None, None]:
     if n_infos > 0:
         yield COMMENT_START
         yield (f"{COMMENT_START} The following {n_infos} key/value pairs "
-               f"denote additional information about the instance.")
-        yield (f"{COMMENT_START} They have no impact whatsoever on the"
-               f"instance behavior.")
+               "denote additional information about the instance.")
+        yield (f"{COMMENT_START} They have no impact whatsoever on the "
+               "instance behavior.")
+        yield (f"{COMMENT_START} A common use case is that we may have "
+               "used a method to randomly sample the instance.")
+        yield (f"{COMMENT_START} In this case, we could store the parameters "
+               f"of the instance generator, such as the random seed and/or "
+               f"the distributions used in this section.")
         for k, v in instance.infos.items():
             yield f"{k}{KEY_VALUE_SEPARATOR}{v}"
 
@@ -1336,6 +1457,8 @@ def from_stream(stream: Iterable[str]) -> Instance:
     n_customers: int | None = None
     n_stations: int | None = None
     n_demands: int | None = None
+    time_end_warmup: int | float | None = None
+    time_end_measure: int | float | None = None
     routes: list[list[int]] | None = None
     demands: list[list[int | float]] | None = None
     in_warehouse: list[int] | None = None
@@ -1394,6 +1517,30 @@ def from_stream(stream: Iterable[str]) -> Instance:
                         f"cannot be set to {value!r}", oline, line_idx)
                 n_demands = check_to_int_range(
                     value, KEY_N_DEMANDS, 1, 1_000_000)
+
+            elif key == KEY_TIME_END_WARMUP:
+                if time_end_warmup is not None:
+                    raise __pe(f"{KEY_TIME_END_WARMUP} already defined",
+                               oline, line_idx)
+                time_end_warmup = float(value)
+                if not (isfinite(time_end_warmup) and (time_end_warmup > 0)):
+                    raise __pe(f"time_end_warmup={time_end_warmup} invalid",
+                               oline, line_idx)
+
+            elif key == KEY_TIME_END_MEASURE:
+                if time_end_measure is not None:
+                    raise __pe(f"{KEY_TIME_END_MEASURE} already defined",
+                               oline, line_idx)
+                time_end_measure = float(value)
+                if not (isfinite(time_end_measure) and (
+                        time_end_measure > 0)):
+                    raise __pe(f"time_end_measure={time_end_measure} invalid",
+                               oline, line_idx)
+                if (time_end_warmup is not None) and (
+                        time_end_measure <= time_end_warmup):
+                    raise __pe(f"time_end_warmup={time_end_warmup} and "
+                               f"time_end_measure={time_end_measure}",
+                               oline, line_idx)
 
             elif key == KEY_IN_WAREHOUSE:
                 if in_warehouse is not None:
@@ -1514,6 +1661,12 @@ def from_stream(stream: Iterable[str]) -> Instance:
     if n_demands is None:
         raise ValueError("Did not specify instance n_demands"
                          f" ({KEY_N_DEMANDS}).")
+    if time_end_warmup is None:
+        raise ValueError("Did not specify instance time_end_warmup"
+                         f" ({KEY_TIME_END_WARMUP}).")
+    if time_end_measure is None:
+        raise ValueError("Did not specify instance time_end_measure"
+                         f" ({KEY_TIME_END_MEASURE}).")
     if routes is None:
         raise ValueError(f"Did not specify instance routes ({KEY_ROUTE}).")
     if demands is None:
@@ -1526,6 +1679,7 @@ def from_stream(stream: Iterable[str]) -> Instance:
                          f"times ({KEY_PRODUCTION_TIME}).")
 
     return Instance(name, n_products, n_customers, n_stations, n_demands,
+                    time_end_warmup, time_end_measure,
                     routes, demands, in_warehouse, station_product_times,
                     infos)
 

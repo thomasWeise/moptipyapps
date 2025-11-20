@@ -49,6 +49,7 @@ system at time unit 20.
 The warehouse is initially empty.
 >>> instance = Instance(
 ...     name="test1", n_products=1, n_customers=1, n_stations=2, n_demands=1,
+...     time_end_warmup=10, time_end_measure=4000,
 ...     routes=[[0, 1]],
 ...     demands=[[0, 0, 0, 10, 20, 100]],
 ...     warehous_at_t0=[0],
@@ -68,22 +69,26 @@ can be fulfilled.
 >>> simulation = Simulation(instance, PrintingListener(print_time=False))
 >>> simulation.ctrl_run()
 start
-T=20.0: EVENT product=0, amount=0, in_warehouse=0, in_production=0, \
+T=20.0! product=0, amount=0, in_warehouse=0, in_production=0, \
 1 pending demands
-T=20.0: EVENT station=0, 1 jobs queued
-T=20.0: beginning to produce 10 units of product 0 on station 0
-T=120.0: finished producing 10 units of product 0 on station 0
-T=120.0: EVENT station=1, 1 jobs queued
-T=120.0: beginning to produce 10 units of product 0 on station 1
-T=420.0: finished producing 10 units of product 0 on station 1
-T=420.0: EVENT product=0, amount=10, in_warehouse=0, in_production=0, \
+T=20.0! station=0, 1 jobs queued
+T=20.0! start j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 20, sp: 0) \
+at station 0
+T=120.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 20, sp: 0) \
+at station 0
+T=120.0! station=1, 1 jobs queued
+T=120.0! start j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 120, sp: 1) \
+at station 1
+T=420.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: T, st: 120, sp: 1) \
+at station 1
+T=420.0! product=0, amount=10, in_warehouse=0, in_production=0, \
 1 pending demands
-T=420.0: demand 0 for 10 units of product 0 satisfied
-T=420.0: finished
-
+T=420.0! d(id: 0, p: 0, c: 0, am: 10, ar: 20, dl: 100, me: T) statisfied
+T=420.0 -- finished
 
 >>> instance = Instance(
 ...     name="test2", n_products=2, n_customers=1, n_stations=2, n_demands=2,
+...     time_end_warmup=21, time_end_measure=10000,
 ...     routes=[[0, 1], [1, 0]],
 ...     demands=[[0, 0, 1, 10, 20, 90], [1, 0, 0, 5, 22, 200]],
 ...     warehous_at_t0=[2, 1],
@@ -98,73 +103,176 @@ T=420.0: finished
 >>> simulation = Simulation(instance, PrintingListener(print_time=False))
 >>> simulation.ctrl_run()
 start
-T=0.0: EVENT product=0, amount=2, in_warehouse=0, in_production=0, \
-0 pending demands
+T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 2 units of product 0 in warehouse
-T=0.0: EVENT product=1, amount=1, in_warehouse=0, in_production=0, \
-0 pending demands
+T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 1 units of product 1 in warehouse
-T=20.0: EVENT product=1, amount=0, in_warehouse=1, in_production=0, \
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=0, 1 pending demands
+T=20.0: station=1, 1 jobs queued
+T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) at \
+station 1
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=0, 1 pending demands
+T=22.0! station=0, 1 jobs queued
+T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) at \
+station 0
+T=53.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) at \
+station 0
+T=61.5: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) at \
+station 1
+T=61.5! station=1, 1 jobs queued
+T=61.5! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 53, sp: 1) at \
+station 1
+T=61.5! station=0, 1 jobs queued
+T=61.5: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 61.5, sp: 1) at \
+station 0
+T=81.78571428571429! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, \
+st: 53, sp: 1) at station 1
+T=81.78571428571429! product=0, amount=3, in_warehouse=2, in_production=0, \
 1 pending demands
-T=20.0: EVENT station=1, 1 jobs queued
-T=20.0: beginning to produce 9 units of product 1 on station 1
-T=22.0: EVENT product=0, amount=0, in_warehouse=2, in_production=0, \
+T=81.78571428571429! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) \
+statisfied
+T=81.78571428571429! 0 units of product 0 in warehouse
+T=107.03571428571428: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: T, \
+st: 61.5, sp: 1) at station 0
+T=107.03571428571428! product=1, amount=9, in_warehouse=1, in_production=0, \
 1 pending demands
-T=22.0: EVENT station=0, 1 jobs queued
-T=22.0: beginning to produce 3 units of product 0 on station 0
-T=53.0: finished producing 3 units of product 0 on station 0
-T=61.5: finished producing 9 units of product 1 on station 1
-T=61.5: EVENT station=1, 1 jobs queued
-T=61.5: beginning to produce 3 units of product 0 on station 1
-T=61.5: EVENT station=0, 1 jobs queued
-T=61.5: beginning to produce 9 units of product 1 on station 0
-T=81.78571428571429: finished producing 3 units of product 0 on station 1
-T=81.78571428571429: EVENT product=0, amount=3, in_warehouse=2, \
-in_production=0, 1 pending demands
-T=81.78571428571429: demand 1 for 5 units of product 0 satisfied
-T=81.78571428571429: 0 units of product 0 in warehouse
-T=107.03571428571428: finished producing 9 units of product 1 on station 0
-T=107.03571428571428: EVENT product=1, amount=9, in_warehouse=1, \
-in_production=0, 1 pending demands
-T=107.03571428571428: demand 0 for 10 units of product 1 satisfied
-T=107.03571428571428: 0 units of product 1 in warehouse
-T=107.03571428571428: finished
+T=107.03571428571428: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) \
+statisfied
+T=107.03571428571428! 0 units of product 1 in warehouse
+T=107.03571428571428 -- finished
 
 
 >>> simulation.ctrl_reset()
 >>> simulation.ctrl_run()
 start
-T=0.0: EVENT product=0, amount=2, in_warehouse=0, in_production=0, \
-0 pending demands
+T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 2 units of product 0 in warehouse
-T=0.0: EVENT product=1, amount=1, in_warehouse=0, in_production=0, \
-0 pending demands
+T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 1 units of product 1 in warehouse
-T=20.0: EVENT product=1, amount=0, in_warehouse=1, in_production=0, \
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=0, 1 pending demands
+T=20.0: station=1, 1 jobs queued
+T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) at \
+station 1
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=0, 1 pending demands
+T=22.0! station=0, 1 jobs queued
+T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) at \
+station 0
+T=53.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) at \
+station 0
+T=61.5: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) at \
+station 1
+T=61.5! station=1, 1 jobs queued
+T=61.5! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 53, sp: 1) at \
+station 1
+T=61.5! station=0, 1 jobs queued
+T=61.5: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 61.5, sp: 1) at \
+station 0
+T=81.78571428571429! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, \
+st: 53, sp: 1) at station 1
+T=81.78571428571429! product=0, amount=3, in_warehouse=2, in_production=0, \
 1 pending demands
-T=20.0: EVENT station=1, 1 jobs queued
-T=20.0: beginning to produce 9 units of product 1 on station 1
-T=22.0: EVENT product=0, amount=0, in_warehouse=2, in_production=0, \
+T=81.78571428571429! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) \
+statisfied
+T=81.78571428571429! 0 units of product 0 in warehouse
+T=107.03571428571428: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: T, \
+st: 61.5, sp: 1) at station 0
+T=107.03571428571428! product=1, amount=9, in_warehouse=1, in_production=0, \
 1 pending demands
-T=22.0: EVENT station=0, 1 jobs queued
-T=22.0: beginning to produce 3 units of product 0 on station 0
-T=53.0: finished producing 3 units of product 0 on station 0
-T=61.5: finished producing 9 units of product 1 on station 1
-T=61.5: EVENT station=1, 1 jobs queued
-T=61.5: beginning to produce 3 units of product 0 on station 1
-T=61.5: EVENT station=0, 1 jobs queued
-T=61.5: beginning to produce 9 units of product 1 on station 0
-T=81.78571428571429: finished producing 3 units of product 0 on station 1
-T=81.78571428571429: EVENT product=0, amount=3, in_warehouse=2, \
-in_production=0, 1 pending demands
-T=81.78571428571429: demand 1 for 5 units of product 0 satisfied
-T=81.78571428571429: 0 units of product 0 in warehouse
-T=107.03571428571428: finished producing 9 units of product 1 on station 0
-T=107.03571428571428: EVENT product=1, amount=9, in_warehouse=1, \
-in_production=0, 1 pending demands
-T=107.03571428571428: demand 0 for 10 units of product 1 satisfied
-T=107.03571428571428: 0 units of product 1 in warehouse
-T=107.03571428571428: finished
+T=107.03571428571428: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) \
+statisfied
+T=107.03571428571428! 0 units of product 1 in warehouse
+T=107.03571428571428 -- finished
+
+
+Now we want to stop the simulation measurement period before the last
+job completes. Notice that the last production jobs after time unit
+81.xxx are no longer performed, because their end falls outside of the
+measurement period.
+>>> instance = Instance(
+...     name="test3", n_products=2, n_customers=1, n_stations=2, n_demands=2,
+...     time_end_warmup=21, time_end_measure=100,
+...     routes=[[0, 1], [1, 0]],
+...     demands=[[0, 0, 1, 10, 20, 90], [1, 0, 0, 5, 22, 200]],
+...     warehous_at_t0=[2, 1],
+...     station_product_unit_times=[[[10.0, 50.0, 15.0, 100.0],
+...                                  [ 5.0, 20.0,  7.0,  35.0, 4.0, 50.0]],
+...                                 [[ 5.0, 24.0,  7.0,  80.0],
+...                                  [ 3.0, 21.0,  6.0,  50.0,]]])
+
+>>> instance.name
+'test3'
+
+>>> simulation = Simulation(instance, PrintingListener(print_time=False))
+>>> simulation.ctrl_run()
+start
+T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
+T=0.0: 2 units of product 0 in warehouse
+T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
+T=0.0: 1 units of product 1 in warehouse
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=0, \
+1 pending demands
+T=20.0: station=1, 1 jobs queued
+T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
+at station 1
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=0, \
+1 pending demands
+T=22.0! station=0, 1 jobs queued
+T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
+at station 0
+T=53.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
+at station 0
+T=61.5: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
+at station 1
+T=61.5! station=1, 1 jobs queued
+T=61.5! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 53, sp: 1) \
+at station 1
+T=61.5! station=0, 1 jobs queued
+T=61.5: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 61.5, sp: 1) \
+at station 0
+T=81.78571428571429! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, \
+st: 53, sp: 1) at station 1
+T=81.78571428571429! product=0, amount=3, in_warehouse=2, in_production=0, \
+1 pending demands
+T=81.78571428571429! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) \
+statisfied
+T=81.78571428571429! 0 units of product 0 in warehouse
+T=81.78571428571429 -- finished
+
+>>> simulation.ctrl_reset()
+>>> simulation.ctrl_run()
+start
+T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
+T=0.0: 2 units of product 0 in warehouse
+T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
+T=0.0: 1 units of product 1 in warehouse
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=0, \
+1 pending demands
+T=20.0: station=1, 1 jobs queued
+T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
+at station 1
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=0, \
+1 pending demands
+T=22.0! station=0, 1 jobs queued
+T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
+at station 0
+T=53.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
+at station 0
+T=61.5: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
+at station 1
+T=61.5! station=1, 1 jobs queued
+T=61.5! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 53, sp: 1) \
+at station 1
+T=61.5! station=0, 1 jobs queued
+T=61.5: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 61.5, sp: 1) \
+at station 0
+T=81.78571428571429! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, \
+st: 53, sp: 1) at station 1
+T=81.78571428571429! product=0, amount=3, in_warehouse=2, in_production=0, \
+1 pending demands
+T=81.78571428571429! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) \
+statisfied
+T=81.78571428571429! 0 units of product 0 in warehouse
+T=81.78571428571429 -- finished
 """
 
 from dataclasses import dataclass, field
@@ -173,6 +281,7 @@ from time import time_ns
 from typing import Any, Callable, Final
 
 import numpy as np
+from pycommons.strings.string_conv import bool_to_str, float_to_str
 from pycommons.types import type_error
 
 from moptipyapps.prodsched.instance import (
@@ -198,16 +307,38 @@ class _Event:
 class Job:
     """The record for a production job."""
 
+    #: the unique job id
+    job_id: int
     #: the ID of the product to be produced.
     product_id: int
     #: the amount to produce
     amount: int
     #: the time when the job was issued
-    issue_time: float = -1.0
+    arrival: float
+    #: should the job be considered during measurement?
+    measure: bool
+    #: is the job completed?
+    completed: bool = False
     #: the time when the job arrived at the queue of the current station.
     station_time: float = -1.0
     #: the current job step, starts at 0.
     step: int = -1
+
+    def __str__(self) -> str:
+        """
+        Get a string representation of this job.
+
+        :return: the string representation
+
+        >>> str(Job(0, 1, 10, 0.5, True, False, 1.0, 0))
+        'j(id: 0, p: 1, am: 10, ar: 0.5, me: T, c: F, st: 1, sp: 0)'
+        """
+        fts: Final[Callable] = float_to_str
+        return (f"j(id: {self.job_id}, p: {self.product_id}, "
+                f"am: {self.amount}, ar: {fts(self.arrival)}, "
+                f"me: {bool_to_str(self.measure)}, "
+                f"c: {bool_to_str(self.completed)}, "
+                f"st: {fts(self.station_time)}, sp: {self.step})")
 
 
 class Listener:
@@ -217,7 +348,8 @@ class Listener:
         """Get notification that the simulation is starting."""
 
     def product_in_warehouse(
-            self, time: float, product_id: int, amount: int) -> None:
+            self, time: float, product_id: int, amount: int,
+            is_in_measure_period: bool) -> None:
         """
         Report a change of the amount of products in the warehouse.
 
@@ -225,6 +357,8 @@ class Listener:
         :param product_id: the product ID
         :param amount: the new absolute total amount of that product in the
             warehouse
+        :param is_in_measure_period: is this event inside the measurement
+            period?
         """
 
     def produce_at_begin(
@@ -245,6 +379,8 @@ class Listener:
         :param time: the current time
         :param station_id: the station ID
         :param job: the production job
+        :param is_in_measure_period: is this event inside the measurement
+            period?
         """
 
     def demand_satisfied(
@@ -254,12 +390,15 @@ class Listener:
 
         :param time: the time index when the demand was satisfied
         :param demand: the demand that was satisfied
+        :param is_in_measure_period: is this event inside the measurement
+            period?
         """
 
     def event_product(self, time: float,  # pylint: disable=R0913,R0917
                       product_id: int, amount: int,
                       in_warehouse: int, in_production: int,
-                      pending_demands: tuple[Demand, ...]) -> None:
+                      pending_demands: tuple[Demand, ...],
+                      is_in_measure_period: bool) -> None:
         """
         Get notified right before :meth:`Simulation.event_product`.
 
@@ -270,10 +409,13 @@ class Listener:
             warehouse
         :param in_production: the amounf of product currently under production
         :param pending_demands: the pending orders for the product
+        :param is_in_measure_period: is this event inside the measurement
+            period?
         """
 
     def event_station(self, time: float, station_id: int,
-                      queue: tuple[Job, ...]) -> None:
+                      queue: tuple[Job, ...],
+                      is_in_measure_period: bool) -> None:
         """
         Get notified right before :meth:`Simulation.event_station`.
 
@@ -285,6 +427,8 @@ class Listener:
         :param time: the current time
         :param station_id: the station ID
         :param queue: the job queue for this station
+        :param is_in_measure_period: is this event inside the measurement
+            period?
         """
 
     def finished(self, time: float) -> None:
@@ -317,14 +461,19 @@ class Simulation:  # pylint: disable=R0902
         #: the station-product-unit-times
         self.__mput: Final[tuple[tuple[np.ndarray, ...], ...]] = (
             instance.station_product_unit_times)
+        #: the end of the warmup period
+        self.__warmup: Final[float] = instance.time_end_warmup
+        #: the end of the measurement period
+        self.__measure: Final[float] = instance.time_end_measure
 
         #: the start event function
         self.__l_start: Final[Callable[[], None]] = listener.start
         #: the product-level-in-warehouse-changed event function
         self.__l_product_in_warehouse: Final[Callable[[
-            float, int, int], None]] = listener.product_in_warehouse
+            float, int, int, bool], None]] = listener.product_in_warehouse
         #: the demand satisfied event function
-        self.__l_demand_satisfied: Final[Callable[[float, Demand], None]] \
+        self.__l_demand_satisfied: Final[Callable[[
+            float, Demand], None]] \
             = listener.demand_satisfied
         #: the listener to be notified if the production of a certain
         #: product begins at a certain station.
@@ -338,11 +487,12 @@ class Simulation:  # pylint: disable=R0902
         self.__l_finished: Final[Callable[[float], None]] = listener.finished
         #: the listener to notify about product events
         self.__l_event_product: Final[Callable[[
-            float, int, int, int, int, tuple[Demand, ...]], None]] = \
+            float, int, int, int, int, tuple[Demand, ...], bool], None]] = \
             listener.event_product
         #: the listener to notify about station events
         self.__l_event_station: Final[Callable[[
-            float, int, tuple[Job, ...]], None]] = listener.event_station
+            float, int, tuple[Job, ...], bool], None]] = \
+            listener.event_station
 
         #: the current time
         self.__time: float = 0.0
@@ -361,6 +511,8 @@ class Simulation:  # pylint: disable=R0902
             [] for _ in range(instance.n_stations)]
         #: whether the stations are busy
         self.__mbusy: Final[list[bool]] = [False] * instance.n_stations
+        #: the job ID counter
+        self.__job_id: int = 0
 
     def ctrl_reset(self) -> None:
         """
@@ -379,6 +531,7 @@ class Simulation:  # pylint: disable=R0902
             mq.clear()
         for i in range(self.instance.n_stations):
             self.__mbusy[i] = False
+        self.__job_id = 0
 
     def ctrl_run(self) -> None:
         """
@@ -521,11 +674,14 @@ class Simulation:  # pylint: disable=R0902
 
         if self.__mbusy[station_id]:
             raise ValueError("Cannot execute job on busy station.")
+
         self.__mbusy[station_id] = True
         self.__l_produce_at_begin(time, station_id, job)
+
         end_time: float = compute_finish_time(
             time, job.amount, self.__mput[station_id][product_id])
-        heappush(self.__queue, _Event(end_time, self.__job_step, (job, )))
+        if end_time < self.__measure:  # only simulate if within time window
+            heappush(self.__queue, _Event(end_time, self.__job_step, (job, )))
 
     def act_store_in_warehouse(self, product_id: int, amount: int) -> None:
         """
@@ -537,9 +693,11 @@ class Simulation:  # pylint: disable=R0902
         if amount <= 0:
             raise ValueError(
                 f"Cannot add amount {amount} of product {product_id}!")
-        wh: int = self.__warehouse[product_id] + amount
+        wh: Final[int] = self.__warehouse[product_id] + amount
         self.__warehouse[product_id] = wh
-        self.__l_product_in_warehouse(self.__time, product_id, wh)
+        time: Final[float] = self.__time
+        self.__l_product_in_warehouse(
+            time, product_id, wh, self.__warmup <= time)
 
     def act_take_from_warehouse(self, product_id: int, amount: int) -> None:
         """
@@ -551,14 +709,16 @@ class Simulation:  # pylint: disable=R0902
         if amount <= 0:
             raise ValueError(
                 f"Cannot remove amount {amount} of product {product_id}!")
-        wh: int = self.__warehouse[product_id] - amount
+        wh: Final[int] = self.__warehouse[product_id] - amount
         if wh < 0:
             raise ValueError(
                 f"Cannot remove {amount} of product {product_id} from "
                 "warehouse if there are only "
                 f"{self.__warehouse[product_id]} units in it.")
         self.__warehouse[product_id] = wh
-        self.__l_product_in_warehouse(self.__time, product_id, wh)
+        time: Final[float] = self.__time
+        self.__l_product_in_warehouse(
+            time, product_id, wh, self.__warmup <= time)
 
     def act_produce(self, product_id: int, amount: int) -> None:
         """
@@ -570,7 +730,11 @@ class Simulation:  # pylint: disable=R0902
         if amount <= 0:
             raise ValueError(
                 f"Cannot produce {amount} units of product {product_id}.")
-        self.__job_step(Job(product_id, amount, self.__time))
+        time: Final[float] = self.__time
+        jid: Final[int] = self.__job_id
+        self.__job_id = jid + 1
+        self.__job_step(Job(jid, product_id, amount, time,
+                            self.__warmup <= time))
 
     def __product_available(
             self, product_id: int, amount: int) -> None:
@@ -586,7 +750,8 @@ class Simulation:  # pylint: disable=R0902
         wh: Final[int] = self.__warehouse[product_id]
         ip: Final[int] = self.__in_production[product_id]
         time: Final[float] = self.__time
-        self.__l_event_product(time, product_id, amount, wh, ip, tp)
+        self.__l_event_product(time, product_id, amount, wh, ip, tp,
+                               self.__warmup <= time)
         self.event_product(time, product_id, amount, wh, ip, tp)
 
     def __demand_issued(self, demand: Demand) -> None:
@@ -605,7 +770,8 @@ class Simulation:  # pylint: disable=R0902
         tp: Final[tuple[Demand, ...]] = tuple(lst)
         ip: Final[int] = self.__in_production[product_id]
         iw: Final[int] = self.__warehouse[product_id]
-        self.__l_event_product(time, product_id, 0, iw, ip, tp)
+        self.__l_event_product(time, product_id, 0, iw, ip, tp,
+                               self.__warmup <= time)
         self.event_product(time, product_id, 0, iw, ip, tp)
 
     def __job_step(self, job: Job) -> None:
@@ -624,35 +790,45 @@ class Simulation:  # pylint: disable=R0902
         routes: Final[tuple[int, ...]] = self.__routes[product_id]
         time: Final[float] = self.__time
 
-        job_step: int = job.step
+        # WARNING: We only track jobs with issue time within the measurement
+        # period!
+        warm: Final[float] = self.__warmup
+        time_in_meas: Final[bool] = warm <= time
+
+        job_step: Final[int] = job.step
+        next_step: Final[int] = job_step + 1
+        completed: Final[bool] = next_step >= tuple.__len__(routes)
+
         if job_step >= 0:  # The job was running on a station.
             old_station_id: Final[int] = routes[job_step]
+            if completed:
+                object.__setattr__(job, "completed", True)
             self.__l_produce_at_end(time, old_station_id, job)
             self.__mbusy[old_station_id] = False
             old_mq: Final[list[Job]] = self.__mq[old_station_id]
             if list.__len__(old_mq) > 0:
                 tupo: Final[tuple[Job, ...]] = tuple(old_mq)
-                self.__l_event_station(time, old_station_id, tupo)
+                self.__l_event_station(time, old_station_id, tupo,
+                                       time_in_meas)
                 self.event_station(time, old_station_id, tupo)
         else:
             self.__in_production[product_id] += job.amount
 
-        job_step += 1
-        max_route: Final[int] = tuple.__len__(routes)
-        if job_step >= max_route:
+        if completed:
             self.__in_production[product_id] -= job.amount
             self.__product_available(product_id, job.amount)
             return
 
-        object.__setattr__(job, "step", job_step)
+        object.__setattr__(job, "step", next_step)
         object.__setattr__(job, "station_time", time)
 
-        new_station_id: Final[int] = routes[job_step]
+        new_station_id: Final[int] = routes[next_step]
         queue: list[Job] = self.__mq[new_station_id]
         queue.append(job)
         if not self.__mbusy[new_station_id]:
             tupq: Final[tuple[Job, ...]] = tuple(queue)
-            self.__l_event_station(time, new_station_id, tupq)
+            self.__l_event_station(
+                time, new_station_id, tupq, time_in_meas)
             self.event_station(time, new_station_id, tupq)
 
 
@@ -684,48 +860,52 @@ class PrintingListener(Listener):
         self.__output("start")
 
     def product_in_warehouse(
-            self, time: float, product_id: int, amount: int) -> None:
+            self, time: float, product_id: int, amount: int,
+            is_in_measure_period: bool) -> None:
         """Print the product amount in the warehouse."""
-        self.__output(f"T={time}: {amount} units of product "
-                      f"{product_id} in warehouse")
+        self.__output(f"T={time}{'!' if is_in_measure_period else ':'} "
+                      f"{amount} units of product {product_id} in warehouse")
 
     def produce_at_begin(
             self, time: float, station_id: int, job: Job) -> None:
         """Print that the production at a given station begun."""
-        self.__output(f"T={time}: beginning to produce {job.amount} units "
-                      f"of product {job.product_id} on station {station_id}")
+        self.__output(f"T={time}{'!' if job.measure else ':'} "
+                      f"start {job} at station {station_id}")
 
     def produce_at_end(self, time: float, station_id: int, job: Job) -> None:
         """Print that the production at a given station ended."""
-        self.__output(f"T={time}: finished producing {job.amount} units of "
-                      f"product {job.product_id} on station {station_id}")
+        self.__output(f"T={time}{'!' if job.measure else ':'} "
+                      f"finished {job} at station {station_id}")
 
     def demand_satisfied(self, time: float, demand: Demand) -> None:
         """Print that a demand was satisfied."""
-        self.__output(f"T={time}: demand {demand.demand_id} for "
-                      f"{demand.amount} units of product {demand.product_id} "
-                      "satisfied")
+        self.__output(
+            f"T={time}{'!' if demand.measure else ':'} {demand} statisfied")
 
     def event_product(self, time: float,  # pylint: disable=R0913,R0917
                       product_id: int, amount: int,
                       in_warehouse: int, in_production: int,
-                      pending_demands: tuple[Demand, ...]) -> None:
+                      pending_demands: tuple[Demand, ...],
+                      is_in_measure_period: bool) -> None:
         """Print the prouct event."""
-        self.__output(f"T={time}: EVENT product={product_id}, amount={amount}"
+        self.__output(f"T={time}{'!' if is_in_measure_period else ':'} "
+                      f"product={product_id}, amount={amount}"
                       f", in_warehouse={in_warehouse}, in_production="
                       f"{in_production}, {tuple.__len__(pending_demands)} "
                       "pending demands")
 
     def event_station(self, time: float, station_id: int,
-                      queue: tuple[Job, ...]) -> None:
+                      queue: tuple[Job, ...],
+                      is_in_measure_period: bool) -> None:
         """Print the station event."""
-        self.__output(f"T={time}: EVENT station={station_id}, "
-                      f"{tuple.__len__(queue)} jobs queued")
+        self.__output(
+            f"T={time}{'!' if is_in_measure_period else ':'} "
+            f"station={station_id}, {tuple.__len__(queue)} jobs queued")
 
     def finished(self, time: float) -> None:
         """Print that the simulation has finished."""
         end: Final[int] = time_ns()
-        self.__output(f"T={time}: finished")
+        self.__output(f"T={time} -- finished")
         if self.__print_time and self.__start_time_ns is not None:
             required: float = (end - self.__start_time_ns) / 1_000_000_000
             self.__output(f"Simulation time: {required}s")
@@ -742,6 +922,7 @@ def warmup() -> None:
     """
     instance = Instance(
         name="warmup", n_products=2, n_customers=1, n_stations=2, n_demands=2,
+        time_end_warmup=10, time_end_measure=10000,
         routes=[[0, 1], [1, 0]],
         demands=[[0, 0, 1, 10, 20, 90], [1, 0, 0, 5, 22, 200]],
         warehous_at_t0=[2, 1],

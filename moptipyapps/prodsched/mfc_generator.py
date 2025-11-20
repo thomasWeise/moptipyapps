@@ -9,29 +9,29 @@ instances such as those used in the paper [1] by Thürer et al.
 ...  Product(0, (0, 1), Gamma.from_alpha_beta(3, 0.26))], [
 ...  Station(0, Gamma.from_k_and_mean(3, 10)),
 ...  Station(1, Gamma.from_k_and_mean(2, 10))],
-...  100, seed=123)
+...  time_end_measure=100, seed=123)
 
 >>> inst.name
-'mfc_1_2_0x7b'
+'mfc_1_2_100_0x7b'
 
 >>> inst.n_demands
 7
 
 >>> inst.demands
 (Demand(arrival=5.213885878801001, deadline=5.213885878801001, demand_id=0,\
- customer_id=0, product_id=0, amount=1),\
- Demand(arrival=25.872387132411287, deadline=25.872387132411287,\
- demand_id=1, customer_id=1, product_id=0, amount=1),\
- Demand(arrival=43.062182155666896, deadline=43.062182155666896,\
- demand_id=2, customer_id=2, product_id=0, amount=1),\
- Demand(arrival=49.817978344678004, deadline=49.817978344678004,\
- demand_id=3, customer_id=3, product_id=0, amount=1),\
+ customer_id=0, product_id=0, amount=1, measure=False),\
+ Demand(arrival=25.872387132411287, deadline=25.872387132411287, demand_id=1,\
+ customer_id=1, product_id=0, amount=1, measure=False),\
+ Demand(arrival=43.062182155666896, deadline=43.062182155666896, demand_id=2,\
+ customer_id=2, product_id=0, amount=1, measure=True),\
+ Demand(arrival=49.817978344678004, deadline=49.817978344678004, demand_id=3,\
+ customer_id=3, product_id=0, amount=1, measure=True),\
  Demand(arrival=58.21166922638016, deadline=58.21166922638016, demand_id=4,\
- customer_id=4, product_id=0, amount=1),\
+ customer_id=4, product_id=0, amount=1, measure=True),\
  Demand(arrival=69.09054693162531, deadline=69.09054693162531, demand_id=5,\
- customer_id=5, product_id=0, amount=1),\
+ customer_id=5, product_id=0, amount=1, measure=True),\
  Demand(arrival=88.804579148131, deadline=88.804579148131, demand_id=6,\
- customer_id=6, product_id=0, amount=1))
+ customer_id=6, product_id=0, amount=1, measure=True))
 
 >>> len(inst.station_product_unit_times[0][0])
 18
@@ -39,18 +39,22 @@ instances such as those used in the paper [1] by Thürer et al.
 >>> len(inst.station_product_unit_times[1][0])
 22
 
+>>> inst.time_end_measure
+100.0
+
+>>> inst.time_end_warmup
+30.0
+
 >>> d = dict(inst.infos)
 >>> del d["info_generated_on"]
 >>> del d["info_generator_version"]
 >>> d
 {'info_generator': 'moptipyapps.prodsched.mfc_generator',\
  'info_rand_seed_src': 'USER_PROVIDED',\
- 'info_rand_seed': '0x7b',\
- 'info_name_src': 'SAMPLED',\
- 'info_max_time_src': 'USER_PROVIDED',\
- 'info_max_time': '100',\
- 'info_product_interarrival_times[0]':\
- 'Erlang(k=3, theta=3.846153846153846)',\
+ 'info_rand_seed': '0x7b', 'info_time_end_measure_src': 'USER_PROVIDED',\
+ 'info_time_end_measure': '100', 'info_time_end_warmup_src': 'SAMPLED',\
+ 'info_time_end_warmup': '30', 'info_name_src': 'SAMPLED',\
+ 'info_product_interarrival_times[0]': 'Erlang(k=3, theta=3.846153846153846)',\
  'info_product_route[0]': 'USER_PROVIDED',\
  'info_station_processing_time[0]': 'Erlang(k=3, theta=3.3333333333333335)',\
  'info_station_processing_time_window_length[0]': 'Uniform(low=0, high=20)',\
@@ -59,7 +63,7 @@ instances such as those used in the paper [1] by Thürer et al.
 
 >>> inst = sample_mfc_instance(seed=23445)
 >>> inst.name
-'mfc_10_13_0x5b95'
+'mfc_10_13_10000_0x5b95'
 
 >>> inst.n_demands
 9922
@@ -90,6 +94,7 @@ from moptipy.utils.nputils import (
 from moptipy.utils.strings import sanitize_name
 from numpy.random import Generator
 from pycommons.math.int_math import try_int
+from pycommons.strings.string_conv import num_to_str
 from pycommons.types import check_int_range, type_error
 
 from moptipyapps.prodsched.instance import (
@@ -141,10 +146,14 @@ INFO_RAND_SEED: Final[str] = "info_rand_seed"
 INFO_RAND_SEED_SRC: Final[str] = f"{INFO_RAND_SEED}_src"
 #: the name source
 INFO_NAME_SRC: Final[str] = "info_name_src"
-#: the maximum time
-INFO_MAX_TIME: Final[str] = "info_max_time"
-#: the maximum time source
-INFO_MAX_TIME_SRC: Final[str] = f"{INFO_MAX_TIME}_src"
+#: the warmup time end
+INFO_TIME_END_WARMUP: Final[str] = "info_time_end_warmup"
+#: the source of the warmup time end
+INFO_TIME_END_WARMUP_SRC: Final[str] = f"{INFO_TIME_END_WARMUP}_src"
+#: the measurement time end
+INFO_TIME_END_MEASURE: Final[str] = "info_time_end_measure"
+#: the source of the measurement time end
+INFO_TIME_END_MEASURE_SRC: Final[str] = f"{INFO_TIME_END_MEASURE}_src"
 
 
 @dataclass(order=True, frozen=True)
@@ -243,7 +252,8 @@ class Station:
 # pylint: disable=R0914,R0912,R0915
 def sample_mfc_instance(products: Iterable[Product] | None = None,
                         stations: Iterable[Station] | None = None,
-                        max_time: int | float | None = None,
+                        time_end_warmup: int | float | None = None,
+                        time_end_measure: int | float | None = None,
                         name: str | None = None,
                         seed: int | None = None) -> Instance:
     """
@@ -251,7 +261,8 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
 
     :param products: the products
     :param stations: the work stations
-    :param max_time: the maximum time until which we stop sampling
+    :param time_end_warmup: the end of the warmup period
+    :param time_end_measure: the end of the measurement period
     :param name: the instance name
     :param seed: the random seed, if any
     :return: the instance
@@ -328,24 +339,39 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
         raise type_error(seed, "seed", int)
     infos[INFO_RAND_SEED] = hex(seed)
 
+    if time_end_measure is None:
+        time_end_measure = 10_000 if (time_end_warmup is None) or (
+            time_end_warmup <= 0) else max(
+            time_end_warmup + 1, (10 * time_end_warmup) / 3)
+        infos[INFO_TIME_END_MEASURE_SRC] = INFO_SAMPLED
+    else:
+        infos[INFO_TIME_END_MEASURE_SRC] = INFO_USER_PROVIDED
+    time_end_measure = try_int(time_end_measure)
+    if not 0 < time_end_measure < MAX_VALUE:
+        raise ValueError(
+            f"Invalid time_end_measure={time_end_measure}.")
+    infos[INFO_TIME_END_MEASURE] = num_to_str(time_end_measure)
+
+    if time_end_warmup is None:
+        time_end_warmup = (3 * time_end_measure) / 10
+        infos[INFO_TIME_END_WARMUP_SRC] = INFO_SAMPLED
+    else:
+        infos[INFO_TIME_END_WARMUP_SRC] = INFO_USER_PROVIDED
+    time_end_warmup = try_int(time_end_warmup)
+    if not 0 <= time_end_warmup < time_end_measure:
+        raise ValueError(f"Invalid time_end_warmup={time_end_warmup} "
+                         f"for time_end_measure={time_end_measure}.")
+    infos[INFO_TIME_END_WARMUP] = num_to_str(time_end_warmup)
+
     if name is None:
         infos[INFO_NAME_SRC] = INFO_SAMPLED
-        name = f"mfc_{n_products}_{n_stations}_{seed:#x}"
+        s: str = num_to_str(time_end_measure).replace(".", "d")
+        name = f"mfc_{n_products}_{n_stations}_{s}_{seed:#x}"
     else:
         infos[INFO_NAME_SRC] = INFO_USER_PROVIDED
     uname: str = sanitize_name(name)
     if uname != name:
         raise ValueError(f"Invalid name {name!r}.")
-
-    if max_time is None:
-        max_time = 10_000
-        infos[INFO_MAX_TIME_SRC] = INFO_SAMPLED
-    else:
-        infos[INFO_MAX_TIME_SRC] = INFO_USER_PROVIDED
-    max_time = try_int(max_time)
-    if not 0 < max_time < MAX_VALUE:
-        raise ValueError(f"Invalid max_time={max_time}.")
-    infos[INFO_MAX_TIME] = str(max_time)
 
     random: Final[Generator] = rand_generator(seed)
 
@@ -366,12 +392,12 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
                         "Failed to sample appropriate inter-arrival time"
                         f" from {product.interarrival_times}")
             time += until
-            if time > max_time:
+            if time >= time_end_measure:
                 break
             demands.append(Demand(
                 arrival=time, deadline=time, demand_id=current_id,
                 customer_id=current_id, product_id=product.product_id,
-                amount=1))
+                amount=1, measure=time_end_warmup <= time))
             current_id += 1
 
     #: sample the working times
@@ -400,7 +426,7 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
                         f" from {station.processing_windows}")
             time += window
             times.extend((processing, time))
-            if time >= max_time:
+            if time >= time_end_measure:
                 break
         production_times.append([
             times if station.station_id in product.routing else []
@@ -416,6 +442,7 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
         name=name, n_products=n_products,
         n_customers=current_id, n_stations=n_stations,
         n_demands=current_id,
+        time_end_warmup=time_end_warmup, time_end_measure=time_end_measure,
         routes=(product.routing for product in products),
         demands=demands, warehous_at_t0=[0] * n_products,
         station_product_unit_times=production_times,
