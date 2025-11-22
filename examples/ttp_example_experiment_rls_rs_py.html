@@ -1,0 +1,134 @@
+<!doctype html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd"><title></title><meta content="text/html; charset=utf-8"http-equiv=content-type><style>pre{line-height:125%}td.linenos .normal,span.linenos{color:inherit;background-color:#0000;padding-left:5px;padding-right:5px}td.linenos .special,span.linenos.special{color:#000;background-color:#ffffc0;padding-left:5px;padding-right:5px}body .hll{background-color:#ffc}body{background:#f8f8f8}body .c{color:#3d7b7b;font-style:italic}body .err{border:1px solid red}body .k{color:green;font-weight:700}body .o{color:#666}body .ch,body .cm{color:#3d7b7b;font-style:italic}body .cp{color:#9c6500}body .cpf,body .c1,body .cs{color:#3d7b7b;font-style:italic}body .gd{color:#a00000}body .ge{font-style:italic}body .ges{font-style:italic;font-weight:700}body .gr{color:#e40000}body .gh{color:navy;font-weight:700}body .gi{color:#008400}body .go{color:#717171}body .gp{color:navy;font-weight:700}body .gs{font-weight:700}body .gu{color:purple;font-weight:700}body .gt{color:#04d}body .kc,body .kd,body .kn{color:green;font-weight:700}body .kp{color:green}body .kr{color:green;font-weight:700}body .kt{color:#b00040}body .m{color:#666}body .s{color:#ba2121}body .na{color:#687822}body .nb{color:green}body .nc{color:#00f;font-weight:700}body .no{color:#800}body .nd{color:#a2f}body .ni{color:#717171;font-weight:700}body .ne{color:#cb3f38;font-weight:700}body .nf{color:#00f}body .nl{color:#767600}body .nn{color:#00f;font-weight:700}body .nt{color:green;font-weight:700}body .nv{color:#19177c}body .ow{color:#a2f;font-weight:700}body .w{color:#bbb}body .mb,body .mf,body .mh,body .mi,body .mo{color:#666}body .sa,body .sb,body .sc,body .dl{color:#ba2121}body .sd{color:#ba2121;font-style:italic}body .s2{color:#ba2121}body .se{color:#aa5d1f;font-weight:700}body .sh{color:#ba2121}body .si{color:#a45a77;font-weight:700}body .sx{color:green}body .sr{color:#a45a77}body .s1{color:#ba2121}body .ss{color:#19177c}body .bp{color:green}body .fm{color:#00f}body .vc,body .vg,body .vi,body .vm{color:#19177c}body .il{color:#666}</style><body><h2></h2><div class=highlight><pre><span></span><span class=sd>"""</span>
+<span class=sd>An example experiment for the Traveling Tournament Problem.</span>
+
+<span class=sd>In this experiment, we apply both a random sampling algorithm (RS) and a</span>
+<span class=sd>randomized local search (RLS) to the Traveling Tournament Problem (TTP).</span>
+
+<span class=sd>Our goal is only to find feasible game plans, not feasible + short ones.</span>
+<span class=sd>So we only use the "errors" objective function. Since we only want to find</span>
+<span class=sd>feasible plans, we also do not need to consider the different distance</span>
+<span class=sd>matrices that are available. Thus, we only use the 19 `circ*` instances</span>
+<span class=sd>with numbers of teams ranging from 4 to 40. (See `make_instances`.)</span>
+
+<span class=sd>We apply both algorithms on a permutation-based search spaces using the</span>
+<span class=sd>very simple game encoding procedure (which may produce infeasible plans)</span>
+<span class=sd>for 32768 FEs and log all improving moves under the "errors" objective</span>
+<span class=sd>function. (See `base_setup`.)</span>
+
+<span class=sd>Both algorithms use random permutation shuffling as their nullary operator.</span>
+<span class=sd>Random sampling only applies this operator again and again and only creates</span>
+<span class=sd>random solutions. It thus is rarely able to find a feasible solution and</span>
+<span class=sd>does so only on the smallest problem instances. This random sampling algorithm</span>
+<span class=sd>is set up in function `rs`.</span>
+
+<span class=sd>Randomized local search - set up in function `rls` - additionally uses a unary</span>
+<span class=sd>operator that receives an existing permutation as input and produces a</span>
+<span class=sd>slightly modified copy as output. This enables it to try to improve the best</span>
+<span class=sd>solution that it has encountered so far. It does so by applying the unary</span>
+<span class=sd>operator to it, obtaining a new slightly modified copy of that best solution,</span>
+<span class=sd>and keeping this copy as new best-so-far solution if it is *not worse*, i.e.,</span>
+<span class=sd>better or equally good. As unary operator, it applies a simple swap-2 method</span>
+<span class=sd>that exchanges two randomly chosen (different) elements in the permutation.</span>
+
+<span class=sd>Three runs are executed for every algorithm-instance combination (see function</span>
+<span class=sd>`run`).</span>
+<span class=sd>"""</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>argparse</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.random_sampling</span><span class=w> </span><span class=kn>import</span> <span class=n>RandomSampling</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.so.rls</span><span class=w> </span><span class=kn>import</span> <span class=n>RLS</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.execution</span><span class=w> </span><span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.experiment</span><span class=w> </span><span class=kn>import</span> <span class=n>run_experiment</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.permutations.op0_shuffle</span><span class=w> </span><span class=kn>import</span> <span class=n>Op0Shuffle</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.permutations.op1_swap2</span><span class=w> </span><span class=kn>import</span> <span class=n>Op1Swap2</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.permutations</span><span class=w> </span><span class=kn>import</span> <span class=n>Permutations</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.errors</span><span class=w> </span><span class=kn>import</span> <span class=n>Errors</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.game_encoding</span><span class=w> </span><span class=kn>import</span> <span class=n>GameEncoding</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.game_plan_space</span><span class=w> </span><span class=kn>import</span> <span class=n>GamePlanSpace</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>moptipyapps_argparser</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>make_instances</span><span class=p>()</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>Instance</span><span class=p>]]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the instances to be used in the TTP experiment.</span>
+
+<span class=sd>    Here, we simply load all the `circ*` instances. Here, all cities</span>
+<span class=sd>    are located on a circle.</span>
+
+<span class=sd>    :return: the instances to be used in the TTP experiment.</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>cast</span><span class=p>(</span><span class=s2>"Callable[[], Instance]"</span><span class=p>,</span> <span class=k>lambda</span> <span class=n>j</span><span class=o>=</span><span class=n>i</span><span class=p>:</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span><span class=p>(</span>
+        <span class=sa>f</span><span class=s2>"circ</span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2>"</span><span class=p>))</span> <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=mi>42</span><span class=p>,</span> <span class=mi>2</span><span class=p>))</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Permutations</span><span class=p>,</span> <span class=n>Execution</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the basic setup.</span>
+
+<span class=sd>    :param instance: the instance to use</span>
+<span class=sd>    :return: the basic execution</span>
+<span class=sd>    """</span>
+    <span class=n>ge</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>GameEncoding</span><span class=p>]</span> <span class=o>=</span> <span class=n>GameEncoding</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+    <span class=n>perms</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Permutations</span><span class=p>]</span> <span class=o>=</span> <span class=n>ge</span><span class=o>.</span><span class=n>search_space</span><span class=p>()</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>perms</span><span class=p>,</span> <span class=n>Execution</span><span class=p>()</span><span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=mi>32768</span><span class=p>)</span><span class=o>.</span><span class=n>set_log_improvements</span><span class=p>(</span>
+        <span class=kc>True</span><span class=p>)</span><span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>Errors</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span><span class=o>.</span><span class=n>set_search_space</span><span class=p>(</span><span class=n>perms</span><span class=p>)</span>
+        <span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>GamePlanSpace</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span><span class=o>.</span><span class=n>set_encoding</span><span class=p>(</span>
+        <span class=n>GameEncoding</span><span class=p>(</span><span class=n>instance</span><span class=p>)))</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>rls</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the RLS execution.</span>
+
+<span class=sd>    :param instance: the problem instance</span>
+<span class=sd>    :return: the setup</span>
+<span class=sd>    """</span>
+    <span class=n>space</span><span class=p>,</span> <span class=n>exe</span> <span class=o>=</span> <span class=n>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>exe</span><span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>RLS</span><span class=p>(</span><span class=n>Op0Shuffle</span><span class=p>(</span><span class=n>space</span><span class=p>),</span> <span class=n>Op1Swap2</span><span class=p>()))</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>rs</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the random sampling execution.</span>
+
+<span class=sd>    :param instance: the problem instance</span>
+<span class=sd>    :return: the setup</span>
+<span class=sd>    """</span>
+    <span class=n>space</span><span class=p>,</span> <span class=n>exe</span> <span class=o>=</span> <span class=n>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>exe</span><span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>RandomSampling</span><span class=p>(</span><span class=n>Op0Shuffle</span><span class=p>(</span><span class=n>space</span><span class=p>)))</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>run</span><span class=p>(</span><span class=n>base_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>n_runs</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>3</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Run the experiment.</span>
+
+<span class=sd>    :param base_dir: the base directory</span>
+<span class=sd>    :param n_runs: the number of runs</span>
+<span class=sd>    """</span>
+    <span class=n>use_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>base_dir</span><span class=p>)</span>
+    <span class=n>use_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+
+    <span class=n>run_experiment</span><span class=p>(</span>
+        <span class=n>base_dir</span><span class=o>=</span><span class=n>use_dir</span><span class=p>,</span>
+        <span class=n>instances</span><span class=o>=</span><span class=n>make_instances</span><span class=p>(),</span>
+        <span class=n>setups</span><span class=o>=</span><span class=p>[</span><span class=n>rls</span><span class=p>,</span> <span class=n>rs</span><span class=p>],</span>
+        <span class=n>n_runs</span><span class=o>=</span><span class=n>n_runs</span><span class=p>)</span>
+
+
+<span class=c1># Run the experiment from the command line</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span> <span class=s2>"Traveling Tournament Problem (TTP)"</span><span class=p>,</span>
+        <span class=s2>"Run the TTP experiment."</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the directory to store the experimental results under"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./results/"</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+    <span class=n>run</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span>
+</pre></div>

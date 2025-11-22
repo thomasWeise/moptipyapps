@@ -1,0 +1,50 @@
+moptipyapps.prodsched package
+=============================
+
+.. automodule:: moptipyapps.prodsched
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.prodsched.instance module
+-------------------------------------
+
+.. automodule:: moptipyapps.prodsched.instance
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.mfc\_generator module
+-------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.mfc_generator
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.simulation module
+---------------------------------------
+
+.. automodule:: moptipyapps.prodsched.simulation
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.statistics module
+---------------------------------------
+
+.. automodule:: moptipyapps.prodsched.statistics
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.statistics\_collector module
+--------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.statistics_collector
+   :members:
+   :show-inheritance:
+   :undoc-members:
