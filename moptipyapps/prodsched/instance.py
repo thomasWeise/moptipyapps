@@ -1080,6 +1080,30 @@ class Instance(Component):
             n_products, n_customers, n_demands, demands, time_end_warmup,
             time_end_measure, cache)
 
+        # count the demands that fall in the measure time window
+        n_measure: int = 0
+        n_measures: list[int] = [0] * n_products
+        for d in self.demands:
+            if d.arrival >= self.time_end_measure:
+                raise ValueError(f"Invalid arrival time of demand {d!r}.")
+            if d.measure != (self.time_end_warmup <= d.arrival):
+                raise ValueError(
+                    f"Inconsistent measure property for demand {d!r}.")
+            if d.measure:
+                n_measure += 1
+                n_measures[d.product_id] += 1
+        if n_measure <= 0:
+            raise ValueError("There are no measurable demands!")
+        for pid, npm in enumerate(n_measures):
+            if npm <= 0:
+                raise ValueError(f"No measurable demand for product {pid}!")
+        #: the number of demands that actually fall into the time measured
+        #: window
+        self.n_measurable_demands: Final[int] = n_measure
+        #: the measurable demands on a per-product basis
+        self.n_measurable_demands_per_product: Final[tuple[int, ...]] = tuple(
+            n_measures)
+
         #: The units of product in the warehouse at time step 0.
         #: For each product, we have either 0 or a positive amount of product.
         self.warehous_at_t0: Final[tuple[int, ...]] = _make_in_warehouse(
