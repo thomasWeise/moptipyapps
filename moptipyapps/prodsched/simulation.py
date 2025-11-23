@@ -108,56 +108,54 @@ T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 2 units of product 0 in warehouse
 T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 1 units of product 1 in warehouse
-T=20.0: product=1, amount=0, in_warehouse=1, in_production=0, \
-1 pending demands
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=0,\
+ 1 pending demands
 T=20.0: station=1, 1 jobs queued
-T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
-at station 1
-T=22.0! product=0, amount=0, in_warehouse=2, in_production=0, \
-1 pending demands
+T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=0,\
+ 1 pending demands
 T=22.0! station=0, 1 jobs queued
-T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
-at station 0
-T=30.0! product=1, amount=0, in_warehouse=1, in_production=9, \
-2 pending demands
-T=53.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
-at station 0
-T=61.5: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
-at station 1
-T=61.5! station=1, 2 jobs queued
-T=61.5! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0) \
-at station 1
-T=61.5! station=0, 1 jobs queued
-T=61.5: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 61.5, sp: 1) \
-at station 0
-T=94.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0) \
-at station 1
-T=94.0! station=1, 1 jobs queued
-T=94.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 53, sp: 1) \
-at station 1
-T=107.03571428571428: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: T, \
-st: 61.5, sp: 1) at station 0
-T=107.03571428571428! station=0, 1 jobs queued
-T=107.03571428571428! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, \
-st: 94, sp: 1) at station 0
-T=107.03571428571428! product=1, amount=9, in_warehouse=1, in_production=7, \
-2 pending demands
-T=107.03571428571428: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) \
-statisfied
-T=107.03571428571428! 0 units of product 1 in warehouse
-T=111.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, st: 53, sp: 1) \
-at station 1
-T=111.0! product=0, amount=3, in_warehouse=2, in_production=0, \
-1 pending demands
-T=111.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied
-T=111.0! 0 units of product 0 in warehouse
-T=144.05714285714285! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: T, \
-st: 94, sp: 1) at station 0
-T=144.05714285714285! product=1, amount=7, in_warehouse=0, in_production=0, \
-1 pending demands
-T=144.05714285714285! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) \
-statisfied
-T=144.05714285714285 -- finished
+T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=30.0! product=1, amount=0, in_warehouse=1, in_production=9,\
+ 2 pending demands
+T=52.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=62.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=62.0! station=1, 2 jobs queued
+T=62.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=62.0! station=0, 1 jobs queued
+T=62.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 62, sp: 1)\
+ at station 0
+T=95.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=95.0! station=1, 1 jobs queued
+T=95.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 52, sp: 1)\
+ at station 1
+T=107.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: T, st: 62, sp: 1)\
+ at station 0
+T=107.0! station=0, 1 jobs queued
+T=107.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 95, sp: 1)\
+ at station 0
+T=107.0! product=1, amount=9, in_warehouse=1, in_production=7,\
+ 2 pending demands
+T=107.0: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) statisfied
+T=107.0! 0 units of product 1 in warehouse
+T=112.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, st: 52, sp: 1)\
+ at station 1
+T=112.0! product=0, amount=3, in_warehouse=2, in_production=0,\
+ 1 pending demands
+T=112.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied
+T=112.0! 0 units of product 0 in warehouse
+T=144.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: T, st: 95, sp: 1)\
+ at station 0
+T=144.0! product=1, amount=7, in_warehouse=0, in_production=0,\
+ 1 pending demands
+T=144.0! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) statisfied
+T=144.0 -- finished
 
 
 >>> simulation.ctrl_reset()
@@ -167,56 +165,54 @@ T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 2 units of product 0 in warehouse
 T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 1 units of product 1 in warehouse
-T=20.0: product=1, amount=0, in_warehouse=1, in_production=0, \
-1 pending demands
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=0,\
+ 1 pending demands
 T=20.0: station=1, 1 jobs queued
-T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
-at station 1
-T=22.0! product=0, amount=0, in_warehouse=2, in_production=0, \
-1 pending demands
+T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=0,\
+ 1 pending demands
 T=22.0! station=0, 1 jobs queued
-T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
-at station 0
-T=30.0! product=1, amount=0, in_warehouse=1, in_production=9, \
-2 pending demands
-T=53.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
-at station 0
-T=61.5: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
-at station 1
-T=61.5! station=1, 2 jobs queued
-T=61.5! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0) \
-at station 1
-T=61.5! station=0, 1 jobs queued
-T=61.5: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 61.5, sp: 1) \
-at station 0
-T=94.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0) \
-at station 1
-T=94.0! station=1, 1 jobs queued
-T=94.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 53, sp: 1) \
-at station 1
-T=107.03571428571428: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: T, \
-st: 61.5, sp: 1) at station 0
-T=107.03571428571428! station=0, 1 jobs queued
-T=107.03571428571428! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, \
-st: 94, sp: 1) at station 0
-T=107.03571428571428! product=1, amount=9, in_warehouse=1, in_production=7, \
-2 pending demands
-T=107.03571428571428: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) \
-statisfied
-T=107.03571428571428! 0 units of product 1 in warehouse
-T=111.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, st: 53, sp: 1) \
-at station 1
-T=111.0! product=0, amount=3, in_warehouse=2, in_production=0, \
-1 pending demands
-T=111.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied
-T=111.0! 0 units of product 0 in warehouse
-T=144.05714285714285! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: T, \
-st: 94, sp: 1) at station 0
-T=144.05714285714285! product=1, amount=7, in_warehouse=0, in_production=0, \
-1 pending demands
-T=144.05714285714285! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) \
-statisfied
-T=144.05714285714285 -- finished
+T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=30.0! product=1, amount=0, in_warehouse=1, in_production=9,\
+ 2 pending demands
+T=52.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=62.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=62.0! station=1, 2 jobs queued
+T=62.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=62.0! station=0, 1 jobs queued
+T=62.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 62, sp: 1)\
+ at station 0
+T=95.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=95.0! station=1, 1 jobs queued
+T=95.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 52, sp: 1)\
+ at station 1
+T=107.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: T, st: 62, sp: 1)\
+ at station 0
+T=107.0! station=0, 1 jobs queued
+T=107.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 95, sp: 1)\
+ at station 0
+T=107.0! product=1, amount=9, in_warehouse=1, in_production=7,\
+ 2 pending demands
+T=107.0: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) statisfied
+T=107.0! 0 units of product 1 in warehouse
+T=112.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, st: 52, sp: 1)\
+ at station 1
+T=112.0! product=0, amount=3, in_warehouse=2, in_production=0,\
+ 1 pending demands
+T=112.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied
+T=112.0! 0 units of product 0 in warehouse
+T=144.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: T, st: 95, sp: 1)\
+ at station 0
+T=144.0! product=1, amount=7, in_warehouse=0, in_production=0,\
+ 1 pending demands
+T=144.0! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) statisfied
+T=144.0 -- finished
 
 
 Now we want to stop the simulation measurement period before the last
@@ -245,34 +241,34 @@ T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 2 units of product 0 in warehouse
 T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 1 units of product 1 in warehouse
-T=20.0: product=1, amount=0, in_warehouse=1, in_production=0, \
-1 pending demands
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=0,\
+ 1 pending demands
 T=20.0: station=1, 1 jobs queued
-T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
-at station 1
-T=22.0! product=0, amount=0, in_warehouse=2, in_production=0, \
-1 pending demands
+T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=0,\
+ 1 pending demands
 T=22.0! station=0, 1 jobs queued
-T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
-at station 0
-T=30.0! product=1, amount=0, in_warehouse=1, in_production=9, \
-2 pending demands
-T=53.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
-at station 0
-T=61.5: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
-at station 1
-T=61.5! station=1, 2 jobs queued
-T=61.5! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0) \
-at station 1
-T=61.5! station=0, 1 jobs queued
-T=61.5: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 61.5, sp: 1) \
-at station 0
-T=94.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0) \
-at station 1
-T=94.0! station=1, 1 jobs queued
-T=94.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 53, sp: 1) \
-at station 1
-T=94.0 -- finished
+T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=30.0! product=1, amount=0, in_warehouse=1, in_production=9,\
+ 2 pending demands
+T=52.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=62.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=62.0! station=1, 2 jobs queued
+T=62.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=62.0! station=0, 1 jobs queued
+T=62.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 62, sp: 1)\
+ at station 0
+T=95.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=95.0! station=1, 1 jobs queued
+T=95.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 52, sp: 1)\
+ at station 1
+T=95.0 -- finished
 
 >>> simulation.ctrl_reset()
 >>> simulation.ctrl_run()
@@ -281,34 +277,34 @@ T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 2 units of product 0 in warehouse
 T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: 1 units of product 1 in warehouse
-T=20.0: product=1, amount=0, in_warehouse=1, in_production=0, \
-1 pending demands
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=0,\
+ 1 pending demands
 T=20.0: station=1, 1 jobs queued
-T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
-at station 1
-T=22.0! product=0, amount=0, in_warehouse=2, in_production=0, \
-1 pending demands
+T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=0,\
+ 1 pending demands
 T=22.0! station=0, 1 jobs queued
-T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
-at station 0
-T=30.0! product=1, amount=0, in_warehouse=1, in_production=9, \
-2 pending demands
-T=53.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0) \
-at station 0
-T=61.5: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0) \
-at station 1
-T=61.5! station=1, 2 jobs queued
-T=61.5! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0) \
-at station 1
-T=61.5! station=0, 1 jobs queued
-T=61.5: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 61.5, sp: 1) \
-at station 0
-T=94.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0) \
-at station 1
-T=94.0! station=1, 1 jobs queued
-T=94.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 53, sp: 1) \
-at station 1
-T=94.0 -- finished
+T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=30.0! product=1, amount=0, in_warehouse=1, in_production=9,\
+ 2 pending demands
+T=52.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=62.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=62.0! station=1, 2 jobs queued
+T=62.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=62.0! station=0, 1 jobs queued
+T=62.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 62, sp: 1)\
+ at station 0
+T=95.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=95.0! station=1, 1 jobs queued
+T=95.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 52, sp: 1)\
+ at station 1
+T=95.0 -- finished
 """
 
 from dataclasses import dataclass, field

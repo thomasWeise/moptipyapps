@@ -34,10 +34,10 @@ instances such as those used in the paper [1] by Thürer et al.
  customer_id=6, product_id=0, amount=1, measure=True))
 
 >>> len(inst.station_product_unit_times[0][0])
-18
+1600
 
 >>> len(inst.station_product_unit_times[1][0])
-22
+1600
 
 >>> inst.time_end_measure
 100.0
@@ -51,15 +51,20 @@ instances such as those used in the paper [1] by Thürer et al.
 >>> d
 {'info_generator': 'moptipyapps.prodsched.mfc_generator',\
  'info_rand_seed_src': 'USER_PROVIDED',\
- 'info_rand_seed': '0x7b', 'info_time_end_measure_src': 'USER_PROVIDED',\
- 'info_time_end_measure': '100', 'info_time_end_warmup_src': 'SAMPLED',\
- 'info_time_end_warmup': '30', 'info_name_src': 'SAMPLED',\
- 'info_product_interarrival_times[0]': 'Erlang(k=3, theta=3.846153846153846)',\
+ 'info_rand_seed': '0x7b',\
+ 'info_time_end_measure_src': 'USER_PROVIDED',\
+ 'info_time_end_measure': '100',\
+ 'info_time_end_warmup_src': 'SAMPLED',\
+ 'info_time_end_warmup': '30',\
+ 'info_name_src': 'SAMPLED',\
+ 'info_product_interarrival_times[0]':\
+ 'Erlang(k=3, theta=3.846153846153846)',\
  'info_product_route[0]': 'USER_PROVIDED',\
- 'info_station_processing_time[0]': 'Erlang(k=3, theta=3.3333333333333335)',\
- 'info_station_processing_time_window_length[0]': 'Uniform(low=0, high=20)',\
+ 'info_station_processing_time[0]':\
+ 'Erlang(k=3, theta=3.3333333333333335)',\
+ 'info_station_processing_time_window_length[0]': 'Const(v=0.125)',\
  'info_station_processing_time[1]': 'Erlang(k=2, theta=5)',\
- 'info_station_processing_time_window_length[1]': 'Uniform(low=0, high=20)'}
+ 'info_station_processing_time_window_length[1]': 'Const(v=0.125)'}
 
 >>> inst = sample_mfc_instance(seed=23445)
 >>> inst.name
@@ -75,7 +80,7 @@ instances such as those used in the paper [1] by Thürer et al.
 1055
 
 >>> [len(k[0]) for k in inst.station_product_unit_times]
-[25828, 55550, 0, 20080, 0, 0, 0, 0, 16976, 11002, 20052, 0, 0]
+[160000, 160000, 0, 160000, 0, 0, 0, 0, 160000, 160000, 160000, 0, 0]
 
 1. Matthias Thürer, Nuno O. Fernandes, Hermann Lödding, and Mark Stevenson.
    Material Flow Control in Make-to-Stock Production Systems: An Assessment of
@@ -105,6 +110,7 @@ from moptipyapps.prodsched.instance import (
     Instance,
 )
 from moptipyapps.utils.sampling import (
+    Const,
     Distribution,
     Erlang,
     Gamma,
@@ -229,9 +235,8 @@ class Station:
         object.__setattr__(
             self, "processing_time", distribution(processing_time))
 
-        mean: Final[int | float] = self.processing_time.mean()
         if processing_windows is None:
-            processing_windows = Uniform(0, 2 * mean)
+            processing_windows = Const(1 / 8)
         object.__setattr__(
             self, "processing_windows", distribution(
                 processing_windows))
@@ -527,32 +532,32 @@ def default_stations() -> tuple[Station, ...]:
     :return: the default product station
 
     >>> default_stations()
-    (Station(station_id=0, processing_time=Erlang(k=3, theta=0.26), \
-processing_windows=Uniform(low=0, high=1.56)), \
-Station(station_id=1, processing_time=Erlang(k=3, theta=0.12), \
-processing_windows=Uniform(low=0, high=0.72)), \
-Station(station_id=2, processing_time=Erlang(k=2, theta=1.33), \
-processing_windows=Uniform(low=0, high=5.32)), \
-Station(station_id=3, processing_time=Exponential(eta=1), \
-processing_windows=Uniform(low=0, high=2)), \
-Station(station_id=4, processing_time=Erlang(k=3, theta=0.67), \
-processing_windows=Uniform(low=0, high=4.0200000000000005)), \
-Station(station_id=5, processing_time=Erlang(k=4, theta=0.35), \
-processing_windows=Uniform(low=0, high=2.8)), \
-Station(station_id=6, processing_time=Erlang(k=3, theta=0.59), \
-processing_windows=Uniform(low=0, high=3.54)), \
-Station(station_id=7, processing_time=Erlang(k=3, theta=0.63), \
-processing_windows=Uniform(low=0, high=3.7800000000000002)), \
-Station(station_id=8, processing_time=Erlang(k=2, theta=0.59), \
-processing_windows=Uniform(low=0, high=2.36)), \
-Station(station_id=9, processing_time=Erlang(k=3, theta=0.6), \
-processing_windows=Uniform(low=0, high=3.5999999999999996)), \
-Station(station_id=10, processing_time=Exponential(eta=1), \
-processing_windows=Uniform(low=0, high=2)), \
-Station(station_id=11, processing_time=Erlang(k=4, theta=0.29), \
-processing_windows=Uniform(low=0, high=2.32)), \
-Station(station_id=12, processing_time=Erlang(k=3, theta=0.48), \
-processing_windows=Uniform(low=0, high=2.88)))
+    (Station(station_id=0, processing_time=Erlang(k=3, theta=0.26),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=1, processing_time=Erlang(k=3, theta=0.12),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=2, processing_time=Erlang(k=2, theta=1.33),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=3, processing_time=Exponential(eta=1),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=4, processing_time=Erlang(k=3, theta=0.67),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=5, processing_time=Erlang(k=4, theta=0.35),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=6, processing_time=Erlang(k=3, theta=0.59),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=7, processing_time=Erlang(k=3, theta=0.63),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=8, processing_time=Erlang(k=2, theta=0.59),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=9, processing_time=Erlang(k=3, theta=0.6),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=10, processing_time=Exponential(eta=1),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=11, processing_time=Erlang(k=4, theta=0.29),\
+ processing_windows=Const(v=0.125)),\
+ Station(station_id=12, processing_time=Erlang(k=3, theta=0.48),\
+ processing_windows=Const(v=0.125)))
 
     1. Matthias Thürer, Nuno O. Fernandes, Hermann Lödding, and Mark
        Stevenson. Material Flow Control in Make-to-Stock Production Systems:

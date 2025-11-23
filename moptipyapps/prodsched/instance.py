@@ -131,6 +131,12 @@ array([10., 90.]), array([ 12.,  70.,  30., 120.])), (\
 array([ 70., 200.,   3., 220.]), array([ 60., 220.,   5., 260.]), array(\
 [ 30., 210.,  10., 300.])))
 
+>>> instance.n_measurable_demands
+6
+
+>>> instance.n_measurable_demands_per_product
+(2, 2, 2)
+
 >>> dict(instance.infos)
 {'source': 'manually created', 'creation_date': '2025-11-09'}
 
@@ -184,7 +190,7 @@ True
 
 from dataclasses import dataclass
 from itertools import batched
-from math import isfinite
+from math import ceil, isfinite
 from string import ascii_letters, digits
 from typing import (
     Callable,
@@ -1745,61 +1751,56 @@ def compute_finish_time(start_time: float, amount: int,
 
     Here, the end time of the production time validity is at time unit 100.
     However, we begin producing 1 product unit at time step 95. This unit would
-    use 10 time units. It cannot be completed until the end of the period. So
-    only 0.5 units are produced, needing 5 time units and finishing at period
-    100. Then the production time window begins again. Since there is only 1
-    production time, in the second production cycle there will still be 10
-    time units per production unit. The remaining 0.5 units will be produced
-    in 5 time units, meaning that the overall production is finished at time
-    step 105.
+    use 10 time units. It will use these units, even though this extends beyond
+    the end of the production time window.
     >>> compute_finish_time(95.0, 1, np.array((10.0, 100.0)))
     105.0
 
     Now we have two production periods. The production begins again at time
-    step 95. 0.5 units are finished until the production period ends at time
-    step 100. Then, the second production period begins, requiring 20 time
-    units per product unit. We thus need 10 time units to finish the remaining
-    0.5 product unit, completing the job at time unit 110.
+    step 95. It will use 10 time units, even though this extends into the
+    second period.
     >>> compute_finish_time(95.0, 1, np.array((10.0, 100.0, 20.0, 200.0)))
-    110.0
+    105.0
 
     Now things get more complex. We want to do 10 units of product.
-    We can finish 0.5 units until the first period ends after 5 time steps.
-    Then, in the second period, we can do exactly 2 units of product until
-    the period ends at time 140. This leaves 7.5 units of product to be done
-    in the third period, where each unit needs 50 time units. Thus, we end
-    up needing 5 + 40 + 7.5*50 time units, which add to the starting time.
+    We start in the first period, so one unit will be completed there.
+    This takes the starting time for the next job to 105, which is in the
+    second period. Here, one unit of product takes 20 time units. We can
+    finish producing one unit until time 125 and start the production of a
+    second one, taking until 145. Now the remaining three units are produced
+    until time 495
     >>> compute_finish_time(95.0, 10, np.array((
     ...     10.0, 100.0, 20.0, 140.0, 50.0, 5000.0)))
-    515.0
-    >>> 95 + (0.5*10 + 2*20 + 7.5*50)
-    515.0
+    495.0
+    >>> 95 + (1*10 + 2*20 + 7*50)
+    495
 
-    This is the same as the example before, except that the third period now
-    ends at time step 200. Thus, we can only do 1.2=(200-140)/50 units of
-    product in the 200 - 140 time units this period lasts. Then the production
-    cycle wraps over. Luckily, we can complete the remaining 6.3 units of
-    product in the first period, where each product unit needs only 10 time
-    units.
+    We again produce 10 product units starting at time step 95. The first one
+    takes 10 time units, taking us into the second production interval at time
+    105. Then we can again do two units here, which consume 40 time units,
+    taking us over the edge into the third interval at time unit 145. Here we
+    do two units using 50 time units. We ahen are at time 245, which wraps back
+    to 45. So the remaining 5 units take 10 time units each.
     >>> compute_finish_time(95.0, 10, np.array((
     ...     10.0, 100.0, 20.0, 140.0, 50.0, 200.0)))
-    263.0
-    >>> 95 + (0.5*10 + 2*20 + 1.2*50 + 6.3*10)
-    263.0
+    295.0
+    >>> 95 + (1*10 + 2*20 + 2*50 + 5*10)
+    295
 
-    It is also possible to yield fractional production times.
+    This is the same as the last example, but this time, the last interval
+    (3 time units until 207) is skipped over by the long production of the
+    second 50-time-unit product.
     >>> compute_finish_time(95.0, 10, np.array((
     ...     10.0, 100.0, 20.0, 140.0, 50.0, 200.0,  3.0, 207.0)))
-    246.66666666666666
-    >>> 95 + (0.5*10 + 2*20 + 1.2*50 + (7/3)*3 + (6.3-(7/3))*10)
-    246.66666666666666
+    295.0
+    >>> 95 + (1*10 + 2*20 + 2*50 + 5*10)
+    295
 
     Production unit times may extend beyond the intervals.
     >>> compute_finish_time(0.0, 5, np.array((1000.0, 100.0, 10.0, 110.0)))
-    545.0
-    >>> (0.1*1000.0 + 1*10 + 0.1*1000.0 + 1*10 + 0.1*1000.0 + 1*10 +
-    ...     0.1*1000.0 + 1*10 + 0.1*1000.0 + 0.5*10)
-    545.0
+    5000.0
+    >>>
+    5 * 1000
     """
     time_mod: Final[float] = production_times[-1]
     low_end: Final[int] = len(production_times)
@@ -1819,26 +1820,24 @@ def compute_finish_time(start_time: float, amount: int,
         else:
             high = mid - 1
     low *= 2
-    max_time: float = production_times[low + 1]
-    if max_time <= seg_start:
-        low += 2
 
     # Now we can cycle through the production cycle until the product has
     # been produced.
     while True:
         max_time = production_times[low + 1]
-        unit_time: float = production_times[low]
-        seg_end = seg_start + (unit_time * remaining)
-        if seg_end <= max_time:
-            return float(start_time + seg_end - seg_start)
-        duration = max_time - seg_start
+        while max_time <= seg_start:
+            low += 2
+            if low >= low_end:
+                low = 0
+                seg_start = 0.0
+            max_time = production_times[low + 1]
+
+        unit_time = production_times[low]
+        can_do: int = ceil(min(
+            max_time - seg_start, remaining) / unit_time)
+        duration = can_do * unit_time
+        seg_start += duration
         start_time += duration
-        remaining -= (duration / unit_time)
+        remaining -= can_do
         if remaining <= 0:
             return float(start_time)
-        low += 2
-        if low >= low_end:
-            low = 0
-            seg_start = 0
-            continue
-        seg_start = max_time

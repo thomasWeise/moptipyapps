@@ -1,4 +1,4 @@
-"""
+r"""
 A tool for collecting statistics.
 
 >>> instance = Instance(
@@ -14,25 +14,25 @@ A tool for collecting statistics.
 ...                                 [[ 5.0, 24.0,  7.0,  80.0],
 ...                                  [ 3.0, 21.0,  6.0,  50.0,]]])
 
->>> instance.name
-'test2'
+
 >>> from moptipyapps.prodsched.simulation import Simulation
->>> statistics = Statistics(instance)
+>>> statistics = Statistics(instance.n_products)
 >>> collector = StatisticsCollector(instance)
 >>> collector.set_dest(statistics)
 >>> simulation = Simulation(instance, collector)
 >>> simulation.ctrl_run()
->>> print(statistics)
+>>> print("\n".join(str(statistics).split("\n")[:-1]))
 stat;total;product_0;product_1
-trp.mean;301.17460317460325;451.1000000000001;243.51098901098905
-trp.sd;97.09947158455819;0;19.72076158183606
-fill.rate;1;1;1
-cwt.mean;1807.0476190476195;2255.5000000000005;1582.821428571429
-cwt.sd;388.3725353194742;nan;1.4647211896006136
-stocklevel.mean;5.010522096402445e-5;0;0.15610281591341824
+trp.mean;304.8888888888889;455.6;246.92307692307693
+trp.sd;97.56326157594913;0;19.50721118346466
+fill.rate;0;0;0
+cwt.mean;1829.3333333333333;2278;1605
+cwt.sd;388.56187838403986;nan;2.8284271247461903
+stocklevel.mean;0.15813207736246118;0;0.15813207736246118
 fulfilled.rate;1;1;1
 """
 
+from time import time_ns
 from typing import Final
 
 from pycommons.math.stream_statistics import StreamStats, StreamSum
@@ -96,6 +96,8 @@ class StatisticsCollector(Listener):
         #: they were there
         self.__in_warehouse: Final[list[list[float]]] = [[
             0.0, 0.0]] * n_products
+        #: the stat time of the simulation
+        self.__start: int = -1
 
     def set_dest(self, dest: Statistics) -> None:
         """
@@ -111,6 +113,7 @@ class StatisticsCollector(Listener):
         """Clear all the data of the collector."""
         if self.__dest is None:
             raise ValueError("Need destination statistics!")
+        self.__start = time_ns()
         n_products: Final[int] = self.__n_products
         for i in range(n_products):
             self.__production_times[i].reset()
@@ -140,9 +143,9 @@ class StatisticsCollector(Listener):
         """
         iwh: Final[list[float]] = self.__in_warehouse[product_id]
         if is_in_measure_period:
-            self.__stock_levels[product_id].add(
-                (time - max(iwh[1], self.__warmup)) * iwh[0])
-            self.__stock_level.add(product_id)
+            value: float = (time - max(iwh[1], self.__warmup)) * iwh[0]
+            self.__stock_levels[product_id].add(value)
+            self.__stock_level.add(value)
         iwh[0] = amount
         iwh[1] = time
 
@@ -235,4 +238,5 @@ class StatisticsCollector(Listener):
             sm.add(v)
             slm.add(v)
             dest.stock_level_means[i] = sm.result() / twl
-        dest.stock_level_mean = slm.result() / (self.__n_products * twl)
+        dest.stock_level_mean = slm.result() / twl
+        dest.simulation_time_nanos = time_ns() - self.__start
