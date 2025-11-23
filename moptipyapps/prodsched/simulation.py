@@ -69,20 +69,21 @@ can be fulfilled.
 >>> simulation = Simulation(instance, PrintingListener(print_time=False))
 >>> simulation.ctrl_run()
 start
-T=20.0! product=0, amount=0, in_warehouse=0, in_production=0, \
-1 pending demands
+T=0.0: product=0, amount=0, in_warehouse=0, in_production=0, 0 pending demands
+T=20.0! product=0, amount=0, in_warehouse=0, in_production=0,\
+ 1 pending demands
 T=20.0! station=0, 1 jobs queued
-T=20.0! start j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 20, sp: 0) \
-at station 0
-T=120.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 20, sp: 0) \
-at station 0
+T=20.0! start j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 20, sp: 0)\
+ at station 0
+T=120.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 20, sp: 0)\
+ at station 0
 T=120.0! station=1, 1 jobs queued
-T=120.0! start j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 120, sp: 1) \
-at station 1
-T=420.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: T, st: 120, sp: 1) \
-at station 1
-T=420.0! product=0, amount=10, in_warehouse=0, in_production=0, \
-1 pending demands
+T=120.0! start j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 120, sp: 1)\
+ at station 1
+T=420.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: T, st: 120, sp: 1)\
+ at station 1
+T=420.0! product=0, amount=10, in_warehouse=0, in_production=0,\
+ 1 pending demands
 T=420.0! d(id: 0, p: 0, c: 0, am: 10, ar: 20, dl: 100, me: T) statisfied
 T=420.0 -- finished
 
@@ -574,9 +575,8 @@ class Simulation:  # pylint: disable=R0902
 
         #: fill the warehouse at time index 0
         for product_id, amount in enumerate(self.instance.warehous_at_t0):
-            if amount > 0:
-                heappush(queue, _Event(0.0, self.__product_available, (
-                    product_id, amount)))
+            heappush(queue, _Event(0.0, self.__product_available, (
+                product_id, amount)))
         #: fill in the customer demands/orders
         for demand in self.instance.demands:
             heappush(queue, _Event(
@@ -643,9 +643,9 @@ class Simulation:  # pylint: disable=R0902
         :param pending_demands: the pending orders for the product
         """
         dem_len: int = tuple.__len__(pending_demands)
-        if dem_len <= 0:
-            self.act_store_in_warehouse(product_id, amount)
-            return
+        if dem_len <= 0 < amount:  # no demands + positive amount?
+            self.act_store_in_warehouse(product_id, amount)  # store
+            return  # ... and we are done
 
         # Go through the list of demands and satisfy them on a first-come-
         # first-serve basis.

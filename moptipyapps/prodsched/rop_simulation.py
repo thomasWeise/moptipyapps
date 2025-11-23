@@ -1,6 +1,125 @@
 """
 A re-order-point-based simulation.
 
+>>> from moptipyapps.prodsched.simulation import PrintingListener
+>>> instance = Instance(
+...     name="test1", n_products=2, n_customers=4, n_stations=2, n_demands=4,
+...     time_end_warmup=3000, time_end_measure=10000,
+...     routes=[[0, 1], [1, 0]],
+...     demands=[Demand(arrival=100, deadline=100, demand_id=0,
+...                     customer_id=0, product_id=0, amount=1, measure=False),
+...              Demand(arrival=3100, deadline=3100, demand_id=1,
+...                     customer_id=1, product_id=0, amount=1, measure=True),
+...              Demand(arrival=500, deadline=500, demand_id=2,
+...                     customer_id=2, product_id=1, amount=1, measure=False),
+...              Demand(arrival=4000, deadline=5000, demand_id=3,
+...                     customer_id=3, product_id=1, amount=1, measure=True)],
+...     warehous_at_t0=[0, 0],
+...     station_product_unit_times=[[[10.0, 50.0, 15.0, 100.0],
+...                                  [ 5.0, 20.0,  7.0,  35.0, 4.0, 50.0]],
+...                                 [[ 5.0, 24.0,  7.0,  80.0],
+...                                  [ 3.0, 21.0,  6.0,  50.0,]]])
+>>> rop_sim = ROPSimulation(instance, PrintingListener(print_time=False))
+>>> rop_sim.set_rop((10, 20))
+>>> rop_sim.ctrl_run()
+start
+T=0.0: product=0, amount=0, in_warehouse=0, in_production=0, 0 pending demands
+T=0.0: station=0, 1 jobs queued
+T=0.0: start j(id: 0, p: 0, am: 11, ar: 0, me: F, c: F, st: 0, sp: 0)\
+ at station 0
+T=0.0: product=1, amount=0, in_warehouse=0, in_production=0, 0 pending demands
+T=0.0: station=1, 1 jobs queued
+T=0.0: start j(id: 1, p: 1, am: 21, ar: 0, me: F, c: F, st: 0, sp: 0)\
+ at station 1
+T=84.0: finished j(id: 1, p: 1, am: 21, ar: 0, me: F, c: F, st: 0, sp: 0)\
+ at station 1
+T=100.0: product=0, amount=0, in_warehouse=0, in_production=11,\
+ 1 pending demands
+T=130.0: finished j(id: 0, p: 0, am: 11, ar: 0, me: F, c: F, st: 0,\
+ sp: 0) at station 0
+T=130.0: station=0, 2 jobs queued
+T=130.0: start j(id: 1, p: 1, am: 21, ar: 0, me: F, c: F, st: 84,\
+ sp: 1) at station 0
+T=130.0: station=1, 1 jobs queued
+T=130.0: start j(id: 0, p: 0, am: 11, ar: 0, me: F, c: F, st: 130,\
+ sp: 1) at station 1
+T=197.0: finished j(id: 0, p: 0, am: 11, ar: 0, me: F, c: T, st: 130,\
+ sp: 1) at station 1
+T=197.0: product=0, amount=11, in_warehouse=0, in_production=1,\
+ 1 pending demands
+T=197.0: d(id: 0, p: 0, c: 0, am: 1, ar: 100, dl: 100, me: F) statisfied
+T=197.0: 10 units of product 0 in warehouse
+T=240.0: finished j(id: 1, p: 1, am: 21, ar: 0, me: F, c: T, st: 84,\
+ sp: 1) at station 0
+T=240.0: station=0, 1 jobs queued
+T=240.0: start j(id: 2, p: 0, am: 1, ar: 100, me: F, c: F, st: 100,\
+ sp: 0) at station 0
+T=240.0: product=1, amount=21, in_warehouse=0, in_production=0,\
+ 0 pending demands
+T=240.0: 21 units of product 1 in warehouse
+T=250.0: finished j(id: 2, p: 0, am: 1, ar: 100, me: F, c: F, st: 100,\
+ sp: 0) at station 0
+T=250.0: station=1, 1 jobs queued
+T=250.0: start j(id: 2, p: 0, am: 1, ar: 100, me: F, c: F, st: 250, sp: 1)\
+ at station 1
+T=255.0: finished j(id: 2, p: 0, am: 1, ar: 100, me: F, c: T, st: 250, sp: 1)\
+ at station 1
+T=255.0: product=0, amount=1, in_warehouse=10, in_production=0,\
+ 0 pending demands
+T=255.0: 11 units of product 0 in warehouse
+T=500.0: product=1, amount=0, in_warehouse=21, in_production=0,\
+ 1 pending demands
+T=500.0: d(id: 2, p: 1, c: 2, am: 1, ar: 500, dl: 500, me: F) statisfied
+T=500.0: 20 units of product 1 in warehouse
+T=500.0: station=1, 1 jobs queued
+T=500.0: start j(id: 3, p: 1, am: 1, ar: 500, me: F, c: F, st: 500,\
+ sp: 0) at station 1
+T=503.0: finished j(id: 3, p: 1, am: 1, ar: 500, me: F, c: F, st: 500,\
+ sp: 0) at station 1
+T=503.0: station=0, 1 jobs queued
+T=503.0: start j(id: 3, p: 1, am: 1, ar: 500, me: F, c: F, st: 503,\
+ sp: 1) at station 0
+T=508.0: finished j(id: 3, p: 1, am: 1, ar: 500, me: F, c: T, st: 503,\
+ sp: 1) at station 0
+T=508.0: product=1, amount=1, in_warehouse=20, in_production=0,\
+ 0 pending demands
+T=508.0: 21 units of product 1 in warehouse
+T=3100.0! product=0, amount=0, in_warehouse=11, in_production=0,\
+ 1 pending demands
+T=3100.0! d(id: 1, p: 0, c: 1, am: 1, ar: 3100, dl: 3100, me: T) statisfied
+T=3100.0! 10 units of product 0 in warehouse
+T=3100.0! station=0, 1 jobs queued
+T=3100.0! start j(id: 4, p: 0, am: 1, ar: 3100, me: T, c: F, st: 3100,\
+ sp: 0) at station 0
+T=3110.0! finished j(id: 4, p: 0, am: 1, ar: 3100, me: T, c: F, st: 3100,\
+ sp: 0) at station 0
+T=3110.0! station=1, 1 jobs queued
+T=3110.0! start j(id: 4, p: 0, am: 1, ar: 3100, me: T, c: F, st: 3110,\
+ sp: 1) at station 1
+T=3117.0! finished j(id: 4, p: 0, am: 1, ar: 3100, me: T, c: T, st: 3110,\
+ sp: 1) at station 1
+T=3117.0! product=0, amount=1, in_warehouse=10, in_production=0,\
+ 0 pending demands
+T=3117.0! 11 units of product 0 in warehouse
+T=4000.0! product=1, amount=0, in_warehouse=21, in_production=0,\
+ 1 pending demands
+T=4000.0! d(id: 3, p: 1, c: 3, am: 1, ar: 4000, dl: 5000, me: T) statisfied
+T=4000.0! 20 units of product 1 in warehouse
+T=4000.0! station=1, 1 jobs queued
+T=4000.0! start j(id: 5, p: 1, am: 1, ar: 4000, me: T, c: F, st: 4000,\
+ sp: 0) at station 1
+T=4003.0! finished j(id: 5, p: 1, am: 1, ar: 4000, me: T, c: F, st: 4000,\
+ sp: 0) at station 1
+T=4003.0! station=0, 1 jobs queued
+T=4003.0! start j(id: 5, p: 1, am: 1, ar: 4000, me: T, c: F, st: 4003,\
+ sp: 1) at station 0
+T=4008.0! finished j(id: 5, p: 1, am: 1, ar: 4000, me: T, c: T, st: 4003,\
+ sp: 1) at station 0
+T=4008.0! product=1, amount=1, in_warehouse=20, in_production=0,\
+ 0 pending demands
+T=4008.0! 21 units of product 1 in warehouse
+T=4008.0 -- finished
+
 >>> instance = Instance(
 ...     name="test2", n_products=2, n_customers=1, n_stations=2, n_demands=5,
 ...     time_end_warmup=21, time_end_measure=10000,
@@ -13,8 +132,6 @@ A re-order-point-based simulation.
 ...                                  [ 5.0, 20.0,  7.0,  35.0, 4.0, 50.0]],
 ...                                 [[ 5.0, 24.0,  7.0,  80.0],
 ...                                  [ 3.0, 21.0,  6.0,  50.0,]]])
-
->>> from moptipyapps.prodsched.simulation import PrintingListener
 >>> rop_sim = ROPSimulation(instance, PrintingListener(print_time=False))
 >>> rop_sim.set_rop((10, 10))
 >>> rop_sim.ctrl_run()
