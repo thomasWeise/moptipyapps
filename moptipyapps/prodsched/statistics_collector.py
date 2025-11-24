@@ -27,8 +27,8 @@ trp.mean;304.8888888888889;455.6;246.92307692307693
 trp.sd;97.56326157594913;0;19.50721118346466
 fill.rate;0;0;0
 cwt.mean;1829.3333333333333;2278;1605
-cwt.sd;388.56187838403986;nan;2.8284271247461903
-stocklevel.mean;0.15813207736246118;0;0.15813207736246118
+cwt.sd;388.56187838403986;;2.8284271247461903
+stocklevel.mean;0.6078765407355446;0.4497444633730835;0.15813207736246118
 fulfilled.rate;1;1;1
 """
 
@@ -94,8 +94,8 @@ class StatisticsCollector(Listener):
         self.__stock_level: Final[StreamSum] = StreamSum()
         #: the number of products currently in warehouse and since when
         #: they were there
-        self.__in_warehouse: Final[list[list[float]]] = [[
-            0.0, 0.0]] * n_products
+        self.__in_warehouse: Final[tuple[list[float], ...]] = tuple([
+            0.0, 0.0] for _ in range(n_products))
         #: the stat time of the simulation
         self.__start: int = -1
 
