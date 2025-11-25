@@ -1,0 +1,246 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.statistics — moptipyapps 0.8.74 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=43adff84"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/statistics.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.74 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.statistics</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.statistics</h1><div class=highlight><pre>
+<span></span><span class=sd>"""A statistics record for the simulation."""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>itertools</span><span class=w> </span><span class=kn>import</span> <span class=n>chain</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Generator</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KEY_VALUE_SEPARATOR</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.csv</span><span class=w> </span><span class=kn>import</span> <span class=n>CSV_SEPARATOR</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.stream_statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>StreamStats</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.strings.string_conv</span><span class=w> </span><span class=kn>import</span> <span class=n>num_or_none_to_str</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span>
+
+<span class=c1>#: the name of the statistics key</span>
+<span class=n>COL_STAT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"stat"</span>
+<span class=c1>#: the total column name</span>
+<span class=n>COL_TOTAL</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"total"</span>
+<span class=c1>#: the product column prefix</span>
+<span class=n>COL_PRODUCT_PREFIX</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"product_"</span>
+<span class=c1>#: the mean TRP row</span>
+<span class=n>ROW_TRP_MEAN</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"trp.mean"</span>
+<span class=c1>#: the TRP standard deviation row</span>
+<span class=n>ROW_TRP_SD</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"trp.sd"</span>
+<span class=c1>#: the fill rate row</span>
+<span class=n>ROW_FILL_RATE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"fill.rate"</span>
+<span class=c1>#: the mean CWT row</span>
+<span class=n>ROW_CWT_MEAN</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"cwt.mean"</span>
+<span class=c1>#: the CWT standard deviation row</span>
+<span class=n>ROW_CWT_SD</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"cwt.sd"</span>
+<span class=c1>#: the mean stock level row</span>
+<span class=n>ROW_STOCK_LEVEL_MEAN</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"stocklevel.mean"</span>
+<span class=c1>#: the fulfilled rate</span>
+<span class=n>ROW_FULFILLED_RATE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"fulfilled.rate"</span>
+<span class=n>ROW_SIMULATION_TIME</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"time.s</span><span class=si>{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+
+
+<div class=viewcode-block id=Statistics>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.statistics.Statistics>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Statistics</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""A statistics record based on production scheduling."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the statistics record.</span>
+
+<span class=sd>        :param n_products: the number of products</span>
+<span class=sd>        """</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_products</span><span class=p>,</span> <span class=s2>"n_products"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the production time means per-product</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>production_time_means</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the overall production time mean</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>production_time_mean</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the production time standard deviations per-product</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>production_time_sds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the overall production time standard deviations</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>production_time_sd</span><span class=p>:</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the fraction of demands that were immediately satisfied,</span>
+        <span class=c1>#: on a per-product basis</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>immediately_satisfied_rates</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+            <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span><span class=p>)</span>
+        <span class=c1>#: the overall fraction of immediately satisfied demands</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>immediately_satisfied_rate</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the average waiting time for all demands that were not immediately</span>
+        <span class=c1>#: satisfied -- only counting demands that were actually satisfied</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_means</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the standard deviation of the waiting time for all demands that</span>
+        <span class=c1>#: were not immediately satisfied -- only counting demands that were</span>
+        <span class=c1>#: actually satisfied</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the overall average waiting time for all demands that were not</span>
+        <span class=c1>#: immediately satisfied -- only counting demands that were actually</span>
+        <span class=c1>#: satisfied</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_mean</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the overall standard deviation of the waiting time for all demands</span>
+        <span class=c1>#: that were not immediately satisfied -- only counting demands that</span>
+        <span class=c1>#: were actually  satisfied</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sd</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the fraction of demands that were fulfilled, on a per-product basis</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fulfilled_rates</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the fraction of demands that were fulfilled overall</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fulfilled_rate</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the average stock level, on a per-product basis</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>stock_level_means</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the overall average stock level</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>stock_level_mean</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the nano seconds used by the simulation</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>simulation_time_nanos</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Convert this object to a string."""</span>
+        <span class=k>return</span> <span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>to_stream</span><span class=p>(</span><span class=bp>self</span><span class=p>))</span></div>
+
+
+
+<div class=viewcode-block id=to_stream>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.statistics.to_stream>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>to_stream</span><span class=p>(</span><span class=n>stats</span><span class=p>:</span> <span class=n>Statistics</span><span class=p>)</span> <span class=o>-></span> <span class=n>Generator</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span> <span class=kc>None</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Write a statistics record to a stream.</span>
+
+<span class=sd>    :param stats: the statistics record</span>
+<span class=sd>    :return: the stream of data</span>
+<span class=sd>    """</span>
+    <span class=n>n_products</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>production_time_means</span><span class=p>)</span>
+    <span class=n>nts</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>],</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=n>num_or_none_to_str</span>
+
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>COL_STAT</span><span class=p>,</span> <span class=n>COL_TOTAL</span><span class=p>),</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COL_PRODUCT_PREFIX</span><span class=si>}{</span><span class=n>i</span><span class=si>}</span><span class=s2>"</span> <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span>
+            <span class=n>n_products</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_TRP_MEAN</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>production_time_mean</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>production_time_means</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_TRP_SD</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>production_time_sd</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>production_time_sds</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_FILL_RATE</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>immediately_satisfied_rate</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>immediately_satisfied_rates</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_CWT_MEAN</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_mean</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_means</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_CWT_SD</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sd</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sds</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_STOCK_LEVEL_MEAN</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>stock_level_mean</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>stock_level_means</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_FULFILLED_RATE</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>fulfilled_rate</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>fulfilled_rates</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ROW_SIMULATION_TIME</span><span class=si>}{</span><span class=n>nts</span><span class=p>(</span>
+<span class=w>        </span><span class=n>stats</span><span class=o>.</span><span class=n>simulation_time_nanos</span><span class=w> </span><span class=o>/</span><span class=w> </span><span class=mi>1_000_000_000</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span></div>
+
+
+
+<div class=viewcode-block id=mean>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.statistics.mean>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>mean</span><span class=p>(</span><span class=n>stats</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Statistics</span><span class=p>])</span> <span class=o>-></span> <span class=n>Statistics</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the mean over a given statistic.</span>
+
+<span class=sd>    :param stats: the statistic</span>
+<span class=sd>    :return: the mean statistics</span>
+<span class=sd>    """</span>
+    <span class=n>stats</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>stats</span><span class=p>)</span>
+    <span class=n>n_products</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>stats</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=o>.</span><span class=n>production_time_means</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span><span class=p>:</span>
+        <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>production_time_means</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Inconsistent number of products."</span><span class=p>)</span>
+
+    <span class=n>result</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Statistics</span><span class=p>]</span> <span class=o>=</span> <span class=n>Statistics</span><span class=p>(</span><span class=n>n_products</span><span class=p>)</span>
+    <span class=n>ss</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>StreamStats</span><span class=p>]</span> <span class=o>=</span> <span class=n>StreamStats</span><span class=p>()</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>):</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>stock_level_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+                  <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>stock_level_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>stock_level_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>stock_level_mean</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+              <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>stock_level_mean</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>stock_level_mean</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>):</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>production_time_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+                  <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>production_time_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>production_time_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>production_time_mean</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+              <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>production_time_mean</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>production_time_mean</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>):</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>production_time_sds</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+                  <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>production_time_sds</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>production_time_sds</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>production_time_sd</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+              <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>production_time_sd</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>production_time_sd</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>):</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>immediately_satisfied_rates</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+                  <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span> <span class=k>if</span>
+                  <span class=n>stat</span><span class=o>.</span><span class=n>immediately_satisfied_rates</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>immediately_satisfied_rates</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>immediately_satisfied_rate</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+              <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>immediately_satisfied_rate</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>immediately_satisfied_rate</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>):</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+                  <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span> <span class=k>if</span>
+                  <span class=n>stat</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_means</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_mean</span>
+              <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span> <span class=k>if</span>
+              <span class=n>stat</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_mean</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_mean</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>):</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sds</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+                  <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span> <span class=k>if</span>
+                  <span class=n>stat</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sds</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sds</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sd</span>
+              <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span> <span class=k>if</span>
+              <span class=n>stat</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sd</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>waiting_time_for_none_immediates_sd</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_products</span><span class=p>):</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+        <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>fulfilled_rates</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+                  <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>fulfilled_rates</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>fulfilled_rates</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>reset</span><span class=p>()</span>
+    <span class=n>ss</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>fulfilled_rate</span> <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span>
+              <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>fulfilled_rate</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>fulfilled_rate</span> <span class=o>=</span> <span class=n>ss</span><span class=o>.</span><span class=n>mean</span><span class=p>()</span>
+
+    <span class=c1># get the mean simulation time: most likely a sum of integers</span>
+    <span class=n>count</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=n>overall</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>stats</span><span class=p>:</span>
+        <span class=n>val</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>simulation_time_nanos</span>
+        <span class=k>if</span> <span class=n>val</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>count</span> <span class=o>+=</span> <span class=mi>1</span>
+            <span class=n>overall</span> <span class=o>+=</span> <span class=n>val</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>simulation_time_nanos</span> <span class=o>=</span> <span class=kc>None</span> <span class=k>if</span> <span class=n>count</span> <span class=o><=</span> <span class=mi>0</span> <span class=k>else</span> <span class=n>overall</span> <span class=o>/</span> <span class=n>count</span>
+
+    <span class=k>return</span> <span class=n>result</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.74 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.statistics</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>
