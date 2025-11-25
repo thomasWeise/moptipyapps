@@ -163,19 +163,31 @@ Erlang(k=3, theta=3.3333333333333335)
  17.1628992966332, 9.684008648356015]
 >>> mean(x) / erlang2.mean()
 1.022444624140316
+
+>>> AtLeast.greater_than_zero(Gamma(1, 0.5))
+AtLeast(lb=5e-324, d=Exponential(eta=1))
+
+>>> AtLeast.greater_than_zero(Gamma(2, 0.5))
+Erlang(k=2, theta=0.5)
+
+>>> AtLeast.greater_than_zero(Gamma(2.5, 0.5))
+Gamma(k=2.5, theta=0.5)
 """
 
 from dataclasses import dataclass
-from math import fsum, isfinite
+from math import fsum, isfinite, nextafter
 from typing import Callable, Final, cast
 
 from moptipy.utils.nputils import rand_generator, rand_seeds_from_str
 from numpy.random import Generator
 from pycommons.math.int_math import try_int
-from pycommons.types import type_error
+from pycommons.types import check_int_range, type_error
 
 #: the maximum number of trials during a sampling process
 _MAX_TRIALS: int = 1_000_000
+
+#: the smallest positive number
+_SMALLEST_POSITIVE_NUMBER: Final[float] = nextafter(0.0, 1.0)
 
 
 class Distribution:
@@ -253,6 +265,19 @@ class Const(Distribution):
         :return: the mean
         """
         return self.v
+
+    def simplify(self) -> "Distribution":
+        """
+        Simplify this constat.
+
+        :return: the simplified constant
+
+        >>> Const(1.5).simplify()
+        Const(v=1.5)
+        >>> Const(1.0).simplify()
+        IntConst(v=1)
+        """
+        return IntConst(self.v) if isinstance(self.v, int) else self
 
 
 @dataclass(order=True, frozen=True)
@@ -469,7 +494,7 @@ class Choice(Distribution):
 
     >>> Choice((Uniform(1, 2), Choice(
     ...     (Const(1), Uniform(1, 2))))).simplify()
-    Choice(ch=(Uniform(low=1, high=2), Const(v=1), Uniform(low=1, high=2)))
+    Choice(ch=(Uniform(low=1, high=2), IntConst(v=1), Uniform(low=1, high=2)))
     """
 
     #: the choices
@@ -566,10 +591,15 @@ class AtLeast(Distribution):
             dlb: AtLeast = cast("AtLeast", dd)
             object.__setattr__(self, "lb", max(self.lb, dlb.lb))
             object.__setattr__(self, "d", dlb.d)
-        if isinstance(dd, In):
+        elif isinstance(dd, In):
             idd: In = cast("In", dd)
             ulb: int | float = max(idd.lb, self.lb)
             if ulb >= idd.ub:
+                raise ValueError(f"Invalid distribution {self!r}.")
+        elif isinstance(dd, Uniform):
+            udd: Uniform = cast("Uniform", dd)
+            ulb = max(udd.low, self.lb)
+            if ulb >= udd.high:
                 raise ValueError(f"Invalid distribution {self!r}.")
 
     def simplify(self) -> "Distribution":
@@ -577,6 +607,12 @@ class AtLeast(Distribution):
         Try to simplify this distribution.
 
         :returns: a simplified version of this distribution
+
+        >>> AtLeast(1, Uniform(3, 4)).simplify()
+        Uniform(low=3, high=4)
+
+        >>> AtLeast(3.5, Uniform(3, 4)).simplify()
+        Uniform(low=3.5, high=4)
         """
         dd: Final[Distribution] = self.d
         if isinstance(dd, Const):
@@ -584,7 +620,16 @@ class AtLeast(Distribution):
         if isinstance(dd, In):
             idd: In = cast("In", dd)
             return In(max(idd.lb, self.lb), idd.ub, idd.d).simplify()
+        if isinstance(dd, Uniform):
+            udd: Uniform = cast("Uniform", dd)
+            if udd.low >= self.lb:
+                return udd
+            return Uniform(self.lb, udd.high).simplify()
         if (self.lb <= 0) and (isinstance(dd, Exponential | Gamma | Erlang)):
+            return dd
+        if (self.lb <= _SMALLEST_POSITIVE_NUMBER) and isinstance(
+                dd, Gamma | Erlang) and (
+                cast("Gamma", dd).k > 1):  # pylint: disable=E1101
             return dd
         return self
 
@@ -602,6 +647,16 @@ class AtLeast(Distribution):
             if lb <= v:
                 return v
         raise ValueError(f"Failed to sample from {self!r}.")
+
+    @classmethod
+    def greater_than_zero(cls, d: int | float | Distribution) -> Distribution:
+        """
+        Ensure that all samples are greater than zero.
+
+        :param d: the original distribution
+        :return: a distribution which is always greater than zero
+        """
+        return cls(_SMALLEST_POSITIVE_NUMBER, distribution(d)).simplify()
 
 
 @dataclass(order=True, frozen=True)
@@ -710,6 +765,49 @@ class In(Distribution):
             else super().mean()
 
 
+class IntDistribution(Distribution):
+    """A base class for integer distributions."""
+
+    def sample(self, random: Generator) -> int:
+        """
+        Sample a random number following this integer distribution generator.
+
+        Each call to this function returns exactly one number.
+
+        :param random: the random number generator
+        :return: the number, which always will be integer
+        """
+        raise NotImplementedError
+
+    def simplify(self) -> "IntDistribution":
+        """
+        Try to simplify this integer distribution.
+
+        :returns: a simplified version of this integer distribution
+        """
+        if not isinstance(self, IntDistribution):
+            raise type_error(self, "self", IntDistribution)
+        return self
+
+
+class IntConst(IntDistribution, Const):
+    """An integer constant."""
+
+    def __post_init__(self) -> None:
+        """Perform some basic sanity checks and cleanup."""
+        super().__post_init__()
+        check_int_range(self.v, "v", -1_000_000_000_000_000_000,
+                        1_000_000_000_000_000_000)
+
+    def sample(self, random: Generator) -> int:
+        """Get the integer constant value."""
+        return cast("int", self.v)
+
+    def mean(self) -> int:
+        """Get the arithmetic mean."""
+        return cast("int", self.v)
+
+
 def distribution(d: int | float | Distribution) -> Distribution:
     """
     Get the distribution from the parameter.
@@ -718,15 +816,17 @@ def distribution(d: int | float | Distribution) -> Distribution:
     :return: the canonicalized distribution
 
     >>> distribution(7)
-    Const(v=7)
+    IntConst(v=7)
 
     >>> distribution(3.4)
     Const(v=3.4)
 
     >>> distribution(Choice((Const(4.0), )))
-    Const(v=4)
+    IntConst(v=4)
     """
-    if isinstance(d, int | float):
+    if isinstance(d, int):
+        return IntConst(d)
+    if isinstance(d, float):
         return Const(d)
     if isinstance(d, Distribution):
         old_d: Distribution | None = None

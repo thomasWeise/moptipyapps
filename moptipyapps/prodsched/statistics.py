@@ -44,47 +44,47 @@ class Statistics:
         check_int_range(n_products, "n_products", 1, 1_000_000_000)
         #: the production time means per-product
         self.production_time_means: Final[list[
-            float | int | None]] = [None] * n_products
+            int | float | None]] = [None] * n_products
         #: the overall production time mean
-        self.production_time_mean: float | int | None = None
+        self.production_time_mean: int | float | None = None
         #: the production time standard deviations per-product
         self.production_time_sds: Final[list[
-            float | int | None]] = [None] * n_products
+            int | float | None]] = [None] * n_products
         #: the overall production time standard deviations
         self.production_time_sd: float | None = None
         #: the fraction of demands that were immediately satisfied,
         #: on a per-product basis
-        self.immediately_satisfied_rates: Final[list[float | int | None]] = (
+        self.immediately_satisfied_rates: Final[list[int | float | None]] = (
             [None] * n_products)
         #: the overall fraction of immediately satisfied demands
-        self.immediately_satisfied_rate: float | int | None = None
+        self.immediately_satisfied_rate: int | float | None = None
         #: the average waiting time for all demands that were not immediately
         #: satisfied -- only counting demands that were actually satisfied
         self.waiting_time_for_none_immediates_means: Final[list[
-            float | int | None]] = [None] * n_products
+            int | float | None]] = [None] * n_products
         #: the standard deviation of the waiting time for all demands that
         #: were not immediately satisfied -- only counting demands that were
         #: actually satisfied
         self.waiting_time_for_none_immediates_sds: Final[list[
-            float | int | None]] = [None] * n_products
+            int | float | None]] = [None] * n_products
         #: the overall average waiting time for all demands that were not
         #: immediately satisfied -- only counting demands that were actually
         #: satisfied
-        self.waiting_time_for_none_immediates_mean: float | int | None = None
+        self.waiting_time_for_none_immediates_mean: int | float | None = None
         #: the overall standard deviation of the waiting time for all demands
         #: that were not immediately satisfied -- only counting demands that
         #: were actually  satisfied
-        self.waiting_time_for_none_immediates_sd: float | int | None = None
+        self.waiting_time_for_none_immediates_sd: int | float | None = None
         #: the fraction of demands that were fulfilled, on a per-product basis
         self.fulfilled_rates: Final[list[
-            float | int | None]] = [None] * n_products
+            int | float | None]] = [None] * n_products
         #: the fraction of demands that were fulfilled overall
-        self.fulfilled_rate: float | int | None = None
+        self.fulfilled_rate: int | float | None = None
         #: the average stock level, on a per-product basis
         self.stock_level_means: Final[list[
-            float | int | None]] = [None] * n_products
+            int | float | None]] = [None] * n_products
         #: the overall average stock level
-        self.stock_level_mean: float | int | None = None
+        self.stock_level_mean: int | float | None = None
         #: the nano seconds used by the simulation
         self.simulation_time_nanos: int | float | None = None
 
@@ -101,7 +101,7 @@ def to_stream(stats: Statistics) -> Generator[str, None, None]:
     :return: the stream of data
     """
     n_products: Final[int] = list.__len__(stats.production_time_means)
-    nts: Final[Callable[[float | int | None], str]] = num_or_none_to_str
+    nts: Final[Callable[[int | float | None], str]] = num_or_none_to_str
 
     yield str.join(CSV_SEPARATOR, chain((
         COL_STAT, COL_TOTAL), (f"{COL_PRODUCT_PREFIX}{i}" for i in range(

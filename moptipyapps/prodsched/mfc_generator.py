@@ -110,20 +110,18 @@ from moptipyapps.prodsched.instance import (
     Instance,
 )
 from moptipyapps.utils.sampling import (
+    AtLeast,
     Const,
     Distribution,
     Erlang,
     Gamma,
     Uniform,
-    distribution,
 )
 from moptipyapps.version import __version__
 
 #: the "now" function
 __DTN: Final[Callable[[], datetime.datetime]] = datetime.datetime.now
 
-#: the maximum trials for sampling
-MAX_TRIALS: Final[int] = 1_000_000
 
 #: The information key for interarrival times
 INFO_PRODUCT_INTERARRIVAL_TIME_DIST: Final[str] = \
@@ -192,7 +190,8 @@ class Product:
             check_int_range(k, "station", 0, 1_000_000)
         object.__setattr__(self, "routing", route)
         object.__setattr__(
-            self, "interarrival_times", distribution(interarrival_times))
+            self, "interarrival_times", AtLeast.greater_than_zero(
+                interarrival_times).simplify())
 
     def log_info(self, infos: dict[str, str]) -> None:
         """
@@ -233,13 +232,14 @@ class Station:
         object.__setattr__(self, "station_id", check_int_range(
             station_id, "station_id", 0, 1_000_000))
         object.__setattr__(
-            self, "processing_time", distribution(processing_time))
+            self, "processing_time",
+            AtLeast.greater_than_zero(processing_time).simplify())
 
         if processing_windows is None:
             processing_windows = Const(1 / 8)
         object.__setattr__(
-            self, "processing_windows", distribution(
-                processing_windows))
+            self, "processing_windows",
+            AtLeast.greater_than_zero(processing_windows).simplify())
 
     def log_info(self, infos: dict[str, str]) -> None:
         """
@@ -383,19 +383,10 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
     # sample the demands
     demands: Final[list[Demand]] = []
     current_id: int = 0
-    trials: int = MAX_TRIALS
     for product in products:
         time: float = 0.0
         while True:
-            while True:
-                until = product.interarrival_times.sample(random)
-                if until > 0:
-                    break
-                trials -= 1
-                if trials <= 0:
-                    raise ValueError(
-                        "Failed to sample appropriate inter-arrival time"
-                        f" from {product.interarrival_times}")
+            until = product.interarrival_times.sample(random)
             time += until
             if time >= time_end_measure:
                 break
@@ -411,24 +402,8 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
         times: list[float] = []
         time = 0.0
         while True:
-            while True:
-                processing = station.processing_time.sample(random)
-                if processing > 0:
-                    break
-                trials -= 1
-                if trials <= 0:
-                    raise ValueError(
-                        "Failed to sample appropriate processing time"
-                        f" from {station.processing_time}")
-            while True:
-                window = station.processing_windows.sample(random)
-                if window > 0:
-                    break
-                trials -= 1
-                if trials <= 0:
-                    raise ValueError(
-                        "Failed to sample appropriate processing window time"
-                        f" from {station.processing_windows}")
+            processing = station.processing_time.sample(random)
+            window = station.processing_windows.sample(random)
             time += window
             times.extend((processing, time))
             if time >= time_end_measure:
@@ -538,7 +513,8 @@ def default_stations() -> tuple[Station, ...]:
  processing_windows=Const(v=0.125)),\
  Station(station_id=2, processing_time=Erlang(k=2, theta=1.33),\
  processing_windows=Const(v=0.125)),\
- Station(station_id=3, processing_time=Exponential(eta=1),\
+ Station(station_id=3,\
+ processing_time=AtLeast(lb=5e-324, d=Exponential(eta=1)),\
  processing_windows=Const(v=0.125)),\
  Station(station_id=4, processing_time=Erlang(k=3, theta=0.67),\
  processing_windows=Const(v=0.125)),\
@@ -552,7 +528,8 @@ def default_stations() -> tuple[Station, ...]:
  processing_windows=Const(v=0.125)),\
  Station(station_id=9, processing_time=Erlang(k=3, theta=0.6),\
  processing_windows=Const(v=0.125)),\
- Station(station_id=10, processing_time=Exponential(eta=1),\
+ Station(station_id=10,\
+ processing_time=AtLeast(lb=5e-324, d=Exponential(eta=1)),\
  processing_windows=Const(v=0.125)),\
  Station(station_id=11, processing_time=Erlang(k=4, theta=0.29),\
  processing_windows=Const(v=0.125)),\
