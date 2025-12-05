@@ -1,8 +1,7 @@
 """A statistics record for the simulation."""
 
-from dataclasses import dataclass
 from itertools import chain
-from typing import Callable, Final, Generator, Iterable
+from typing import Callable, Final, Generator
 
 from moptipy.utils.logger import KEY_VALUE_SEPARATOR
 from pycommons.io.csv import CSV_SEPARATOR, SCOPE_SEPARATOR
@@ -15,8 +14,6 @@ from pycommons.math.stream_statistics import (
 )
 from pycommons.strings.string_conv import num_or_none_to_str
 from pycommons.types import check_int_range, type_error
-
-from moptipyapps.prodsched.instance import Instance
 
 #: the name of the statistics key
 COL_STAT: Final[str] = "stat"
@@ -95,6 +92,26 @@ class Statistics:
         """Convert this object to a string."""
         return "\n".join(to_stream(self))
 
+    def copy_from(self, stat: "Statistics") -> None:
+        """
+        Copy the contents of another statistics record.
+
+        :param stat: the other statistics record
+        """
+        if not isinstance(stat, Statistics):
+            raise type_error(stat, "stat", Statistics)
+        self.production_times[:] = stat.production_times
+        self.production_time = stat.production_time
+        self.immediate_rates[:] = stat.immediate_rates
+        self.immediate_rate = stat.immediate_rate
+        self.waiting_times[:] = stat.waiting_times
+        self.waiting_time = stat.waiting_time
+        self.fulfilled_rates[:] = stat.fulfilled_rates
+        self.fulfilled_rate = stat.fulfilled_rate
+        self.stock_levels[:] = stat.stock_levels
+        self.stock_level = stat.stock_level
+        self.simulation_time_nanos = stat.simulation_time_nanos
+
 
 def to_stream(stats: Statistics) -> Generator[str, None, None]:
     """
@@ -128,34 +145,3 @@ def to_stream(stats: Statistics) -> Generator[str, None, None]:
         map(nts, stats.fulfilled_rates))))
     yield f"{ROW_SIMULATION_TIME}{nts(
         stats.simulation_time_nanos / 1_000_000_000)}"
-
-
-@dataclass(order=False, frozen=True)
-class MultiStatistics:
-    """A set of statistics gathered over multiple instances."""
-
-    #: the per-instance statistics
-    per_instance: tuple[Statistics, ...]
-
-    def __init__(self, instances: Iterable[Instance]) -> None:
-        """
-        Create the multi-statistics object.
-
-        :param instances: the instances for which we create the statistics
-        """
-        object.__setattr__(self, "per_instance", tuple(
-            Statistics(inst.n_products) for inst in instances))
-
-
-def multi_to_stream(multi: MultiStatistics) -> Generator[str, None, None]:
-    """
-    Convert a multi-statistics object to a stream.
-
-    :param multi: the multi-statistics object
-    :return: the stream of strings
-    """
-    if not isinstance(multi, MultiStatistics):
-        raise type_error(multi, "multi", MultiStatistics)
-    for i, ss in enumerate(multi.per_instance):
-        yield f"-------- Instance {i} -------"
-        yield from to_stream(ss)

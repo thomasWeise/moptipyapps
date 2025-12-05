@@ -281,7 +281,7 @@ class ROPSimulation(Simulation):
         :param rop: the re-order point
         """
         if isinstance(rop, np.ndarray):
-            rop = map(int, np.ndarray)  # type: ignore
+            rop = map(int, rop)  # type: ignore
         if not isinstance(rop, Iterable):
             raise type_error(rop, "rop", Iterable)
         i: int = -1

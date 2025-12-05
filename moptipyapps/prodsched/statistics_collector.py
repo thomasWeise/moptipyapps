@@ -234,9 +234,10 @@ class StatisticsCollector(Listener):
 
         slm: Final[StreamSum] = self.__stock_level
         twl: Final[float] = self.__total - self.__warmup
+        wu: Final[float] = self.__warmup
         for i, sm in enumerate(self.__stock_levels):
             wh = self.__in_warehouse[i]
-            v: float = (self.__total - wh[1]) * wh[0]
+            v: float = (self.__total - max(wh[1], wu)) * wh[0]
             sm.add(v)
             slm.add(v)
             dest.stock_levels[i] = sm.result() / twl
