@@ -23,11 +23,15 @@ A tool for collecting statistics.
 >>> simulation.ctrl_run()
 >>> print("\n".join(str(statistics).split("\n")[:-1]))
 stat;total;product_0;product_1
+trp.min;229.57142857142858;455.6;229.57142857142858
 trp.mean;304.8888888888889;455.6;246.92307692307693
+trp.max;455.6;455.6;267.1666666666667
 trp.sd;97.56326157594913;0;19.50721118346466
-fill.rate;0;0;0
+cwt.min;1603;2278;1603
 cwt.mean;1829.3333333333333;2278;1605
+cwt.max;2278;2278;1607
 cwt.sd;388.56187838403986;;2.8284271247461903
+fill.rate;0;0;0
 stocklevel.mean;0.6078765407355446;0.4497444633730835;0.15813207736246118
 fulfilled.rate;1;1;1
 """
@@ -35,7 +39,11 @@ fulfilled.rate;1;1;1
 from time import time_ns
 from typing import Final
 
-from pycommons.math.stream_statistics import StreamStats, StreamSum
+from pycommons.math.stream_statistics import (
+    StreamStatistics,
+    StreamStatisticsAggregate,
+)
+from pycommons.math.streams import StreamSum
 from pycommons.types import type_error
 
 from moptipyapps.prodsched.instance import (
@@ -71,20 +79,22 @@ class StatisticsCollector(Listener):
 
         n_products: Final[int] = instance.n_products
         #: the internal per-product production time records
-        self.__production_times: Final[tuple[StreamStats, ...]] = tuple(
-            StreamStats() for _ in range(n_products))
+        self.__production_times: Final[tuple[
+            StreamStatisticsAggregate[StreamStatistics], ...]] = tuple(
+            StreamStatistics.aggregate() for _ in range(n_products))
         #: the internal total production time
-        self.__production_time: Final[StreamStats] = StreamStats()
+        self.__production_time: Final[StreamStatisticsAggregate[
+            StreamStatistics]] = StreamStatistics.aggregate()
         #: the immediately satisfied products: satisfied vs. total
         self.__immediately_satisfied: Final[list[int]] = [0] * n_products
         #: the statistics of the waiting time for not-immediately satisfied
         #: products, per product
-        self.__waiting_time_for_none_immediates: Final[tuple[
-            StreamStats, ...]] = tuple(StreamStats() for _ in range(
-                n_products))
+        self.__waiting_times: Final[tuple[
+            StreamStatisticsAggregate[StreamStatistics], ...]] = tuple(
+            StreamStatistics.aggregate() for _ in range(n_products))
         #: the total waiting time for non-immediately satisfied products
-        self.__waiting_time_for_none_immediate: Final[StreamStats] = (
-            StreamStats())
+        self.__waiting_time: Final[StreamStatisticsAggregate[
+            StreamStatistics]] = StreamStatistics.aggregate()
         #: the number of fulfilled jobs, per-product
         self.__fulfilled: Final[list[int]] = [0] * n_products
         #: the stock levels on a per-product basis
@@ -118,14 +128,14 @@ class StatisticsCollector(Listener):
         for i in range(n_products):
             self.__production_times[i].reset()
             self.__immediately_satisfied[i] = 0
-            self.__waiting_time_for_none_immediates[i].reset()
+            self.__waiting_times[i].reset()
             self.__fulfilled[i] = 0
             self.__stock_levels[i].reset()
             wh = self.__in_warehouse[i]
             wh[0] = 0.0
             wh[1] = 0.0
         self.__production_time.reset()
-        self.__waiting_time_for_none_immediate.reset()
+        self.__waiting_time.reset()
         self.__stock_level.reset()
 
     def product_in_warehouse(
@@ -177,8 +187,6 @@ class StatisticsCollector(Listener):
 
         :param time: the time index when the demand was satisfied
         :param demand: the demand that was satisfied
-        :param is_in_measure_period: is this event inside the measurement
-            period?
         """
         if demand.measure:
             at: Final[float] = demand.arrival
@@ -187,8 +195,8 @@ class StatisticsCollector(Listener):
                 self.__immediately_satisfied[pid] += 1
             else:
                 tt: Final[float] = time - at
-                self.__waiting_time_for_none_immediates[pid].add(tt)
-                self.__waiting_time_for_none_immediate.add(tt)
+                self.__waiting_times[pid].add(tt)
+                self.__waiting_time.add(tt)
             self.__fulfilled[pid] += 1
 
     def finished(self, time: float) -> None:
@@ -203,32 +211,26 @@ class StatisticsCollector(Listener):
         total: Final[tuple[int, ...]] = self.__n_mdpb
 
         for i, stat in enumerate(self.__production_times):
-            dest.production_time_means[i] = stat.mean()
-            dest.production_time_sds[i] = stat.sd()
-        dest.production_time_mean = self.__production_time.mean()
-        dest.production_time_sd = self.__production_time.sd()
+            dest.production_times[i] = stat.result_or_none()
+        dest.production_time = self.__production_time.result_or_none()
 
         sn: int = 0
         sf: int = 0
         st: int = 0
         for i, n in enumerate(self.__immediately_satisfied):
             t = total[i]
-            dest.immediately_satisfied_rates[i] = n / t
+            dest.immediate_rates[i] = n / t
             sn += n
             f = self.__fulfilled[i]
             dest.fulfilled_rates[i] = f / t
             sf += f
             st += t
-        dest.immediately_satisfied_rate = sn / st
+        dest.immediate_rate = sn / st
         dest.fulfilled_rate = sf / st
 
-        for i, stat in enumerate(self.__waiting_time_for_none_immediates):
-            dest.waiting_time_for_none_immediates_means[i] = stat.mean()
-            dest.waiting_time_for_none_immediates_sds[i] = stat.sd()
-        dest.waiting_time_for_none_immediates_mean = (
-            self.__waiting_time_for_none_immediate.mean())
-        dest.waiting_time_for_none_immediates_sd = (
-            self.__waiting_time_for_none_immediate.sd())
+        for i, stat in enumerate(self.__waiting_times):
+            dest.waiting_times[i] = stat.result_or_none()
+        dest.waiting_time = self.__waiting_time.result_or_none()
 
         slm: Final[StreamSum] = self.__stock_level
         twl: Final[float] = self.__total - self.__warmup
@@ -237,6 +239,6 @@ class StatisticsCollector(Listener):
             v: float = (self.__total - wh[1]) * wh[0]
             sm.add(v)
             slm.add(v)
-            dest.stock_level_means[i] = sm.result() / twl
-        dest.stock_level_mean = slm.result() / twl
+            dest.stock_levels[i] = sm.result() / twl
+        dest.stock_level = slm.result() / twl
         dest.simulation_time_nanos = time_ns() - self.__start

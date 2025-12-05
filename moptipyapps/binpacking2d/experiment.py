@@ -101,8 +101,8 @@ def run(base_dir: str, n_runs: int = 23) -> None:
         inst for inst in Instance.list_resources()
         if inst.startswith(("b", "a"))]
     inst_creators: list[Callable[[], Instance]] = [cast(
-        "Callable[[], Instance]", lambda __s=_s: Instance.from_resource(__s))
-        for _s in instances]
+        "Callable[[], Instance]", lambda __s=sss: Instance.from_resource(__s))
+        for sss in instances]
     namer: Final[Instance] = Instance.from_resource(instances[0])
 
     for objective in DEFAULT_OBJECTIVES:

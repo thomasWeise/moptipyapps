@@ -36,7 +36,6 @@ from pycommons.io.path import Path, file_path, line_writer
 from pycommons.math.sample_statistics import CsvReader as SsCsvReader
 from pycommons.math.sample_statistics import CsvWriter as SsCsvWriter
 from pycommons.math.sample_statistics import SampleStatistics
-from pycommons.math.sample_statistics import from_samples as ss_from_samples
 from pycommons.strings.string_conv import str_to_num
 from pycommons.types import check_int_range, type_error
 
@@ -287,7 +286,8 @@ def from_packing_results(results: Iterable[PackingResult]) \
             bin_width=bin_width,
             bin_height=bin_height,
             objectives={
-                o: ss_from_samples(pr.objectives[o] for pr in data)
+                o: SampleStatistics.from_samples(
+                    pr.objectives[o] for pr in data)
                 for o in objectives
             },
             objective_bounds=objective_bounds,

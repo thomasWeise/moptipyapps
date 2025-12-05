@@ -12,7 +12,7 @@ from moptipyapps.prodsched.rop_simulation import ROPSimulation
 from moptipyapps.prodsched.simulation import (
     warmup,
 )
-from moptipyapps.prodsched.statistics import Statistics, mean
+from moptipyapps.prodsched.statistics import Statistics
 from moptipyapps.prodsched.statistics import to_stream as stat_to_stream
 from moptipyapps.prodsched.statistics_collector import StatisticsCollector
 from moptipyapps.utils.shared import moptipyapps_argparser
@@ -70,14 +70,6 @@ def run(dest_dir: str | Path, n_instances: int) -> None:
                 writer(s)
         all_stats.append(stat)
         logger(f"Done generating and simulating instance {index}.")
-
-    logger("Now writing summary statistics.")
-    log_file = simulation_dir.resolve_inside("summary.txt")
-    with log_file.open_for_write() as stream:
-        writer = line_writer(stream)
-        for s in stat_to_stream(mean(all_stats)):
-            writer(s)
-    logger("Done writing summary statistics.")
 
 
 # Run the experiment from the command line

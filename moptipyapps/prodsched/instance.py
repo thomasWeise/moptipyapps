@@ -213,6 +213,7 @@ from moptipy.utils.strings import sanitize_name
 from pycommons.ds.cache import repr_cache
 from pycommons.ds.immutable_map import immutable_mapping
 from pycommons.io.csv import CSV_SEPARATOR
+from pycommons.io.path import Path, directory_path, write_lines
 from pycommons.math.int_math import try_int
 from pycommons.strings.string_conv import bool_to_str, float_to_str, num_to_str
 from pycommons.types import check_int_range, check_to_int_range, type_error
@@ -1841,3 +1842,92 @@ def compute_finish_time(start_time: float, amount: int,
         remaining -= can_do
         if remaining <= 0:
             return float(start_time)
+
+
+def store_instances(dest: str, instances: Iterable[Instance]) -> None:
+    """
+    Store an iterable of instances to the given directory.
+
+    :param dest: the destination directory
+    :param instances: the instances
+    """
+    dest_dir: Final[Path] = Path(dest)
+    dest_dir.ensure_dir_exists()
+
+    if not isinstance(instances, Iterable):
+        raise type_error(instances, "instances", Iterable)
+    names: Final[set[str]] = set()
+    for i, instance in enumerate(instances):
+        if not isinstance(instance, Instance):
+            raise type_error(instance, f"instance[{i}]", Instance)
+        name: str = instance.name
+        if name in names:
+            raise ValueError(
+                f"Name {name!r} of instance {i} already occurred!")
+        dest_file = dest_dir.resolve_inside(f"{name}.txt")
+        if dest_file.exists():
+            raise ValueError(f"File {dest_file!r} already exists, cannot "
+                             f"store {i}th instance {name!r}.")
+        try:
+            with dest_file.open_for_write() as stream:
+                write_lines(to_stream(instance), stream)
+        except OSError as ioe:
+            raise ValueError(f"Error when writing instance {i} with name "
+                             f"{name!r} to file {dest_file!r}.") from ioe
+
+
+def instance_sort_key(inst: Instance) -> str:
+    """
+    Get a sort key for instances.
+
+    :param inst: the instance
+    :return: the sort key
+    """
+    return inst.name
+
+
+def load_instances(source: str) -> tuple[Instance, ...]:
+    """
+    Load the instances from a given irectory.
+
+    :param source: the source directory
+    :return: the tuple of instances
+
+    >>> inst1 = Instance(
+    ...     name="test1", n_products=1, n_customers=1, n_stations=2,
+    ...     n_demands=1, time_end_warmup=10, time_end_measure=4000,
+    ...     routes=[[0, 1]],
+    ...     demands=[[0, 0, 0, 10, 20, 100]],
+    ...     warehous_at_t0=[0],
+    ...     station_product_unit_times=[[[10.0, 10000.0]],
+    ...                                 [[30.0, 10000.0]]])
+
+    >>> inst2 = Instance(
+    ...     name="test2", n_products=2, n_customers=1, n_stations=2,
+    ...      n_demands=3, time_end_warmup=21, time_end_measure=10000,
+    ...     routes=[[0, 1], [1, 0]],
+    ...     demands=[[0, 0, 1, 10, 20, 90], [1, 0, 0, 5, 22, 200],
+    ...              [2, 0, 1, 7, 30, 200]],
+    ...     warehous_at_t0=[2, 1],
+    ...     station_product_unit_times=[[[10.0, 50.0, 15.0, 100.0],
+    ...                                  [ 5.0, 20.0,  7.0,  35.0, 4.0, 50.0]],
+    ...                                 [[ 5.0, 24.0,  7.0,  80.0],
+    ...                                  [ 3.0, 21.0,  6.0,  50.0,]]])
+
+    >>> from pycommons.io.temp import temp_dir
+    >>> with temp_dir() as td:
+    ...     store_instances(td, [inst2, inst1])
+    ...     res = load_instances(td)
+    >>> res == (inst1, inst2)
+    True
+    """
+    src: Final[Path] = directory_path(source)
+    instances: Final[list[Instance]] = []
+    for file in src.list_dir(files=True, directories=False):
+        if file.endswith(".txt"):
+            with file.open_for_read() as stream:
+                instances.append(from_stream(stream))
+    if list.__len__(instances) <= 0:
+        raise ValueError(f"Found no instances in directory {src!r}.")
+    instances.sort(key=instance_sort_key)
+    return tuple(instances)

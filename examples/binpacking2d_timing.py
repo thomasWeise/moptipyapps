@@ -58,8 +58,8 @@ for inst_name in INSTANCES:
         def __f(_x=all_x_data, _y=y,
                 _e=cast("Callable[[Any, Any], Any]",
                         encoding(instance).decode)) -> None:
-            for __x in _x:
-                _e(__x, _y)
+            for xyz in _x:
+                _e(xyz, _y)
         benchmarks.append(__f)
 
     for f in benchmarks:
