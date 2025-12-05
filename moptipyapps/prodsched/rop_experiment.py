@@ -68,7 +68,7 @@ def run(dest: str, instances: str, n_inst: int, n_runs: int,
     if n_prod is None:
         raise ValueError("No instances?")
 
-    search_space: Final[IntSpace] = IntSpace(n_prod, 1, 127)
+    search_space: Final[IntSpace] = IntSpace(n_prod, 0, 127)
     op0: Final[Op0Random] = Op0Random(search_space)
     op1: Final[Op1MNormal] = Op1MNormal(search_space, sd=2.0)
     op2: Final = Op2Uniform()
