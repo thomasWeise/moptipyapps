@@ -1,0 +1,56 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.instances — moptipyapps 0.8.75 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=e7d57b9d"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/instances.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.75 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.instances</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.instances</h1><div class=highlight><pre>
+<span></span><span class=sd>"""Generate instances for training and testing."""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>rand_seeds_from_str</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Instance</span><span class=p>,</span>
+    <span class=n>instance_sort_key</span><span class=p>,</span>
+    <span class=n>load_instances</span><span class=p>,</span>
+    <span class=n>store_instances</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.mfc_generator</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>sample_mfc_instance</span><span class=p>,</span>
+<span class=p>)</span>
+
+
+<div class=viewcode-block id=get_instances>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.instances.get_instances>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>get_instances</span><span class=p>(</span><span class=n>n</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>inst_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Instance</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get the instances for the experiment.</span>
+
+<span class=sd>    :param n: the expected number of instances</span>
+<span class=sd>    :param inst_dir: the instance directory</span>
+<span class=sd>    """</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n</span><span class=p>,</span> <span class=s2>"n"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+    <span class=n>use_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>inst_dir</span><span class=p>)</span>
+
+    <span class=n>has_instances</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=k>if</span> <span class=n>use_dir</span><span class=o>.</span><span class=n>exists</span><span class=p>():</span>
+        <span class=n>has_instances</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=k>try</span><span class=p>:</span>
+            <span class=nb>next</span><span class=p>(</span><span class=n>use_dir</span><span class=o>.</span><span class=n>list_dir</span><span class=p>(</span><span class=kc>True</span><span class=p>,</span> <span class=kc>False</span><span class=p>))</span>
+        <span class=k>except</span> <span class=ne>StopIteration</span><span class=p>:</span>
+            <span class=n>has_instances</span> <span class=o>=</span> <span class=kc>False</span>
+
+    <span class=k>if</span> <span class=n>has_instances</span><span class=p>:</span>
+        <span class=n>loaded</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Instance</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>load_instances</span><span class=p>(</span><span class=n>use_dir</span><span class=p>)</span>
+        <span class=n>loaded_len</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>loaded</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>loaded_len</span> <span class=o>!=</span> <span class=n>n</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Excepted </span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2> instances, got </span><span class=si>{</span><span class=n>loaded_len</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>loaded</span>
+
+    <span class=n>insts</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=k>for</span> <span class=n>seed</span> <span class=ow>in</span> <span class=n>rand_seeds_from_str</span><span class=p>(</span><span class=s2>"mfc"</span><span class=p>,</span> <span class=n>n</span><span class=p>):</span>
+        <span class=n>insts</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>sample_mfc_instance</span><span class=p>(</span><span class=n>seed</span><span class=o>=</span><span class=n>seed</span><span class=p>))</span>
+
+    <span class=n>insts</span><span class=o>.</span><span class=n>sort</span><span class=p>(</span><span class=n>key</span><span class=o>=</span><span class=n>instance_sort_key</span><span class=p>)</span>
+    <span class=n>store_instances</span><span class=p>(</span><span class=n>use_dir</span><span class=p>,</span> <span class=n>insts</span><span class=p>)</span>
+    <span class=k>return</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>insts</span><span class=p>)</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.75 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.instances</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

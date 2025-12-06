@@ -1,0 +1,64 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.rop_multisimulation — moptipyapps 0.8.75 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=e7d57b9d"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/rop_multisimulation.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.75 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.rop_multisimulation</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.rop_multisimulation</h1><div class=highlight><pre>
+<span></span><span class=sd>"""A simulator for multiple instances."""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.encoding</span><span class=w> </span><span class=kn>import</span> <span class=n>Encoding</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Instance</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.multistatistics</span><span class=w> </span><span class=kn>import</span> <span class=n>MultiStatistics</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.rop_simulation</span><span class=w> </span><span class=kn>import</span> <span class=n>ROPSimulation</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.statistics_collector</span><span class=w> </span><span class=kn>import</span> <span class=n>StatisticsCollector</span>
+
+
+<div class=viewcode-block id=ROPMultiSimulation>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.rop_multisimulation.ROPMultiSimulation>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>ROPMultiSimulation</span><span class=p>(</span><span class=n>Encoding</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A multi-simulation."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instances</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Instance</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Instantiate the multi-statistics decoding.</span>
+
+<span class=sd>        :param instances: the packing instance</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instances</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instances</span><span class=p>,</span> <span class=s2>"instances"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+        <span class=c1>#: the statistics collectors</span>
+        <span class=n>col</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>StatisticsCollector</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span>
+            <span class=n>StatisticsCollector</span><span class=p>(</span><span class=n>inst</span><span class=p>)</span> <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>instances</span><span class=p>)</span>
+        <span class=c1>#: the simulations and collectors</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__simulations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span>
+            <span class=n>ROPSimulation</span><span class=p>,</span> <span class=n>StatisticsCollector</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span>
+            <span class=p>(</span><span class=n>ROPSimulation</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=n>col</span><span class=p>[</span><span class=n>i</span><span class=p>]),</span> <span class=n>col</span><span class=p>[</span><span class=n>i</span><span class=p>])</span>
+            <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>inst</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>instances</span><span class=p>))</span>
+
+<div class=viewcode-block id=ROPMultiSimulation.decode>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.rop_multisimulation.ROPMultiSimulation.decode>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>decode</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>y</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Map a ROP setting to a multi-statistics.</span>
+
+<span class=sd>        :param x: the array</span>
+<span class=sd>        :param y: the Gantt chart</span>
+<span class=sd>        """</span>
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=p>(</span><span class=n>sim</span><span class=p>,</span> <span class=n>col</span><span class=p>)</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__simulations</span><span class=p>):</span>
+            <span class=n>col</span><span class=o>.</span><span class=n>set_dest</span><span class=p>(</span><span class=n>y</span><span class=o>.</span><span class=n>per_instance</span><span class=p>[</span><span class=n>i</span><span class=p>])</span>
+            <span class=n>sim</span><span class=o>.</span><span class=n>ctrl_reset</span><span class=p>()</span>
+            <span class=n>sim</span><span class=o>.</span><span class=n>set_rop</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+            <span class=n>sim</span><span class=o>.</span><span class=n>ctrl_run</span><span class=p>()</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this decoding.</span>
+
+<span class=sd>        :return: `"rms"`</span>
+<span class=sd>        :rtype: str</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"rms"</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.75 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.rop_multisimulation</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>
