@@ -68,11 +68,11 @@ def run(dest: str, instances: str, n_inst: int, n_runs: int,
     if n_prod is None:
         raise ValueError("No instances?")
 
-    search_space: Final[IntSpace] = IntSpace(n_prod, 0, 127)
+    search_space: Final[IntSpace] = IntSpace(n_prod, 0, 63)
     op0: Final[Op0Random] = Op0Random(search_space)
-    op1: Final[Op1MNormal] = Op1MNormal(search_space, sd=2.0)
+    op1: Final[Op1MNormal] = Op1MNormal(search_space, sd=2.5)
     op2: Final = Op2Uniform()
-    algo: Final[NSGA2] = NSGA2(op0, op1, op2, ps, 2 / ps)
+    algo: Final[NSGA2] = NSGA2(op0, op1, op2, ps, 1 / min(16, ps))
     encoding: Final[ROPMultiSimulation] = ROPMultiSimulation(insts)
     f1: Final[WorstAndMeanFillRate] = WorstAndMeanFillRate()
     f2: Final[MaxStockLevel] = MaxStockLevel()
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         type=Path, nargs="?", default="./instances/")
     parser.add_argument(
         "n_inst", help="the number of instances",
-        type=int, nargs="?", default=16)
+        type=int, nargs="?", default=11)
     parser.add_argument(
         "n_runs", help="the number of runs",
         type=int, nargs="?", default=31)
