@@ -47,6 +47,7 @@ units on station 2.
 There is one customer demand, for 10 units of this product, which enters the
 system at time unit 20.
 The warehouse is initially empty.
+
 >>> instance = Instance(
 ...     name="test1", n_products=1, n_customers=1, n_stations=2, n_demands=1,
 ...     time_end_warmup=10, time_end_measure=4000,
@@ -66,6 +67,7 @@ immediately begin producing.
 It needs 10*30 time units, meaning that it finishes after 300 time units.
 The demanded product amount is completed after 420 time units and the demand 0
 can be fulfilled.
+
 >>> simulation = Simulation(instance, PrintingListener(print_time=False))
 >>> simulation.ctrl_run()
 start
@@ -220,6 +222,7 @@ Now we want to stop the simulation measurement period before the last
 job completes. Notice that the last production jobs after time unit
 81.xxx are no longer performed, because their end falls outside of the
 measurement period.
+
 >>> instance = Instance(
 ...     name="test3", n_products=2, n_customers=1, n_stations=2, n_demands=3,
 ...     time_end_warmup=21, time_end_measure=100,

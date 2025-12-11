@@ -1,4 +1,12 @@
-"""A statistics record for the simulation."""
+"""
+A statistics record for multiple simulations.
+
+We use this record as the solution space when optimizing for the MFC scenario.
+It stores the statistics of several simulation runs.
+The objective functions can then access these statistics.
+A space instance is provided that can create, copy, and serialize these
+objects to text, so that they can appear in the log files.
+"""
 
 from dataclasses import dataclass
 from typing import Final, Generator, Iterable

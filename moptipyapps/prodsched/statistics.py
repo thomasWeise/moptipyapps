@@ -1,4 +1,10 @@
-"""A statistics record for the simulation."""
+"""
+A statistics record for the simulation.
+
+This module provides a record with statistics derived from one single
+MFC simulation. It can store values such as the mean fill rate or the
+mean stock level.
+"""
 
 from itertools import chain
 from typing import Callable, Final, Generator

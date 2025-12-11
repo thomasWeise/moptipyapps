@@ -1,4 +1,14 @@
-"""A simulator for multiple instances."""
+"""
+A simulator for multiple runs of the ROP scenario.
+
+Re-Order-Point (ROP) scenarios are such that for each product, a value `X` is
+provided. Once there are no more than `X` elements of that product in the
+warehouse, one new unit is ordered to be produced.
+Therefore, we have `n_products` such `X` values.
+
+This module provides the functionality to simulate this scenario over multiple
+instances.
+"""
 from typing import Final, Iterable
 
 import numpy as np

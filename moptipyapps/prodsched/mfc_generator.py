@@ -1,5 +1,5 @@
 """
-Methods for generating instances.
+Methods for generating MFC instances.
 
 Here we provide some basic utilities for generating deterministic variants of
 instances such as those used in the paper [1] by Thürer et al.

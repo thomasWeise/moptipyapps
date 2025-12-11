@@ -1,4 +1,10 @@
-"""A small template for ROP-based experiments."""
+"""
+A small template for ROP-based experiments.
+
+This experiment uses the NSGA-II algorithm to optimize Re-Order-Points (ROPs)
+to achieve both a high worst-case fillrate and a low worst-case average stock
+level.
+"""
 
 
 import argparse

@@ -1,5 +1,5 @@
 r"""
-A tool for collecting statistics.
+A tool for collecting statistics from an MFC simulation.
 
 >>> instance = Instance(
 ...     name="test2", n_products=2, n_customers=1, n_stations=2, n_demands=5,

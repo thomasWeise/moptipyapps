@@ -10,24 +10,31 @@ The time when a certain product is finished can be computed via
 >>> name = "my_instance"
 
 The number of products be 3.
+
 >>> n_products = 3
 
 The number of customers be 5.
+
 >>> n_customers = 5
 
 The number of stations be 4.
+
 >>> n_stations = 4
 
 There will be 6 customer demands.
+
 >>> n_demands = 6
 
 The end of the warmup period.
+
 >>> time_end_warmup = 10
 
 The end of the measurement period.
+
 >>> time_end_measure = 10000
 
 Each product may take a different route through different stations.
+
 >>> route_p0 = [0, 3, 2]
 >>> route_p1 = [0, 2, 1, 3]
 >>> route_p2 = [1, 2, 3]
@@ -35,6 +42,7 @@ Each product may take a different route through different stations.
 
 Each demand is a tuple of demand_id, customer_id, product_id, amount,
 release time, and deadline.
+
 >>> d0 = [0, 0, 1, 20, 1240,  3000]
 >>> d1 = [1, 1, 0, 10, 2300,  4000]
 >>> d2 = [2, 2, 2,  7, 8300, 11000]
@@ -44,6 +52,7 @@ release time, and deadline.
 >>> demands = [d0, d1, d2, d3, d4, d5]
 
 There is a fixed amount of each product in the warehouse at time step 0.
+
 >>> warehous_at_t0 = [10, 0, 6]
 
 Each station requires a certain working time for each unit of each product.
@@ -55,6 +64,7 @@ These times are cyclic, meaning that at time step 60 to 79, it will again need
 10 time units, and so on.
 Of course, production times are only specified for stations that a product is
 actually routed through.
+
 >>> m0_p0 = [10.0, 20.0, 11.0, 40.0,  8.0, 60.0]
 >>> m0_p1 = [12.0, 20.0,  7.0, 40.0, 11.0, 70.0]
 >>> m0_p2 = []
@@ -73,10 +83,12 @@ actually routed through.
 ...                               [m3_p0, m3_p1, m3_p2]]
 
 We can (but do not need to) provide additional information as key-value pairs.
+
 >>> infos = {"source": "manually created",
 ...          "creation_date": "2025-11-09"}
 
 From all of this data, we can create the instance.
+
 >>> instance = Instance(name, n_products, n_customers, n_stations, n_demands,
 ...                     time_end_warmup, time_end_measure,
 ...                     routes, demands, warehous_at_t0,
@@ -144,6 +156,7 @@ We can serialize instances to a stream of strings and also load them back
 from a stream of strings.
 Here, we store `instance` to a stream.
 We then load the independent instance `i2` from that stream.
+
 >>> i2 = from_stream(to_stream(instance))
 >>> i2 is instance
 False
@@ -151,6 +164,7 @@ False
 True
 
 You can see that the loaded instance has the same data as the stored one.
+
 >>> i2.name == instance.name
 True
 >>> i2.n_customers == instance.n_customers
