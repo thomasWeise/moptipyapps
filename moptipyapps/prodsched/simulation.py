@@ -3,8 +3,11 @@ A simulator for production scheduling.
 
 For simulation a production system, we can build on the class
 :class:`~Simulation`. This base class offers the support to implement almost
-arbitrarily complex production system scheduling logic. There are three groups
-of methods:
+arbitrarily complex production system scheduling logic.
+The simulations here a fully deterministic and execute a given MFC scenario
+given as an :class:`~moptipyapps.prodsched.instance.Instance`.
+
+Simulations have three groups of methods:
 
 - Methods starting with `ctrl_*` are for starting and resetting the
   simulation so that it can be started again. You may override them if you
@@ -14,6 +17,17 @@ of methods:
   these methods to implement the logic of your production scheduling method.
 - Methods that start with `act_*` are actions that you can invoke inside the
   `event_*` methods. The tell the simulator or stations what to do.
+
+An example of such specialized simulations is the
+:class:`~moptipyapps.prodsched.rop_simulation.ROPSimulation`,
+which simulates the behavior of a system that uses re-order points (ROPs) to
+decide what to produce and when.
+In such a simulation, the `event_*`-methods are overwritten to invoke the
+`act_*`-methods according to their needs.
+Here, in the base class :class:`~Simulation`, they are implemented such to
+order the production of product units directly upon the arrival of customer
+demands. In the :class:`~moptipyapps.prodsched.rop_simulation.ROPSimulation`
+on the other hand, products are produced base on re-order points.
 
 ## We have the following `ctrl_*` methods:**
 

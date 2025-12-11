@@ -95,10 +95,12 @@ Imagine that we have `n` unique objects and know the (symmetric) distances
 between them.
 
 Let's say that we have four numbers as objects, `1`, `2`, `3`, `4`.
+
 >>> data = [1, 2, 3, 4]
 >>> n = len(data)
 
 The distance between two numbers `a` and `b` be `abs(a - b)`.
+
 >>> def dist(a, b):
 ...     return abs(a - b)
 

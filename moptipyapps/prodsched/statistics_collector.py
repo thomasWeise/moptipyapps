@@ -1,6 +1,17 @@
 r"""
 A tool for collecting statistics from an MFC simulation.
 
+A statistics collector is a special
+:class:`~moptipyapps.prodsched.simulation.Listener`
+that can be plugged into a
+:class:`~moptipyapps.prodsched.simulation.Simulation`.
+During the execution of the simulation, it gathers statistics about what is
+going on. It finally stores these into a
+:class:`~moptipyapps.prodsched.statistics.Statistics` record.
+Such a record can then be used to understand the key characteristics of the
+behavior of the simulation in on a given
+:class:`~moptipyapps.prodsched.instance.Instance`.
+
 >>> instance = Instance(
 ...     name="test2", n_products=2, n_customers=1, n_stations=2, n_demands=5,
 ...     time_end_warmup=21, time_end_measure=10000,

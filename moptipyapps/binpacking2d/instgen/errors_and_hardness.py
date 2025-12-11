@@ -25,6 +25,7 @@ A combination of the errors and the hardness objective.
 ...       f"in {res.lower_bound_bins} bins of "
 ...       f"size {res.bin_width}*{res.bin_height}.")
 'a04n' with 15/16 items with area 10065000 in 3 bins of size 2750*1220.
+
 >>> print(space.to_str(y))
 a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\
 441,122;1649,122;2750,10;2750,1,2;2750,3;1649,1098;2750,878;2750,58;660,122

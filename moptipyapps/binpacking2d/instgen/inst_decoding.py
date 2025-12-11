@@ -122,6 +122,7 @@ instance. Hurray.
 ...       f"in {res.lower_bound_bins} bins of "
 ...       f"size {res.bin_width}*{res.bin_height}.")
 'a04n' with 15/16 items with area 10065000 in 3 bins of size 2750*1220.
+
 >>> print(space.to_str(y))
 a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\
 441,122;1649,122;2750,10;2750,1,2;2750,3;1649,1098;2750,878;2750,58;660,122
@@ -140,6 +141,7 @@ a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\
 ...       f"in {res.lower_bound_bins} bins of "
 ...       f"size {res.bin_width}*{res.bin_height}.")
 'a04n' with 3/16 items with area 10065000 in 3 bins of size 2750*1220.
+
 >>> print(space.to_str(y))
 a04n;3;2750;1220;2750,1216,2;2750,1,13;2750,1215
 
@@ -158,6 +160,7 @@ a04n;3;2750;1220;2750,1216,2;2750,1,13;2750,1215
 ...       f"in {res.lower_bound_bins} bins of "
 ...       f"size {res.bin_width}*{res.bin_height}.")
 'a04n' with 4/16 items with area 10065000 in 3 bins of size 2750*1220.
+
 >>> print(space.to_str(y))
 a04n;4;2750;1220;2750,1208;2750,1219;2750,1220;2750,1,13
 
@@ -176,6 +179,7 @@ a04n;4;2750;1220;2750,1208;2750,1219;2750,1220;2750,1,13
 ...       f"in {res.lower_bound_bins} bins of "
 ...       f"size {res.bin_width}*{res.bin_height}.")
 'a04n' with 5/16 items with area 10065000 in 3 bins of size 2750*1220.
+
 >>> print(space.to_str(y))
 a04n;5;2750;1220;2750,1220;2730,1220;2748,1220;1,1220,4;2,1220,9
 
@@ -194,6 +198,7 @@ a04n;5;2750;1220;2750,1220;2730,1220;2748,1220;1,1220,4;2,1220,9
 ...       f"in {res.lower_bound_bins} bins of "
 ...       f"size {res.bin_width}*{res.bin_height}.")
 'a04n' with 6/16 items with area 10064146 in 3 bins of size 2750*1220.
+
 >>> print(space.to_str(y))
 a04n;6;2750;1220;2,1220,9;1,1220,3;2748,1220;1,366;2750,1220;2730,1220
 
@@ -213,6 +218,7 @@ a04n;6;2750;1220;2,1220,9;1,1220,3;2748,1220;1,366;2750,1220;2730,1220
 ...       f"in {res.lower_bound_bins} bins of "
 ...       f"size {res.bin_width}*{res.bin_height}.")
 'a04n' with 6/16 items with area 10061706 in 3 bins of size 2750*1220.
+
 >>> print(space.to_str(y))
 a04n;6;2750;1220;2,1220,7;2750,1220;2730,1220;1,1220,5;1,366;2748,1220
 
@@ -257,6 +263,7 @@ a04n;6;2750;1220;2,1220,7;2750,1220;2730,1220;1,1220,5;1,366;2748,1220
 ...       f"in {res.lower_bound_bins} bins of "
 ...       f"size {res.bin_width}*{res.bin_height}.")
 'a04n' with 5/16 items with area 9910948 in 3 bins of size 2750*1220.
+
 >>> print(space.to_str(y))
 a04n;5;2750;1220;2698,1;2750,1,12;2750,1216;2750,1215;2750,1160
 """

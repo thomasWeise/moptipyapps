@@ -1745,6 +1745,7 @@ def compute_finish_time(start_time: float, amount: int,
 
     Here, the production time is 10 time units / 1 product unit, valid until
     end time 100.
+
     >>> compute_finish_time(0.0, 1, np.array((10.0, 100.0), np.float64))
     10.0
 
@@ -1753,6 +1754,7 @@ def compute_finish_time(start_time: float, amount: int,
     periods are cyclic, this is OK: we would be halfway through the third
     production period when the request comes in. It will consume 10 time units
     and be done at time unit 260.
+
     >>> compute_finish_time(250.0, 1, np.array((10.0, 100.0)))
     260.0
 
@@ -1761,6 +1763,7 @@ def compute_finish_time(start_time: float, amount: int,
     use 10 time units, meaning that its production is exactly finished when
     the production time validity ends.
     It will be finished at time step 100.
+
     >>> compute_finish_time(90.0, 1, np.array((10.0, 100.0)))
     100.0
 
@@ -1768,12 +1771,14 @@ def compute_finish_time(start_time: float, amount: int,
     However, we begin producing 1 product unit at time step 95. This unit would
     use 10 time units. It will use these units, even though this extends beyond
     the end of the production time window.
+
     >>> compute_finish_time(95.0, 1, np.array((10.0, 100.0)))
     105.0
 
     Now we have two production periods. The production begins again at time
     step 95. It will use 10 time units, even though this extends into the
     second period.
+
     >>> compute_finish_time(95.0, 1, np.array((10.0, 100.0, 20.0, 200.0)))
     105.0
 
@@ -1796,6 +1801,7 @@ def compute_finish_time(start_time: float, amount: int,
     taking us over the edge into the third interval at time unit 145. Here we
     do two units using 50 time units. We ahen are at time 245, which wraps back
     to 45. So the remaining 5 units take 10 time units each.
+
     >>> compute_finish_time(95.0, 10, np.array((
     ...     10.0, 100.0, 20.0, 140.0, 50.0, 200.0)))
     295.0
@@ -1805,6 +1811,7 @@ def compute_finish_time(start_time: float, amount: int,
     This is the same as the last example, but this time, the last interval
     (3 time units until 207) is skipped over by the long production of the
     second 50-time-unit product.
+
     >>> compute_finish_time(95.0, 10, np.array((
     ...     10.0, 100.0, 20.0, 140.0, 50.0, 200.0,  3.0, 207.0)))
     295.0
@@ -1812,6 +1819,7 @@ def compute_finish_time(start_time: float, amount: int,
     295
 
     Production unit times may extend beyond the intervals.
+
     >>> compute_finish_time(0.0, 5, np.array((1000.0, 100.0, 10.0, 110.0)))
     5000.0
     >>>
