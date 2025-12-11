@@ -1,0 +1,98 @@
+moptipyapps.prodsched package
+=============================
+
+.. automodule:: moptipyapps.prodsched
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.prodsched.objectives
+
+Submodules
+----------
+
+moptipyapps.prodsched.instance module
+-------------------------------------
+
+.. automodule:: moptipyapps.prodsched.instance
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.instances module
+--------------------------------------
+
+.. automodule:: moptipyapps.prodsched.instances
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.mfc\_generator module
+-------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.mfc_generator
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.multistatistics module
+--------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.multistatistics
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.rop\_experiment module
+--------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.rop_experiment
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.rop\_multisimulation module
+-------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.rop_multisimulation
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.rop\_simulation module
+--------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.rop_simulation
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.simulation module
+---------------------------------------
+
+.. automodule:: moptipyapps.prodsched.simulation
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.statistics module
+---------------------------------------
+
+.. automodule:: moptipyapps.prodsched.statistics
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.statistics\_collector module
+--------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.statistics_collector
+   :members:
+   :show-inheritance:
+   :undoc-members:

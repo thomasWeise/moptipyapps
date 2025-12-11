@@ -1,0 +1,140 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.rop_experiment — moptipyapps 0.8.77 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=745575ee"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/rop_experiment.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.77 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.rop_experiment</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.rop_experiment</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A small template for ROP-based experiments.</span>
+
+<span class=sd>This experiment uses the NSGA-II algorithm to optimize Re-Order-Points (ROPs)</span>
+<span class=sd>to achieve both a high worst-case fillrate and a low worst-case average stock</span>
+<span class=sd>level.</span>
+<span class=sd>"""</span>
+
+
+<span class=kn>import</span><span class=w> </span><span class=nn>argparse</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.mo.nsga2</span><span class=w> </span><span class=kn>import</span> <span class=n>NSGA2</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.experiment</span><span class=w> </span><span class=kn>import</span> <span class=n>run_experiment</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.mo_execution</span><span class=w> </span><span class=kn>import</span> <span class=n>MOExecution</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.mo.problem.weighted_sum</span><span class=w> </span><span class=kn>import</span> <span class=n>WeightedSum</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.intspace.op0_random</span><span class=w> </span><span class=kn>import</span> <span class=n>Op0Random</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.intspace.op1_mnormal</span><span class=w> </span><span class=kn>import</span> <span class=n>Op1MNormal</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.intspace.op2_uniform</span><span class=w> </span><span class=kn>import</span> <span class=n>Op2Uniform</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.intspace</span><span class=w> </span><span class=kn>import</span> <span class=n>IntSpace</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.console</span><span class=w> </span><span class=kn>import</span> <span class=n>logger</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instances</span><span class=w> </span><span class=kn>import</span> <span class=n>get_instances</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.multistatistics</span><span class=w> </span><span class=kn>import</span> <span class=n>MultiStatisticsSpace</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.objectives.max_stocklevel</span><span class=w> </span><span class=kn>import</span> <span class=n>MaxStockLevel</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.objectives.worst_and_mean_fill_rate</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>WorstAndMeanFillRate</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.rop_multisimulation</span><span class=w> </span><span class=kn>import</span> <span class=n>ROPMultiSimulation</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>moptipyapps_argparser</span>
+
+
+<div class=viewcode-block id=run>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.rop_experiment.run>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>run</span><span class=p>(</span><span class=n>dest</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>instances</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>n_inst</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>n_runs</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+        <span class=n>max_fes</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>ps</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Run the experiment.</span>
+
+<span class=sd>    :param dest: the destination directory</span>
+<span class=sd>    :param instances: the directory with the instances</span>
+<span class=sd>    :param n_inst: the number of instances</span>
+<span class=sd>    :param n_runs: the number of runs</span>
+<span class=sd>    :param max_fes: the maximum FEs</span>
+<span class=sd>    :param ps: the population size</span>
+<span class=sd>    """</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Beginning experiment with dest=</span><span class=si>{</span><span class=n>dest</span><span class=si>!r}</span><span class=s2>, instances=</span><span class=si>{</span><span class=n>instances</span><span class=si>!r}</span><span class=s2>"</span>
+           <span class=sa>f</span><span class=s2>", n_inst=</span><span class=si>{</span><span class=n>n_inst</span><span class=si>}</span><span class=s2>, n_runs=</span><span class=si>{</span><span class=n>n_runs</span><span class=si>}</span><span class=s2>, and max_fes=</span><span class=si>{</span><span class=n>max_fes</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=n>use_dest</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span>
+    <span class=n>use_dest</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Destination folder is </span><span class=si>{</span><span class=n>use_dest</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=n>use_insts</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>instances</span><span class=p>)</span>
+    <span class=n>use_insts</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Instances folder is </span><span class=si>{</span><span class=n>use_insts</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_inst</span><span class=p>,</span> <span class=s2>"n_inst"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>128</span><span class=p>)</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>max_fes</span><span class=p>,</span> <span class=s2>"max_fes"</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>10</span> <span class=o>**</span> <span class=mi>10</span><span class=p>)</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>ps</span><span class=p>,</span> <span class=s2>"ps"</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>16384</span><span class=p>)</span>
+
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Loading </span><span class=si>{</span><span class=n>n_inst</span><span class=si>}</span><span class=s2> instances from </span><span class=si>{</span><span class=n>use_insts</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=n>insts</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Instance</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>get_instances</span><span class=p>(</span><span class=n>n_inst</span><span class=p>,</span> <span class=n>instances</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>insts</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_inst</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Could not load required instances."</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Loaded </span><span class=si>{</span><span class=n>n_inst</span><span class=si>}</span><span class=s2> instances from </span><span class=si>{</span><span class=n>use_insts</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=n>n_prod</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>insts</span><span class=p>:</span>
+        <span class=k>if</span> <span class=n>n_prod</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>n_prod</span> <span class=o>=</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_products</span>
+        <span class=k>elif</span> <span class=n>n_prod</span> <span class=o>!=</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_products</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Inconsistent number of products!"</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_prod</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"No instances?"</span><span class=p>)</span>
+
+    <span class=n>search_space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>IntSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>IntSpace</span><span class=p>(</span><span class=n>n_prod</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>63</span><span class=p>)</span>
+    <span class=n>op0</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Op0Random</span><span class=p>]</span> <span class=o>=</span> <span class=n>Op0Random</span><span class=p>(</span><span class=n>search_space</span><span class=p>)</span>
+    <span class=n>op1</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Op1MNormal</span><span class=p>]</span> <span class=o>=</span> <span class=n>Op1MNormal</span><span class=p>(</span><span class=n>search_space</span><span class=p>,</span> <span class=n>sd</span><span class=o>=</span><span class=mf>2.5</span><span class=p>)</span>
+    <span class=n>op2</span><span class=p>:</span> <span class=n>Final</span> <span class=o>=</span> <span class=n>Op2Uniform</span><span class=p>()</span>
+    <span class=n>algo</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>NSGA2</span><span class=p>]</span> <span class=o>=</span> <span class=n>NSGA2</span><span class=p>(</span><span class=n>op0</span><span class=p>,</span> <span class=n>op1</span><span class=p>,</span> <span class=n>op2</span><span class=p>,</span> <span class=n>ps</span><span class=p>,</span> <span class=mi>1</span> <span class=o>/</span> <span class=nb>min</span><span class=p>(</span><span class=mi>16</span><span class=p>,</span> <span class=n>ps</span><span class=p>))</span>
+    <span class=n>encoding</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>ROPMultiSimulation</span><span class=p>]</span> <span class=o>=</span> <span class=n>ROPMultiSimulation</span><span class=p>(</span><span class=n>insts</span><span class=p>)</span>
+    <span class=n>f1</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>WorstAndMeanFillRate</span><span class=p>]</span> <span class=o>=</span> <span class=n>WorstAndMeanFillRate</span><span class=p>()</span>
+    <span class=n>f2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>MaxStockLevel</span><span class=p>]</span> <span class=o>=</span> <span class=n>MaxStockLevel</span><span class=p>()</span>
+    <span class=n>ws</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>WeightedSum</span><span class=p>]</span> <span class=o>=</span> <span class=n>WeightedSum</span><span class=p>((</span><span class=n>f1</span><span class=p>,</span> <span class=n>f2</span><span class=p>),</span> <span class=p>(</span>
+        <span class=p>(</span><span class=mi>1</span> <span class=o>/</span> <span class=p>(</span><span class=n>f1</span><span class=o>.</span><span class=n>upper_bound</span><span class=p>()</span> <span class=o>-</span> <span class=n>f1</span><span class=o>.</span><span class=n>lower_bound</span><span class=p>())),</span> <span class=mi>1</span> <span class=o>/</span> <span class=p>(</span><span class=mi>2</span> <span class=o>*</span> <span class=n>n_prod</span><span class=p>)))</span>
+    <span class=n>solution_space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>MultiStatisticsSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>MultiStatisticsSpace</span><span class=p>(</span><span class=n>insts</span><span class=p>)</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__setup</span><span class=p>(</span><span class=n>_</span><span class=p>)</span> <span class=o>-></span> <span class=n>MOExecution</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set up the experiment.</span>
+
+<span class=sd>        :return: the execution</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=n>MOExecution</span><span class=p>()</span>
+                <span class=o>.</span><span class=n>set_search_space</span><span class=p>(</span><span class=n>search_space</span><span class=p>)</span>
+                <span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>algo</span><span class=p>)</span>
+                <span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>solution_space</span><span class=p>)</span>
+                <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>ws</span><span class=p>)</span>
+                <span class=o>.</span><span class=n>set_encoding</span><span class=p>(</span><span class=n>encoding</span><span class=p>)</span>
+                <span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=n>max_fes</span><span class=p>)</span>
+                <span class=o>.</span><span class=n>set_log_improvements</span><span class=p>(</span><span class=kc>True</span><span class=p>))</span>
+
+    <span class=n>run_experiment</span><span class=p>(</span><span class=n>base_dir</span><span class=o>=</span><span class=n>use_dest</span><span class=p>,</span> <span class=n>instances</span><span class=o>=</span><span class=p>(</span><span class=k>lambda</span><span class=p>:</span> <span class=s2>"all"</span><span class=p>,</span> <span class=p>),</span>
+                   <span class=n>setups</span><span class=o>=</span><span class=p>(</span><span class=n>__setup</span><span class=p>,</span> <span class=p>),</span> <span class=n>n_runs</span><span class=o>=</span><span class=n>n_runs</span><span class=p>,</span>
+                   <span class=n>pre_warmup_fes</span><span class=o>=</span><span class=mi>2</span><span class=p>,</span> <span class=n>perform_warmup</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span>
+                   <span class=n>perform_pre_warmup</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span></div>
+
+
+
+<span class=c1># Run the experiment from the command line</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span> <span class=s2>"ROP-based MFC Optimization"</span><span class=p>,</span>
+        <span class=s2>"Run a small experiment with ROP-based MFC optimization."</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the directory to store the experimental results under"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./results/"</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"insts"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the directory with the instances"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./instances/"</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"n_inst"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the number of instances"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=nb>int</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=mi>11</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"n_runs"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the number of runs"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=nb>int</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=mi>31</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"max_fes"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the number of FEs per run"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=nb>int</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=mi>8192</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"ps"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the population size of NSGA-II"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=nb>int</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=mi>64</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+    <span class=n>run</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>insts</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>n_inst</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>n_runs</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>max_fes</span><span class=p>,</span>
+        <span class=n>args</span><span class=o>.</span><span class=n>ps</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.77 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.rop_experiment</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

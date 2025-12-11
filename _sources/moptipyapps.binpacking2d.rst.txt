@@ -1,0 +1,92 @@
+moptipyapps.binpacking2d package
+================================
+
+.. automodule:: moptipyapps.binpacking2d
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.binpacking2d.encodings
+   moptipyapps.binpacking2d.instgen
+   moptipyapps.binpacking2d.objectives
+
+Submodules
+----------
+
+moptipyapps.binpacking2d.bks module
+-----------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.bks
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.experiment module
+------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.experiment
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.instance module
+----------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.instance
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.make\_instances module
+-----------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.make_instances
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.packing module
+---------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.packing
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.packing\_result module
+-----------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.packing_result
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.packing\_space module
+----------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.packing_space
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.packing\_statistics module
+---------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.packing_statistics
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.plot\_packing module
+---------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.plot_packing
+   :members:
+   :show-inheritance:
+   :undoc-members:
