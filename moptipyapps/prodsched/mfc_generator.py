@@ -1,8 +1,38 @@
 """
 Methods for generating MFC instances.
 
-Here we provide some basic utilities for generating deterministic variants of
-instances such as those used in the paper [1] by Thürer et al.
+In the module :mod:`~moptipyapps.prodsched.instance`, we provide the class
+:class:`~moptipyapps.prodsched.instance.Instance`. Objects of this class
+represent a fully deterministic production scheduling scenario. They prescribe
+demands (:class:`~moptipyapps.prodsched.instance.Demand`) arriving at fixed
+points in time in the system and work stations that need fixed amounts of
+work times per product during certain time periods.
+This allows us to create fully reproducible simulations
+(:mod:`~moptipyapps.prodsched.simulation`) that show what a factory would do
+to satisfy the demands.
+
+But where does such instance data come from?
+
+In the existing research on material flow control, no such fixed instances
+exist. We invented them. Instead, the existing research [1] uses fixed numbers
+of products and machines, fixed routes of products through machines, and
+random distributions to generate demands and work times.
+
+So we create the function :func:`~default_stations` that creates the standard
+work time distributions for the standard work stations. We also create the
+function :func:`~default_products` that creates the default distributions
+for the default products.
+
+The function :func:`sample_mfc_instance` then creates a material flow instance
+following these distributions based on a given random seed.
+This allows us to create scenarios that follow the same structure and random
+distributions as prescribed in the paper [1] by Thürer et al.
+However, our instances are fully deterministic.
+
+Once could not create a certain number of such instances and average
+performance metrics over simulations on them. This would likely yield metrics
+of reasonable accuracy, while allowing us to reproduce, analyze, and trace
+every single production decision if need be.
 
 >>> from moptipyapps.utils.sampling import Gamma
 >>> inst = sample_mfc_instance([

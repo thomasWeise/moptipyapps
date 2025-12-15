@@ -1,11 +1,112 @@
 """
 A production scheduling instance.
 
-Production instances have names :attr:`Instance.name`.
+Each production scheduling instance has a given :attr:`~Instance.name`.
+It represents once concrete scenario of a material flow / factory production
+scenario.
+The factory has :attr:`~Instance.n_stations` work stations, e.g., machines
+that perform a certain production step.
+The factory also produces a set of :attr:`~Instance.n_products` different
+products.
+Each product passes through a set of work stations in a certain, pre-defined
+order (and may even pass through the same machine multiple times).
+The route each product takes is defined by the :attr:`~Instance.routes`
+matrix.
+Each product unit requires a certain time at each work station.
+These times follow a certain random distribution.
 
-Notice that production times are used in a cycling fashion.
-The time when a certain product is finished can be computed via
-:func:`~compute_finish_time` in an efficient way.
+Ther are customer demands (:class:`~Demand`) that appear in the system at
+certain :attr:`~Demand.arrival` times. The demand is not known to the system
+before its :attr:`~Demand.arrival` time, so we cannot really anticipate it.
+However, when it arrives at the :attr:`~Demand.arrival` time, it has a certain
+:attr:`~Demand.deadline` by which it should be completed. Normally, this is
+the same as the :attr:`~Demand.arrival` time, but it could also be later in
+some scenarios. Each demand has a unique :attr:`~Demand.demand_id` and is
+issued by a certain customer with a certain :attr:`~Demand.customer_id`.
+In many MFC scenarios, the customers do not matter.
+What always matters is the :attr:`~Demand.product_id`, though, which
+identifies the product that the customer ordered, as well as the
+:attr:`~Demand.amount` of that product that the customer ordered (which is
+normally 1, but could be an arbitary positive integer).
+
+To summarize so far:
+We have a factory that can produce :attr:`~Instance.n_products` different
+products, which have IDs from `0` to `n_products-1`.
+The factory uses :attr:`~Instance.n_stations` work stations (with IDs from
+`0` to `n_stations-1`) for that purpose.
+The :attr:`~Instance.routes` matrix defines which product is processed by
+which work station and in which order.
+The product with ID `i` passes through the work stations `routes[i]`, which
+is tuple of work station IDs.
+
+The attr:`~Instance.n_customer` customers issue attr:`~Instance.n_demand`
+demands. Each demand has a unique ID :attr:`~Demand.demand_id` and appears in
+the system at the :attr:`~Demand.arrival` time. It is for
+:attr:`~Demand.amount` units of the product with
+ID :attr:`~Demand.product_id`.
+It should be satisfied until :attr:`~Demand.deadline`.
+
+So the factory is producing the products with the goal to satisfy the demands
+as soon as possible.
+This leaves the last piece of the puzzle:
+How long does it take to manufacture a unit of a given product?
+This is regulated by the three-dimensional matrix
+:attr:`~Instance.station_product_unit_times`.
+If we want to produce one unit of a product with a given ID `p`, we can use
+the :attr:`~Instance.routes` matrix (`routes[p]`) to determine through which
+machines this unit needs to pass.
+If it arrives at a machine with ID `m', then we look up the
+:class:`~numpy.ndarray` of prodcution slots and times under
+`station_product_unit_times[m][p]`.
+
+This array stores (flat) pairs of time window ends and unit production times.
+The function :func:`~compute_finish_time` then tells us when the unit of the
+production would be finished on this machine.
+It would pass to the next machine prescribed in `routes[p]` until it has
+passed all machines and is finished.
+
+Notice that all the elements of an :class:`Instance` are **deterministic**.
+The demands come in at specific, fixed times and are for fixed amounts of
+fixed products.
+They are stored in :attr:`~Instance.demands`.
+Of course, any realistic simulation would only get to *see* them at their
+:attr:`~Demand.arrival` times, but they are from a deterministic sequence
+nonetheless.
+Also, the production times are fixed and stored in the 3D array
+:attr:`~Instance.station_product_unit_times`.
+
+Even the initial amount :attr:`~Instance.warehous_at_t0` of products that is
+available in the warehouse at time step 0 is fixed.
+Each instance also prescribes a fixed warm-up time
+:attr:`~Instance.time_end_warmup` (that must be ignored during the performance
+metric computation) and end time :attr:`~Instance.time_end_measure` for the
+simulation.
+
+Everything is specified, deterministic, and fixed.
+
+Of course, that being said, you can still generate instances randomly.
+Indeed, in :mod:`~moptipyapps.prodsched.mfc_generator`, we do exactly that.
+So you get the best of both worlds:
+You can generate many different instances where work times and demands follow
+the distributions of your liking.
+And you can run fully-reproducible simulations (using the base class
+:class:`~moptipyapps.prodsched.simulation.Simulation`).
+
+Because if all events and times that would normally be "random" are hard-coded
+in an :class:`~Instance`, then two simulations with the same "factory
+operating system" will yield the exactly same behavior.
+
+Instances can be converted to a text stream that you can store in a text file
+by using the function :func:`to_stream`.
+You can load them from a text stream using function :func:`from_stream`.
+If you want to store multiple instances in a directory as text files, you can
+use :func:`store_instances`.
+To load a set of instances from a directory, you can use
+:func:`load_instances`.
+The class :class:`~moptipyapps.prodsched.simulation.Simulation` in module
+:mod`:~moptipyapps.prodsched.simulation` offers the ability to run a fully
+reproducible simulation based on an :class:`~Instance` and to pipe out events
+and data via a :class:`~moptipyapps.prodsched.simulation.Listener` interface.
 
 >>> name = "my_instance"
 
@@ -257,6 +358,19 @@ class Demand(Iterable[int | float]):
     """
     The record for demands.
 
+    Each demand has an :attr:`~Demand.arrival` time at which point it enters
+    the system. It has a unique :attr:`~Demand.demand_id`. It has a
+    :attr:`~Demand.deadline`, at which point the customer
+    :attr:`~Demand.customer_id` who issed the demand expects to receive the
+    :attr:`~Demand.amount` units of the product :attr:`~Demand.product_id`
+    that they ordered.
+
+    Demands with the :attr:`~Demand.measure` flag set fall into the simulation
+    time window where performance metrics are gathered. Demands where
+    :attr:`~Demand.arrival` is `False` will be irgnored during the performance
+    evaluation, because they fall into the setup time. Their processing must
+    still be simulated, though.
+
     >>> Demand(arrival=0.6, deadline=0.8, demand_id=1,
     ...        customer_id=2, product_id=6, amount=12, measure=True)
     Demand(arrival=0.6, deadline=0.8, demand_id=1, customer_id=2,\
@@ -337,7 +451,7 @@ class Demand(Iterable[int | float]):
 
     def __str__(self) -> str:
         """
-        Get a string representation of the demand.
+        Get a short string representation of the demand.
 
         :return: the string representation
 
@@ -423,7 +537,7 @@ def __to_tuple(source: Iterable[int | float],
                cache: Callable, empty_ok: bool = False,
                type_var: type = int) -> tuple:
     """
-    Convert an iterable of type integer to a tuple.
+    Convert an iterable to a tuple with values of a given type.
 
     :param source: the data source
     :param cache: the cache
@@ -1041,6 +1155,8 @@ class Instance(Component):
             These are key-value pairs with keys that are not used by the
             instance. They have no impact on the instance performance, but may
             explain settings of an instance generator.
+        :raises ValueError: If the data is inconsistent or otherwise not
+            permissible.
         """
         use_name: Final[str] = sanitize_name(name)
         if name != use_name:
@@ -1089,13 +1205,21 @@ class Instance(Component):
         #: must pass
         self.routes: Final[tuple[tuple[int, ...], ...]] = _make_routes(
             n_products, n_stations, routes, cache)
-        #: The demands: Each demand is a tuple of demand_id, customer_id,
-        #: product_id, amount, release_time, and deadline.
-        #: The customer makes their order at time step release_time.
-        #: They expect to receive their product by the deadline.
-        #: The demands are sorted by release time and then deadline.
+
+        #: The demands: Each demand stores the :attr:`~Demand.demand_id`,
+        #: :attr:`~Demand.customer_id`, :attr:`~Demand.product_id`,
+        #: :attr:`~Demand.amount`, :attr:`~Demand.arrival` time, and
+        #: :attr:`~Demand.deadline`, as well as whether it should be
+        #: measured during the simulation (:attr:`~Demand.measure`).
+        #: The customer makes their order at time step
+        #: :attr:`~Demand.arrival`.
+        #: They expect to receive their product by the
+        #: :attr:`~Demand.deadline` .
+        #: The demands are sorted by :attr:`~Demand.arrival` and then
+        #: :attr:`~Demand.deadline` .
         #: The release time is always > 0.
-        #: The deadline is always >= release time.
+        #: The :attr:`~Demand.arrival` is always >=
+        #: :attr:`~Demand.deadline` .
         #: Demand ids are unique.
         self.demands: Final[tuple[Demand, ...]] = _make_demands(
             n_products, n_customers, n_demands, demands, time_end_warmup,
@@ -1151,6 +1275,10 @@ class Instance(Component):
         #: Additional information about the nature of the instance can be
         #: stored here. This has no impact on the behavior of the instance,
         #: but it may explain, e.g., settings of an instance generator.
+        #: The module :mod:`~moptipyapps.prodsched.mfc_generator` which is
+        #: used to randomly generate instances, for example, makes use of this
+        #: data to store the random number seed as well as the distributions
+        #: that were used to create the instances.
         self.infos: Final[Mapping[str, str]] = _make_infos(infos)
 
     def __str__(self):
@@ -1908,11 +2036,21 @@ def instance_sort_key(inst: Instance) -> str:
     return inst.name
 
 
-def load_instances(source: str) -> tuple[Instance, ...]:
+def load_instances(
+        source: str, file_filter: Callable[[Path], bool] = lambda _: True)\
+        -> tuple[Instance, ...]:
     """
     Load the instances from a given irectory.
 
+    This function iterates over the files in a directory and applies
+    :func:`from_stream` to each text file (ends with `.txt`) that it finds
+    and that is accepted by the filter `file_filter`. (The default file
+    filter always returns `True`, i.e., accepts all files.)
+
     :param source: the source directory
+    :param file_filter: a filter for files. Here you can provide a function
+        or lambda that returns `True` if a file should be loaded and `False`
+        otherwise. Notice that only `.txt` files are considered either way.
     :return: the tuple of instances
 
     >>> inst1 = Instance(
@@ -1943,10 +2081,12 @@ def load_instances(source: str) -> tuple[Instance, ...]:
     >>> res == (inst1, inst2)
     True
     """
+    if not callable(file_filter):
+        raise type_error(file_filter, "file_filter", call=True)
     src: Final[Path] = directory_path(source)
     instances: Final[list[Instance]] = []
     for file in src.list_dir(files=True, directories=False):
-        if file.endswith(".txt"):
+        if file.endswith(".txt") and file_filter(file):
             with file.open_for_read() as stream:
                 instances.append(from_stream(stream))
     if list.__len__(instances) <= 0:

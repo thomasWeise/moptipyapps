@@ -5,7 +5,43 @@ For simulation a production system, we can build on the class
 :class:`~Simulation`. This base class offers the support to implement almost
 arbitrarily complex production system scheduling logic.
 The simulations here a fully deterministic and execute a given MFC scenario
-given as an :class:`~moptipyapps.prodsched.instance.Instance`.
+given as an :mod:`~moptipyapps.prodsched.instance`, i.e., an object of type
+:class:`~moptipyapps.prodsched.instance.Instance`.
+
+The :class:`~Simulation` class offers a core backbone of a priority-queue
+based discrete event simulation. These events are strictly related to the
+production scheduling task, which allows for an efficient implementation.
+The :class:`~Simulation` is driven by the data of an
+:mod:`~moptipyapps.prodsched.instance`. This instance prescribes when new
+demands (:class:`~moptipyapps.prodsched.instance.Demand`) enter the system,
+how long certain production steps take, and which route each product type
+takes through the system, i.e., by which work stations it is processed in
+which order.
+This is the core logic that drives the simulation.
+
+A simulation is executed by invoking the method :meth:`~Simulation.ctrl_run`.
+Then, the event loop begins and it invokes the `event_*` methods as need be.
+For example, when a customer demand for a certain product comes in or if some
+units of a given product become available, the method
+:meth:`~Simulation.event_product` is invoked.
+You can overwrite this method to decide what to do in such cases.
+For example, you could invoke :meth:`~Simulation.act_demand_satisfied` to mark
+a :class:`~moptipyapps.prodsched.instance.Demand` as satisfied, you could
+invoke :meth:`~Simulation.act_produce` to tell the factory to produce some
+units of a given product, you could invoke
+:meth:`~Simulation.act_store_in_warehouse` to store some units of a product in
+the warehouse or use :meth:`~Simulation.act_take_from_warehouse` to take some
+out.
+In other words, in the `event_*` methods, you implement the logic, the
+operating system for your factory.
+Their default implementations in this class just produce product units on
+demand and do not really perform predictive production.
+
+Each :class:`~Simulation` also needs an instance of :class:`~Listener`.
+The :class:`~Listener` is informed about what happens and sees all the
+production events. It is used to gather statistics and information --
+independently of how you implement the `event_*` methods. This allows us
+to compare factories that run on very different logic.
 
 Simulations have three groups of methods:
 
@@ -29,14 +65,23 @@ order the production of product units directly upon the arrival of customer
 demands. In the :class:`~moptipyapps.prodsched.rop_simulation.ROPSimulation`
 on the other hand, products are produced base on re-order points.
 
-## We have the following `ctrl_*` methods:**
+
+**`ctrl_*` Methods:**
+
+We have the following `ctrl_*` methods, which are invoked from outside to
+start, stop, or reset the simulation.
 
 - :meth:`~Simulation.ctrl_run` runs the simulation.
 - :meth:`~Simulation.ctrl_reset` resets the simulator so that we can start it
   again. If you want to re-use a simulation, you need to first invoke
   :meth:`~Simulation.ctrl_reset` to clear the internal state.
 
-## We have the following `event_*` methods:**
+
+**`event_*` Methods:**
+
+We have the following `event_*` methods, which implement the core logic of
+the factory. They can be overwritten to ralize different production
+scenarios.
 
 - :meth:`~Simulation.event_product` is invoked by the simulation if one of the
   following three things happened:
@@ -50,8 +95,93 @@ on the other hand, products are produced base on re-order points.
   In this method, you can store product into the warehouse, remove product
   from the warehouse, and/or mark a demand as completed.
 
+- :meth:`~Simulation.event_station` is invoked by the simulation if a work
+  station became idle *and* at least one production :class:`~Job` is queued
+  at the station.
+  Now you can decide which of the queued to jobs to execute next by invoking
+  :meth:`~Simulation.act_exec_job`. The job you pass into this method will
+  then immediately begin production at the work station.
 
-## Examples
+
+**`act_*` Methods:**
+
+The `act_*` methods are invoked from inside the `event_*` methods.
+They cause the production system to perform certain actions.
+The following `act_*` methods exist:
+
+- :meth:`~Simulation.act_store_in_warehouse` can be invoked from inside
+  :meth:`~Simulation.event_product`. It tells the system to *add* a certain
+  amount of units of a given product to the warehouse.
+  Notice that these units of product must have come from somewhere.
+  They could be the result of a completed production job or could have
+  occurred at the simulation startup as initial warehouse contents.
+  You cannot just "make up" new product units without violating the integrity
+  of the simulation.
+
+- :meth:`~Simulation.act_take_from_warehouse` can be invoked from inside
+  :meth:`~Simulation.event_product`. It tells the system to take a certain
+  amount of units *out* of the warehouse. You cannot take out more units from
+  the warehouse than currently stored inside it nor can you take out a
+  negative amount of units.
+
+- :meth:`~Simulation.act_demand_satisfied` can be invoked from inside
+  :meth:`~Simulation.event_product`. It tells the system that a certain
+  :class:`~moptipyapps.prodsched.instance.Demand` has been fulfilled.
+  If you do that, you must make sure to remove the corresponding amount of
+  product units from the system. They could have just been produced or they
+  could have been taken from the warehouse. However, demands can only be
+  satisfied using actually existing units of product. If you just "make up"
+  product units, you will destroy the integrity of the simulation.
+
+- :meth:`~Simulation.act_produce` can be invoked from inside
+  :meth:`~Simulation.event_product`. This instructs the system to begin
+  producing a certain amount of a given product. This will lead to the
+  creation of a :class:`~Job` record. This record will enter the queue of
+  the first work station that the product should pass through. It will appear
+  in :meth:`~Simulation.event_station` once this work station gets idle (or
+  right away, if it currently is idle).
+
+- :meth:`~Simulation.act_exec_job` is invoked from inside
+  :meth:`~Simulation.event_station`. Basically,
+  :meth:`~Simulation.event_station` gets called if there are one or multiple
+  production :class:`~Job` records queued at a work station and the work
+  station is idle (or becomes idle). Then, you can decide which of the jobs to
+  begin working on next on that work station. You will pass the corresponding
+  :class:`~Job` record to :meth:`~Simulation.act_exec_job`.
+  Once that job is completed on the current work station, it will re-appear in
+  the :meth:`~Simulation.event_station` invocation for the *next* work station
+  it needs to pass through. Once it completes at its last work station, its
+  produced :attr:`~Job.amount` of product :attr:`~Job.product_id` will appear
+  in a :meth:`~Simulation.event_product` invocation for the corresponding
+  product.
+
+Through this simple interface, we can control a relatively complex material
+flow simulation.
+In :mod:`~moptipyapps.prodsched.rop_simulation`, we extend this simulation
+class by implementing a re-order point based approach.
+Matter of fact, we can extend this basic simulation using all kinds of
+production logic to drive our simulated factory.
+
+The question then is: If all these approaches overwrite the `event_*` methods
+in different ways, how can we get a clear picture of their performance?
+No problem:
+For this purpose, the class :class:`~Listener` exists.
+Its methods are automatically invoked by the simulation and allow us to track
+exactly what happens and when, independently of the actual simulation logic.
+The class :class:`~PrintingListener` implements these methods to print the
+events to the standard output.
+In :mod:`~moptipyapps.prodsched.statistics_collector`, we implement the class
+:class:`~moptipyapps.prodsched.statistics_collector.StatisticsCollector` which
+instead uses the events to fill a
+:class:`~moptipyapps.prodsched.statistics.Statistics` record (see module
+:mod:`~moptipyapps.prodsched.statistics`).
+This record collects all the performance data that is relevant for judging the
+efficiency of a production scheduling approach.
+
+**Examples:**
+
+Let's now look at some basic examples of the production scheduling / material
+flow control simulation.
 
 Here we have a very easy production scheduling instance.
 There is 1 product that passes through 2 stations.
@@ -234,7 +364,7 @@ T=144.0 -- finished
 
 Now we want to stop the simulation measurement period before the last
 job completes. Notice that the last production jobs after time unit
-81.xxx are no longer performed, because their end falls outside of the
+81 are no longer performed, because their end falls outside of the
 measurement period.
 
 >>> instance = Instance(

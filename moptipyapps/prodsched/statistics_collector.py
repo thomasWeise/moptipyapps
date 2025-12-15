@@ -66,7 +66,7 @@ from moptipyapps.prodsched.statistics import Statistics
 
 
 class StatisticsCollector(Listener):
-    """A listener for simulation events."""
+    """A listener for simulation events that collects basic statistics."""
 
     def __init__(self, instance: Instance) -> None:
         """

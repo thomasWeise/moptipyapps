@@ -69,7 +69,18 @@ def get_instances(n: int, inst_dir: str) -> tuple[Instance, ...]:
     newly: Final[list[Instance]] = []
 
     if has_instances:
-        for inst in load_instances(use_dir):
+        def __filter(p: Path, seedstrs=tuple(map(
+                str.casefold, map(hex, seeds)))) -> bool:
+            """
+            Filter the file names.
+
+            :param p: the path
+            :param seedstrs: the internal seed array
+            :return: `True` if the file name matches, else `False`
+            """
+            return any(map(str.casefold(p.basename()).__contains__, seedstrs))
+
+        for inst in load_instances(use_dir, __filter):
             if INFO_RAND_SEED in inst.infos:
                 seed = int(inst.infos[INFO_RAND_SEED], 16)
                 if seed in seeds:
