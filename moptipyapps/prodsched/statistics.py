@@ -4,6 +4,10 @@ A statistics record for the simulation.
 This module provides a record with statistics derived from one single
 MFC simulation. It can store values such as the mean fill rate or the
 mean stock level.
+Such statistics records are filled in by instances of the
+:class:`~moptipyapps.prodsched.statistics_collector.StatisticsCollector`
+plugged into the
+:class:`~moptipyapps.prodsched.simulation.Simulation`.
 """
 
 from itertools import chain
@@ -54,32 +58,88 @@ __STATS: tuple[tuple[str, Callable[[
 
 
 class Statistics:
-    """A statistics record based on production scheduling."""
+    """
+    A statistics record based on production scheduling.
+
+    It provides the following statistics:
+
+    - :attr:`~immediate_rates`: The per-product-fillrate, i.e., the fraction
+      of demands of a given product that were immediately fulfilled when
+      arriving in the system (i.e., that were fulfilled by using product that
+      was available in the warehouse/in stock).
+      Higher values are good.
+    - :attr:`~immediate_rate`: The overall fillrate, i.e., the total fraction
+      of demands that were immediately fulfilled upon arrival in the system
+      over all demands. That is, this is the fraction of demands that were
+      fulfilled by using product that was available in the warehouse/in stock.
+      Higher values are good.
+    - :attr:`~waiting_times`: The per-product waiting times ("CWT") for the
+      demands that came in but could *not* immediately be fulfilled. These are
+      the demands for a given product that were, so to say, not covered by the
+      fillrate/:attr:`~immediate_rate`.  If all demands of a product could
+      immediately be satisfied, then this is `None`.
+      Otherwise, smaller values are good.
+    - :attr:`~waiting_time`: The overall waiting times ("CWT") for the demands
+      that came in but could *not* immediately be fulfilled. These are all the
+      demands for a given product that were, so to say, not covered by the
+      fillrate/:attr:`~immediate_rate`. If all demands could immediately be
+      satisfied, then this is `None`.
+      Otherwise, smaller values are good.
+    - :attr:`~production_times`: The per-product times that producing one unit
+      of the product takes from the moment that a production job is created
+      until it is completed. Smaller values of this "TRP" are better.
+    - :attr:`~production_time`: The overall statistics on the times that
+      producing one unit of any product takes from the moment that a
+      production job is created until it is completed. Smaller values this
+      "TRP" are better.
+    - :attr:`~fulfilled_rates`: The per-product fraction of demands that were
+      satisfied. Demands for a product may remain unsatisfied if they have not
+      been satisfied by the end of the simulation period. Larger values are
+      better.
+    - :attr:`~fulfilled_rate`: The fraction of demands that were satisfied.
+      Demands may remain unsatisfied if they have not been satisfied by the
+      end of the simulation period. Larger values are better.
+    - :attr:`~stock_levels`: The average amount of a given product in the
+      warehouse averaged over the simulation time. Smaller values are better.
+    - :attr:`~stock_level`: The total average amount units of any product in
+      the warehouse averaged over the simulation time. Smaller values are
+      better.
+    - :attr:`~simulation_time_nanos`: The total time that the simulation took,
+      measured in nanoseconds.
+
+    Instances of this class are filled by
+    :class:`~moptipyapps.prodsched.statistics_collector.StatisticsCollector`
+    objects plugged into the
+    :class:`~moptipyapps.prodsched.simulation.Simulation`.
+    """
 
     def __init__(self, n_products: int) -> None:
         """
-        Create the statistics record.
+        Create the statistics record for a given number of products.
 
         :param n_products: the number of products
         """
         check_int_range(n_products, "n_products", 1, 1_000_000_000)
-        #: the production time statistics per-product
+        #: the production time (TRP) statistics per-product
         self.production_times: Final[list[
             StreamStatistics | None]] = [None] * n_products
-        #: the overall production time statistics
+        #: the overall production time (TRP) statistics
         self.production_time: StreamStatistics | None = None
         #: the fraction of demands that were immediately satisfied,
-        #: on a per-product basis
+        #: on a per-product basis, i.e., the fillrate
         self.immediate_rates: Final[list[int | float | None]] = (
             [None] * n_products)
-        #: the overall fraction of immediately satisfied demands
+        #: the overall fraction of immediately satisfied demands, i.e.,
+        #: the fillrate
         self.immediate_rate: int | float | None = None
         #: the average waiting time for all demands that were not immediately
-        #: satisfied -- only counting demands that were actually satisfied
+        #: satisfied -- only counting demands that were actually satisfied,
+        #: i.e., the CWT
         self.waiting_times: Final[list[
             StreamStatistics | None]] = [None] * n_products
         #: the overall waiting time for all demands that were not immediately
-        #: satisfied -- only counting demands that were actually satisfied
+        #: satisfied -- only counting demands that were actually satisfied,
+        #: i.e., the CWT
         self.waiting_time: StreamStatistics | None = None
         #: the fraction of demands that were fulfilled, on a per-product basis
         self.fulfilled_rates: Final[list[
@@ -91,7 +151,7 @@ class Statistics:
             int | float | None]] = [None] * n_products
         #: the overall average stock level
         self.stock_level: int | float | None = None
-        #: the nano seconds used by the simulation
+        #: the nanoseconds used by the simulation
         self.simulation_time_nanos: int | float | None = None
 
     def __str__(self) -> str:

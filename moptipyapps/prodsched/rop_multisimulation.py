@@ -7,7 +7,13 @@ warehouse, one new unit is ordered to be produced.
 Therefore, we have `n_products` such `X` values.
 
 This module provides the functionality to simulate this scenario over multiple
-instances.
+instances (:class:`~moptipyapps.prodsched.instance.Instance`). It acts as an
+:class:`~moptipy.api.encoding.Encoding` that converts a re-order point into an
+instance of
+:class:`~moptipyapps.prodsched.multistatistics.MultiStatistics` which can then
+be used as basis to compute the values of (potentially multiple)
+objective functions, such as those given in package
+:mod:`~moptipyapps.prodsched.objectives`.
 """
 from typing import Final, Iterable
 

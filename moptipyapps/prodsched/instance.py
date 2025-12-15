@@ -55,7 +55,7 @@ This is regulated by the three-dimensional matrix
 If we want to produce one unit of a product with a given ID `p`, we can use
 the :attr:`~Instance.routes` matrix (`routes[p]`) to determine through which
 machines this unit needs to pass.
-If it arrives at a machine with ID `m', then we look up the
+If it arrives at a machine with ID `m`, then we look up the
 :class:`~numpy.ndarray` of prodcution slots and times under
 `station_product_unit_times[m][p]`.
 

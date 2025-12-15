@@ -1,13 +1,39 @@
 """
 Generate instances for training and testing.
 
-In this package, we provide a function for generating instances in a
+In this package, we provide a function for generating instances, i.e., objects
+of type :class:`~moptipyapps.prodsched.instance.Instance`, in a
 deterministic fashion for training and testing of MFC scenarios.
 
 The function :func:`get_instances` will return a fixed set of instances
 for a given instance number. It allows you to store and retrieve compatible
 instance sets of different sizes from a given directory.
-It is not very efficient, but it will do.
+
+This is necessary when doing repeatable experiments that average performance
+metrics over multiple :class:`~moptipyapps.prodsched.instance.Instance`
+objects. We do not just want to be able to generate the instances, but we also
+need to store them and to re-load them. Storing them is easy, function
+:func:`~moptipyapps.prodsched.instance.store_instances` can do it.
+Loading instances is easy, too, because for that we have function
+:func:`~moptipyapps.prodsched.instance.load_instances`.
+
+However, what do you do if you generated 10 instances in a deterministic
+fashion, but for your next experiment you only want to use five of them?
+How do you decide which to use?
+Or what if you want to use 15 now. How do you make sure that the previous
+ten instances are part of the set of 15 instances?
+:func:`get_instances` does all of that for you.
+It creates the random seeds for the instance creation in the good old
+deterministic "moptipy" style, using
+:func:`~moptipy.utils.nputils.rand_seeds_from_str`.
+It then checks the instance directory for instances to use that comply
+with the seeds and generates (and stores) additional instances if need be.
+For this, we use the Thürer-style instance synthesis implemented as
+:func:`~moptipyapps.prodsched.mfc_generator.sample_mfc_instance`.
+Thus, we have a consistent way of generating, storing, and loading instances
+in a transparent way.
+
+(The implementation is not overly efficient, but it will do.)
 
 >>> from pycommons.io.temp import temp_dir
 >>> with temp_dir() as td:
