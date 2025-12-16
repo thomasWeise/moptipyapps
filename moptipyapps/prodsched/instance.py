@@ -39,7 +39,7 @@ which work station and in which order.
 The product with ID `i` passes through the work stations `routes[i]`, which
 is tuple of work station IDs.
 
-The :attr:`~Instance.n_customer` customers issue :attr:`~Instance.n_demand`
+The :attr:`~Instance.n_customers` customers issue :attr:`~Instance.n_demands`
 demands. Each demand has a unique ID :attr:`~Demand.demand_id` and appears in
 the system at the :attr:`~Demand.arrival` time. It is for
 :attr:`~Demand.amount` units of the product with

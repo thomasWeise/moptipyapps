@@ -4,6 +4,182 @@ A small template for ROP-based experiments.
 This experiment uses the NSGA-II algorithm to optimize Re-Order-Points (ROPs)
 to achieve both a high worst-case fillrate and a low worst-case average stock
 level.
+
+It is just a preliminary idea.
+
+In manufacturing systems, the concept of re-order points (ROPs) can be used
+to schedule production.
+The ROP basically provides one limit `X` per product.
+If there are less or equal (`<=`) `X` units of the product in the warehouse,
+a production order is issued so that one new unit is produced.
+
+The question is how should `X` be set so that we can
+
+1. satisfy as many customer demands as possible directly when they come in,
+   i.e., maximize the fill rate
+   (:attr:`~moptipyapps.prodsched.statistics.Statistics.immediate_rates`,
+   represented by
+   :mod:`~moptipyapps.prodsched.objectives.worst_and_mean_fill_rate`) and
+2. have a low total average number of product units sitting around in our
+   warehouse, i.e., minimize the stock level
+   (:attr:`~moptipyapps.prodsched.statistics.Statistics.stock_levels`,
+   represented by
+   :mod:`~moptipyapps.prodsched.objectives.max_stocklevel`).
+
+Since we have `n=10` products in the Thürer [1] base scenario, we also have
+`10` such ROP values `X`.
+
+Now how can we know the fill rate and the stock level?
+This is done by simulating the whole system in action.
+We therefore use instances generated using the Thürer-style distributions as
+defined in :mod:`~moptipyapps.prodsched.mfc_generator` [1].
+
+Our simulations (see :mod:`~moptipyapps.prodsched.simulation`) are not
+randomized.
+Instead, each of them is based on a fixed
+:mod:`~moptipyapps.prodsched.instance`.
+Each :mod:`~moptipyapps.prodsched.instance.Instance` defines exactly when a
+customer :class:`~moptipyapps.prodsched.instance.Demand` demand comes in and,
+for many time windows, the production time needed by a machine to produce
+one unit of product.
+Of course, all of these values follow the random distributions (Erlang, Gamma,
+with respective parameters) given in Tables 2 and 3 of the original Thürer
+paper [1] and implemented in :mod:`~moptipyapps.prodsched.mfc_generator`.
+But apart from this, they are fixed per instance.
+
+This means that we can take the same ROP and run the simulation twice for a
+given instance and will get exactly the same results and
+:mod:`~moptipyapps.prodsched.statistics` (fill rates, stock levels, etc.).
+
+Of course, using a single fixed :mod:`~moptipyapps.prodsched.instance` may
+be misleading.
+Maybe we would think that a certain ROP is very good ... but it is only
+good on the specific instance we tried.
+
+So as a second step, we here generate 11 instances (via
+:func:`~moptipyapps.prodsched.instances.get_instances`).
+And then we look at the worst fill rate and the worst stock level over all 11
+instances (more or less).
+And we use that to judge whether an ROP is good or not.
+
+This leaves the question:
+Where do these ROPs come from?
+
+They come from an optimization process.
+First, we define that ROPs be integer vectors (i.e., from an
+:class:`~moptipy.spaces.intspace.IntSpace`) where each element comes from
+the range `0..63`.
+We sample the initial solutions randomly from that interval
+(via :class:`~moptipy.operators.intspace.op0_random.Op0Random`).
+
+As unary search operator, we take an existing ROP and, for a number of
+elements, sample a new value normally distributed around it (with standard
+deviation 2.5) but rounded to integer.
+We do this for a binomially distributed number of elements, exactly like the
+bit-string based (1+1) EA would do it, but implemented for integers by
+operator :class:`~moptipy.operators.intspace.op1_mnormal.Op1MNormal`.
+
+As binary operator, we use uniform crossover, given as
+:class:`~moptipy.operators.intspace.op2_uniform.Op2Uniform`.
+
+As optimization algorithm, we use NSGA-II implemented by class
+:class:`~moptipy.algorithms.mo.nsga2.NSGA2`.
+This is a multi-objective optimization algorithm.
+We do this because we have two goals:
+
+1. Maximize the worst-case fill rates,
+2. Minimize the worst-case average stock level.
+
+Regarding the first objective, we have a small tweak:
+Assume that, over all 11 instances, `PM` be the worst fill rate per product
+(in [0,1], 0 being worst) and `AM` be the worst average fill rate over all
+products (0 worst, 1 best).
+Then our objective value -- subject to minimization -- is
+`(1 - PM) * 100 + (1 - AM)`.
+This is implemented in module
+:mod:`~moptipyapps.prodsched.objectives.worst_and_mean_fill_rate`.
+
+The objective function minimizing the stock level is implemented in Module
+:mod:`~moptipyapps.prodsched.objectives.max_stocklevel`.
+
+In summary, what we do is this:
+
+1. The optimization algorithm proposes ROPs, each of which being an integer
+   vector with 10 values (1 value per product).
+   (:class:`~moptipy.spaces.intspace.IntSpace`)
+   These integer vectors are the elements of the search space.
+
+2. The ROP is evaluated by simulating it 11 times (using 10000 time units per
+   instance, 3000 of which are used for warmup).
+   This is implemented as an :mod:`~moptipy.api.encoding`,
+   :class:`~moptipyapps.prodsched.rop_multisimulation.ROPMultiSimulation`.
+
+3. This :mod:`~moptipyapps.prodsched.simulation`-based decoding procedure maps
+   the ROP vectors to the solution space. In our case, this solution space are
+   just multi-statistics records, as implemented in module
+   :mod:`~moptipyapps.prodsched.multistatistics`, where a corresponding
+   :mod:`~moptipy.api.space` implementation is also provided.
+
+4. Each of the 11 simulations is based on one fixed
+   :mod:`~moptipyapps.prodsched.instance`, where all customer demands and
+   machine work times (at certain time intervals) are fixed (but were sampled
+   based on the distributions given in the Thürer paper [1]) using module
+   :mod:`~moptipyapps.prodsched.mfc_generator`.
+
+5. Each of the 11 simulations has per-product fill rates `PM_i,j`, one average
+   fill rate `AM_i`, one average stock level `SL_i` stored in the
+   :mod:`~moptipyapps.prodsched.multistatistics` records.
+
+6. As first objective, we use the smallest `PM_i_j` as `PM` and the smallest
+   `AM_i` as `AM` and compute `(1 - AM) * 100 + (1 - PM)` in
+   :mod:`~moptipyapps.prodsched.objectives.worst_and_mean_fill_rate`.
+
+7. As second objective, we use the largest `SL_i` in
+   :mod:`~moptipyapps.prodsched.objectives.max_stocklevel`.
+
+8. NSGA-II, given in :mod:`~moptipy.algorithms.mo.nsga2`, maintains a
+   population of solutions which it evaluates like that.
+
+9. NSGA-II decides which solutions to keep based on the current Pareto front
+   and crowding distance.
+
+10. The retained solutions are reproduced, either via unary or binary search
+    operators.
+
+11. The unary search operator changes a random number (binomial distribution)
+    of elements of a ROP vector (via normal distribution).
+    It is given in
+    :class:`~moptipy.operators.intspace.op1_mnormal.Op1MNormal`.
+
+11. The binary search operator is simple uniform crossover, i.e., fills a
+    new solution with elements of either of the two parent solutions. It is
+    defined in :class:`~moptipy.operators.intspace.op2_uniform.Op2Uniform`.
+
+The core idea is that we do not use randomized ARENA-like simulation.
+Instead, we use a simulator that is based on deterministic, fully pre-defined
+instances.
+These instances are still randomly generated according to the distributions
+given by Thürer in [1].
+However, they have all values pre-determined.
+This allows us to run a simulation with the same ROP twice and get the exactly
+same result.
+If two different ROPs are simulated, but both of them decide to produce 1 unit
+of product `A` on machine `V` at time unit `T`, then for both of them this
+will take exactly the same amount of time.
+
+Simulation results are thus less noisy.
+
+Of course, there is a danger of overfitting.
+This is why we need to use multiple simulations to check a ROP.
+And then we take the worst-case results.
+
+So this is the idea.
+
+1. Matthias Thürer, Nuno O. Fernandes, Hermann Lödding, and Mark Stevenson.
+   Material Flow Control in Make-to-Stock Production Systems: An Assessment of
+   Order Generation, Order Release and Production Authorization by Simulation
+   Flexible Services and Manufacturing Journal. 37(1):1-37. March 2025.
+   doi:<https://doi.org/10.1007/s10696-024-09532-2>
 """
 
 
