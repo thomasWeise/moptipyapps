@@ -1,7 +1,7 @@
 r"""
 A tool for collecting statistics from an MFC simulation.
 
-A statistics collector is a special
+A statistics collector :class:`~StatisticsCollector` is a special
 :class:`~moptipyapps.prodsched.simulation.Listener`
 that can be plugged into a
 :class:`~moptipyapps.prodsched.simulation.Simulation`.
@@ -11,6 +11,29 @@ going on. It finally stores these into a
 Such a record can then be used to understand the key characteristics of the
 behavior of the simulation in on a given
 :class:`~moptipyapps.prodsched.instance.Instance`.
+
+The simulation listeners (:class:`~moptipyapps.prodsched.simulation.Listener`)
+offer a method to pipe out data from arbitrary subclasses of
+:class:`~moptipyapps.prodsched.simulation.Simulation`.
+This means that they allow us to access data in a unified way, regardless of
+which manufacturing logic or production scheduling we actually implement.
+
+In the case of the :class:`~StatisticsCollector` implemented here, we
+implement the :class:`~moptipyapps.prodsched.simulation.Listener`-API to
+fill a :class:`~moptipyapps.prodsched.statistics.Statistics` record with data.
+Such records offer the standard statistics that Thürer et al. used in their
+works.
+In other words, we can make such statistics available and accessible,
+regardless of how our simulation schedules the production.
+
+Moreover, multiple such :class:`~moptipyapps.prodsched.statistics.Statistics`
+records, filled with data from simulations over multiple different instances
+(:mod:`~moptipyapps.prodsched.instance`) can be combined in a
+:class:`~moptipyapps.prodsched.multistatistics.MultiStatistics` record.
+This record, which will comprehensively represent performance over several
+independent instances, then can be used as basis for objective functions
+(:class:`~moptipy.api.objective.Objective`) such as those given in
+:mod:`~moptipyapps.prodsched.objectives`.
 
 >>> instance = Instance(
 ...     name="test2", n_products=2, n_customers=1, n_stations=2, n_demands=5,

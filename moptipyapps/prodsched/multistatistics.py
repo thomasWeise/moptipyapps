@@ -1,11 +1,29 @@
 """
 A statistics record for multiple simulations.
 
-We use this record as the solution space when optimizing for the MFC scenario.
-It stores the statistics of several simulation runs.
+:class:`~MultiStatistics` are records that hold multiple simulation
+:class:`~moptipyapps.prodsched.statistics.Statistics`, each of which computed
+over a separate :class:`~moptipyapps.prodsched.simulation.Simulation` based on
+a separate :mod:`~moptipyapps.prodsched.instance` of the material flow
+problem.
+These records are filled with data by via the
+:class:`moptipyapps.prodsched.rop_multisimulation.ROPMultiSimulation`
+mechanism, which performs the multiple simulations.
+
+We cn use this record as the solution space when optimizing for the MFC
+scenario.
+Such a record holds comprehensive statistics across several simulation runs.
+This makes it suitable as source of data for objective functions
+(:class:`~moptipy.api.objective.Objective`).
 The objective functions can then access these statistics.
-A space instance is provided that can create, copy, and serialize these
-objects to text, so that they can appear in the log files.
+
+Since we use :class:`~MultiStatistics` as solution space, we also need an
+implementation of moptipy's :class:`~moptipy.api.space.Space`-API to plug it
+into the optimization process.
+Sucha space implementation is provided as class
+:class:`~MultiStatisticsSpace`.
+It can create, copy, and serialize these objects to text, so that they can
+appear in the log files.
 """
 
 from dataclasses import dataclass
@@ -143,7 +161,7 @@ class MultiStatisticsSpace(Space):
         """
         Get the number of possible multi-statistics.
 
-        :return: just some arbitrary number
+        :return: just some arbitrary very large number
         """
         return 100 ** tuple.__len__(self.instances)
 
