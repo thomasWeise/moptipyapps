@@ -104,7 +104,7 @@ use :func:`store_instances`.
 To load a set of instances from a directory, you can use
 :func:`load_instances`.
 The class :class:`~moptipyapps.prodsched.simulation.Simulation` in module
-:mod`:~moptipyapps.prodsched.simulation` offers the ability to run a fully
+:mod:`~moptipyapps.prodsched.simulation` offers the ability to run a fully
 reproducible simulation based on an :class:`~Instance` and to pipe out events
 and data via a :class:`~moptipyapps.prodsched.simulation.Listener` interface.
 
