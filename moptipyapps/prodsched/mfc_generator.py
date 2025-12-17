@@ -505,7 +505,7 @@ interarrival_times=Erlang(k=2, theta=5)))
        An Assessment of Order Generation, Order Release and Production
        Authorization by Simulation Flexible Services and Manufacturing
        Journal. 37(1):1-37. March 2025.
-       doi:https://doi.org/10.1007/s10696-024-09532-2
+       doi: https://doi.org/10.1007/s10696-024-09532-2
     """
     return (
         Product(0, __s1t0((1, 2, 4, 2, 9, 10, 11)),
@@ -571,7 +571,7 @@ def default_stations() -> tuple[Station, ...]:
        An Assessment of Order Generation, Order Release and Production
        Authorization by Simulation Flexible Services and Manufacturing
        Journal. 37(1):1-37. March 2025.
-       doi:https://doi.org/10.1007/s10696-024-09532-2
+       doi: https://doi.org/10.1007/s10696-024-09532-2
     """
     return (
         Station(0, Gamma(3, 0.26)),

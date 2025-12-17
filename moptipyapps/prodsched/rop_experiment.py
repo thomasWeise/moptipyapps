@@ -39,7 +39,7 @@ randomized.
 Instead, each of them is based on a fixed
 :mod:`~moptipyapps.prodsched.instance`.
 Each :mod:`~moptipyapps.prodsched.instance.Instance` defines exactly when a
-customer :class:`~moptipyapps.prodsched.instance.Demand` demand comes in and,
+customer :class:`~moptipyapps.prodsched.instance.Demand` comes in and,
 for many time windows, the production time needed by a machine to produce
 one unit of product.
 Of course, all of these values follow the random distributions (Erlang, Gamma,
@@ -81,6 +81,10 @@ operator :class:`~moptipy.operators.intspace.op1_mnormal.Op1MNormal`.
 
 As binary operator, we use uniform crossover, given as
 :class:`~moptipy.operators.intspace.op2_uniform.Op2Uniform`.
+This operator takes two existing solutions and creates a new solution by
+element-wise copying elements of the parents.
+For each element, it randomly decides from which parent solution it should be
+copied.
 
 As optimization algorithm, we use NSGA-II implemented by class
 :class:`~moptipy.algorithms.mo.nsga2.NSGA2`.
@@ -99,7 +103,7 @@ Then our objective value -- subject to minimization -- is
 This is implemented in module
 :mod:`~moptipyapps.prodsched.objectives.worst_and_mean_fill_rate`.
 
-The objective function minimizing the stock level is implemented in Module
+The objective function minimizing the stock level is implemented in module
 :mod:`~moptipyapps.prodsched.objectives.max_stocklevel`.
 
 In summary, what we do is this:
@@ -151,7 +155,7 @@ In summary, what we do is this:
     It is given in
     :class:`~moptipy.operators.intspace.op1_mnormal.Op1MNormal`.
 
-11. The binary search operator is simple uniform crossover, i.e., fills a
+12. The binary search operator is simple uniform crossover, i.e., fills a
     new solution with elements of either of the two parent solutions. It is
     defined in :class:`~moptipy.operators.intspace.op2_uniform.Op2Uniform`.
 
@@ -179,7 +183,7 @@ So this is the idea.
    Material Flow Control in Make-to-Stock Production Systems: An Assessment of
    Order Generation, Order Release and Production Authorization by Simulation
    Flexible Services and Manufacturing Journal. 37(1):1-37. March 2025.
-   doi:<https://doi.org/10.1007/s10696-024-09532-2>
+   doi: https://doi.org/10.1007/s10696-024-09532-2
 """
 
 

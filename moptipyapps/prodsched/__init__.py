@@ -10,5 +10,5 @@ optimization procedures.
    Material Flow Control in Make-to-Stock Production Systems: An Assessment of
    Order Generation, Order Release and Production Authorization by Simulation
    Flexible Services and Manufacturing Journal. 37(1):1-37. March 2025.
-   doi:https://doi.org/10.1007/s10696-024-09532-2
+   doi: https://doi.org/10.1007/s10696-024-09532-2
 """
