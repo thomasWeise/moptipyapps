@@ -361,13 +361,13 @@ class Demand(Iterable[int | float]):
     Each demand has an :attr:`~Demand.arrival` time at which point it enters
     the system. It has a unique :attr:`~Demand.demand_id`. It has a
     :attr:`~Demand.deadline`, at which point the customer
-    :attr:`~Demand.customer_id` who issed the demand expects to receive the
+    :attr:`~Demand.customer_id` who issued the demand expects to receive the
     :attr:`~Demand.amount` units of the product :attr:`~Demand.product_id`
     that they ordered.
 
     Demands with the :attr:`~Demand.measure` flag set fall into the simulation
     time window where performance metrics are gathered. Demands where
-    :attr:`~Demand.arrival` is `False` will be irgnored during the performance
+    :attr:`~Demand.measure` is `False` will be irgnored during the performance
     evaluation, because they fall into the setup time. Their processing must
     still be simulated, though.
 
