@@ -1,0 +1,620 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.packing_statistics — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/packing_statistics.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.packing_statistics</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.packing_statistics</h1><div class=highlight><pre>
+<span></span><span class=sd>"""An extended end result statistics record to represent packings."""</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>argparse</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>os.path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>dataclasses</span><span class=w> </span><span class=kn>import</span> <span class=n>dataclass</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>isfinite</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Generator</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.evaluation.base</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>KEY_N</span><span class=p>,</span>
+    <span class=n>EvaluationDataElement</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.evaluation.end_results</span><span class=w> </span><span class=kn>import</span> <span class=n>EndResult</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.evaluation.end_statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>CsvReader</span> <span class=k>as</span> <span class=n>EsCsvReader</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.evaluation.end_statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>CsvWriter</span> <span class=k>as</span> <span class=n>EsCsvWriter</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.evaluation.end_statistics</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>EndStatistics</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.evaluation.end_statistics</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>from_end_results</span> <span class=k>as</span> <span class=n>es_from_end_results</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.strings</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>num_to_str</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.ds.immutable_map</span><span class=w> </span><span class=kn>import</span> <span class=n>immutable_mapping</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.ds.sequences</span><span class=w> </span><span class=kn>import</span> <span class=n>reiterable</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.console</span><span class=w> </span><span class=kn>import</span> <span class=n>logger</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.csv</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>SCOPE_SEPARATOR</span><span class=p>,</span>
+    <span class=n>csv_column</span><span class=p>,</span>
+    <span class=n>csv_scope</span><span class=p>,</span>
+    <span class=n>csv_select_scope</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.csv</span><span class=w> </span><span class=kn>import</span> <span class=n>CsvReader</span> <span class=k>as</span> <span class=n>CsvReaderBase</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.csv</span><span class=w> </span><span class=kn>import</span> <span class=n>CsvWriter</span> <span class=k>as</span> <span class=n>CsvWriterBase</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span><span class=p>,</span> <span class=n>file_path</span><span class=p>,</span> <span class=n>line_writer</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.sample_statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>CsvReader</span> <span class=k>as</span> <span class=n>SsCsvReader</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.sample_statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>CsvWriter</span> <span class=k>as</span> <span class=n>SsCsvWriter</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.sample_statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>SampleStatistics</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.strings.string_conv</span><span class=w> </span><span class=kn>import</span> <span class=n>str_to_num</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.objectives.bin_count</span><span class=w> </span><span class=kn>import</span> <span class=n>BIN_COUNT_NAME</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing_result</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>_OBJECTIVE_LOWER</span><span class=p>,</span>
+    <span class=n>_OBJECTIVE_UPPER</span><span class=p>,</span>
+    <span class=n>KEY_BIN_HEIGHT</span><span class=p>,</span>
+    <span class=n>KEY_BIN_WIDTH</span><span class=p>,</span>
+    <span class=n>KEY_N_DIFFERENT_ITEMS</span><span class=p>,</span>
+    <span class=n>KEY_N_ITEMS</span><span class=p>,</span>
+    <span class=n>LOWER_BOUNDS_BIN_COUNT</span><span class=p>,</span>
+    <span class=n>PackingResult</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing_result</span><span class=w> </span><span class=kn>import</span> <span class=n>from_csv</span> <span class=k>as</span> <span class=n>pr_from_csv</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing_result</span><span class=w> </span><span class=kn>import</span> <span class=n>from_logs</span> <span class=k>as</span> <span class=n>pr_from_logs</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>moptipyapps_argparser</span><span class=p>,</span>
+    <span class=n>motipyapps_footer_bottom_comments</span><span class=p>,</span>
+<span class=p>)</span>
+
+
+<div class=viewcode-block id=PackingStatistics>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.PackingStatistics>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>init</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>order</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>eq</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>PackingStatistics</span><span class=p>(</span><span class=n>EvaluationDataElement</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    An end statistics record of one run of one algorithm on one problem.</span>
+
+<span class=sd>    This record provides the information of the outcome of one application of</span>
+<span class=sd>    one algorithm to one problem instance in an immutable way.</span>
+<span class=sd>    """</span>
+
+    <span class=c1>#: the original end statistics record</span>
+    <span class=n>end_statistics</span><span class=p>:</span> <span class=n>EndStatistics</span>
+    <span class=c1>#: the number of items in the instance</span>
+    <span class=n>n_items</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the number of different items in the instance</span>
+    <span class=n>n_different_items</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the bin width</span>
+    <span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the bin height</span>
+    <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the objective values evaluated after the optimization</span>
+    <span class=n>objectives</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>SampleStatistics</span><span class=p>]</span>
+    <span class=c1>#: the bounds for the objective values (append ".lowerBound" and</span>
+    <span class=c1>#: ".upperBound" to all objective function names)</span>
+    <span class=n>objective_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span>
+    <span class=c1>#: the bounds for the minimum number of bins of the instance</span>
+    <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span>
+                 <span class=n>end_statistics</span><span class=p>:</span> <span class=n>EndStatistics</span><span class=p>,</span>
+                 <span class=n>n_items</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>n_different_items</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>objectives</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>SampleStatistics</span><span class=p>],</span>
+                 <span class=n>objective_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span>
+                 <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a consistent instance of :class:`PackingStatistics`.</span>
+
+<span class=sd>        :param end_statistics: the end statistics</span>
+<span class=sd>        :param n_items: the number of items</span>
+<span class=sd>        :param n_different_items: the number of different items</span>
+<span class=sd>        :param bin_width: the bin width</span>
+<span class=sd>        :param bin_height: the bin height</span>
+<span class=sd>        :param objectives: the objective values computed after the</span>
+<span class=sd>            optimization</span>
+<span class=sd>        :param bin_bounds: the different bounds for the number of bins</span>
+<span class=sd>        :param objective_bounds: the bounds for the objective functions</span>
+<span class=sd>        :raises TypeError: if any parameter has a wrong type</span>
+<span class=sd>        :raises ValueError: if the parameter values are inconsistent</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>end_statistics</span><span class=p>,</span> <span class=n>EndStatistics</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>end_statistics</span><span class=p>,</span> <span class=s2>"end_statistics"</span><span class=p>,</span> <span class=n>EndResult</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>end_statistics</span><span class=o>.</span><span class=n>best_f</span> <span class=o>!=</span> <span class=n>objectives</span><span class=p>[</span><span class=n>end_statistics</span><span class=o>.</span><span class=n>objective</span><span class=p>]:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"end_statistics.best_f=</span><span class=si>{</span><span class=n>end_statistics</span><span class=o>.</span><span class=n>best_f</span><span class=si>}</span><span class=s2>, but "</span>
+                <span class=sa>f</span><span class=s2>"objectives[</span><span class=si>{</span><span class=n>end_statistics</span><span class=o>.</span><span class=n>objective</span><span class=si>!r}</span><span class=s2>]="</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>objectives</span><span class=p>[</span><span class=n>end_statistics</span><span class=o>.</span><span class=n>objective</span><span class=p>]</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>objectives</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>objectives</span><span class=p>,</span> <span class=s2>"objectives"</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>,</span> <span class=s2>"objective_bounds"</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>,</span> <span class=s2>"bin_bounds"</span><span class=p>,</span> <span class=n>Mapping</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>)</span> <span class=o>!=</span> <span class=p>(</span><span class=mi>2</span> <span class=o>*</span> <span class=nb>len</span><span class=p>(</span><span class=n>objectives</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"it is required that there is a lower and an "</span>
+                             <span class=sa>f</span><span class=s2>"upper bound for each of the </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>objectives</span><span class=p>)</span><span class=si>}</span><span class=s2> "</span>
+                             <span class=sa>f</span><span class=s2>"functions, but we got </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>)</span><span class=si>}</span><span class=s2> "</span>
+                             <span class=sa>f</span><span class=s2>"bounds, objectives=</span><span class=si>{</span><span class=n>objectives</span><span class=si>}</span><span class=s2>, "</span>
+                             <span class=sa>f</span><span class=s2>"objective_bounds=</span><span class=si>{</span><span class=n>objective_bounds</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=k>for</span> <span class=n>name</span><span class=p>,</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>objectives</span><span class=o>.</span><span class=n>items</span><span class=p>():</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                    <span class=n>name</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"name of evaluation[</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>]=</span><span class=si>{</span><span class=n>stat</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>stat</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=n>SampleStatistics</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                    <span class=n>stat</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"value of evaluation[</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>]=</span><span class=si>{</span><span class=n>stat</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span>
+                    <span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=n>SampleStatistics</span><span class=p>))</span>
+            <span class=n>lll</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=n>_OBJECTIVE_LOWER</span><span class=p>)</span>
+            <span class=n>lower</span> <span class=o>=</span> <span class=n>objective_bounds</span><span class=p>[</span><span class=n>lll</span><span class=p>]</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>lower</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>lll</span><span class=si>}</span><span class=s2>==</span><span class=si>{</span><span class=n>lower</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>uuu</span> <span class=o>=</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=n>_OBJECTIVE_UPPER</span><span class=p>)</span>
+            <span class=n>upper</span> <span class=o>=</span> <span class=n>objective_bounds</span><span class=p>[</span><span class=n>uuu</span><span class=p>]</span>
+            <span class=k>for</span> <span class=n>value</span> <span class=ow>in</span> <span class=p>(</span><span class=n>stat</span><span class=o>.</span><span class=n>minimum</span><span class=p>,</span> <span class=n>stat</span><span class=o>.</span><span class=n>maximum</span><span class=p>)</span> \
+                    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>stat</span><span class=p>,</span> <span class=n>SampleStatistics</span><span class=p>)</span> <span class=k>else</span> <span class=p>(</span><span class=n>stat</span><span class=p>,</span> <span class=p>):</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>value</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"non-finite value of evaluation[</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>]=</span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>lower</span> <span class=o><=</span> <span class=n>value</span> <span class=o><=</span> <span class=n>upper</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"it is required that </span><span class=si>{</span><span class=n>lll</span><span class=si>}</span><span class=s2><=f<=</span><span class=si>{</span><span class=n>uuu</span><span class=si>}</span><span class=s2>, but got "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>lower</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>value</span><span class=si>}</span><span class=s2>, and </span><span class=si>{</span><span class=n>upper</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>bins</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>SampleStatistics</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span>
+            <span class=s2>"SampleStatistics"</span><span class=p>,</span> <span class=n>objectives</span><span class=p>[</span><span class=n>BIN_COUNT_NAME</span><span class=p>])</span> \
+            <span class=k>if</span> <span class=n>BIN_COUNT_NAME</span> <span class=ow>in</span> <span class=n>objectives</span> <span class=k>else</span> <span class=kc>None</span>
+        <span class=k>for</span> <span class=n>name2</span><span class=p>,</span> <span class=n>value2</span> <span class=ow>in</span> <span class=n>bin_bounds</span><span class=o>.</span><span class=n>items</span><span class=p>():</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name2</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                    <span class=n>name2</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"name of bounds[</span><span class=si>{</span><span class=n>name2</span><span class=si>!r}</span><span class=s2>]=</span><span class=si>{</span><span class=n>value2</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+            <span class=n>check_int_range</span><span class=p>(</span><span class=n>value2</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"bounds[</span><span class=si>{</span><span class=n>name2</span><span class=si>!r}</span><span class=s2>]"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>bins</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>bins</span><span class=o>.</span><span class=n>minimum</span> <span class=o><</span> <span class=n>value2</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"number of bins=</span><span class=si>{</span><span class=n>bins</span><span class=si>}</span><span class=s2> is inconsistent with "</span>
+                    <span class=sa>f</span><span class=s2>"bound </span><span class=si>{</span><span class=n>name2</span><span class=si>!r}</span><span class=s2>=</span><span class=si>{</span><span class=n>value2</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"end_statistics"</span><span class=p>,</span> <span class=n>end_statistics</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"objectives"</span><span class=p>,</span> <span class=n>immutable_mapping</span><span class=p>(</span><span class=n>objectives</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"objective_bounds"</span><span class=p>,</span>
+                           <span class=n>immutable_mapping</span><span class=p>(</span><span class=n>objective_bounds</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"bin_bounds"</span><span class=p>,</span> <span class=n>immutable_mapping</span><span class=p>(</span><span class=n>bin_bounds</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"n_different_items"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_different_items</span><span class=p>,</span> <span class=s2>"n_different_items"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"n_items"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_items</span><span class=p>,</span> <span class=s2>"n_items"</span><span class=p>,</span> <span class=n>n_different_items</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>bin_width</span><span class=p>,</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>bin_height</span><span class=p>,</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>_tuple</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Any</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a tuple with all the data of this data class for comparison.</span>
+
+<span class=sd>        :returns: a tuple with all the data of this class, where `None` values</span>
+<span class=sd>            are masked out</span>
+<span class=sd>        """</span>
+        <span class=c1># noinspection PyProtectedMember</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>end_statistics</span><span class=o>.</span><span class=n>_tuple</span><span class=p>()</span></div>
+
+
+
+<div class=viewcode-block id=from_packing_results>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.from_packing_results>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>from_packing_results</span><span class=p>(</span><span class=n>results</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>PackingResult</span><span class=p>])</span> \
+        <span class=o>-></span> <span class=n>Generator</span><span class=p>[</span><span class=n>PackingStatistics</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span> <span class=kc>None</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create packing statistics from a sequence of packing results.</span>
+
+<span class=sd>    :param results: the packing results</span>
+<span class=sd>    :returns: a sequence of packing statistics</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>results</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>results</span><span class=p>,</span> <span class=s2>"results"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+    <span class=n>groups</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>dict</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>],</span> <span class=nb>list</span><span class=p>[</span><span class=n>PackingResult</span><span class=p>]]]</span> \
+        <span class=o>=</span> <span class=p>{}</span>
+    <span class=n>objectives_set</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>pr</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>results</span><span class=p>):</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>pr</span><span class=p>,</span> <span class=n>PackingResult</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>pr</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"end_results[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]"</span><span class=p>,</span> <span class=n>PackingResult</span><span class=p>)</span>
+        <span class=n>setting</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]</span> <span class=o>=</span> \
+            <span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>algorithm</span><span class=p>,</span> <span class=n>pr</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>instance</span><span class=p>,</span>
+             <span class=n>pr</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>objective</span><span class=p>,</span> <span class=s2>""</span> <span class=k>if</span> <span class=n>pr</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>encoding</span> <span class=ow>is</span> <span class=kc>None</span>
+             <span class=k>else</span> <span class=n>pr</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>encoding</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>setting</span> <span class=ow>in</span> <span class=n>groups</span><span class=p>:</span>
+            <span class=n>groups</span><span class=p>[</span><span class=n>setting</span><span class=p>]</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>pr</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>groups</span><span class=p>[</span><span class=n>setting</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=n>pr</span><span class=p>]</span>
+        <span class=n>objectives_set</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>objectives</span><span class=o>.</span><span class=n>keys</span><span class=p>())</span>
+
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>groups</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"results is empty!"</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>objectives_set</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"results has not objectives!"</span><span class=p>)</span>
+    <span class=n>end_stats</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>EndStatistics</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>objectives</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>objectives_set</span><span class=p>)</span>
+
+    <span class=k>for</span> <span class=n>key</span> <span class=ow>in</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>groups</span><span class=o>.</span><span class=n>keys</span><span class=p>()):</span>
+        <span class=n>data</span> <span class=o>=</span> <span class=n>groups</span><span class=p>[</span><span class=n>key</span><span class=p>]</span>
+        <span class=n>pr0</span> <span class=o>=</span> <span class=n>data</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=n>n_items</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>pr0</span><span class=o>.</span><span class=n>n_items</span>
+        <span class=n>n_different_items</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>pr0</span><span class=o>.</span><span class=n>n_different_items</span>
+        <span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>pr0</span><span class=o>.</span><span class=n>bin_width</span>
+        <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>pr0</span><span class=o>.</span><span class=n>bin_height</span>
+        <span class=n>used_objective</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>pr0</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>objective</span>
+        <span class=n>encoding</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=n>pr0</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>encoding</span>
+        <span class=k>if</span> <span class=n>used_objective</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>objectives_set</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>used_objective</span><span class=si>!r}</span><span class=s2> not in </span><span class=si>{</span><span class=n>objectives_set</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>used_objective</span> <span class=o>!=</span> <span class=n>key</span><span class=p>[</span><span class=mi>2</span><span class=p>]:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"used objective=</span><span class=si>{</span><span class=n>used_objective</span><span class=si>!r}</span><span class=s2> different "</span>
+                <span class=sa>f</span><span class=s2>"from key[2]=</span><span class=si>{</span><span class=n>key</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span><span class=si>}</span><span class=s2>!?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>encoding</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>encoding</span> <span class=o>!=</span> <span class=n>key</span><span class=p>[</span><span class=mi>3</span><span class=p>]):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"used encoding=</span><span class=si>{</span><span class=n>encoding</span><span class=si>!r}</span><span class=s2> different "</span>
+                <span class=sa>f</span><span class=s2>"from key[3]=</span><span class=si>{</span><span class=n>key</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span><span class=si>}</span><span class=s2>!?"</span><span class=p>)</span>
+        <span class=n>objective_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>pr0</span><span class=o>.</span><span class=n>objective_bounds</span>
+        <span class=n>bin_bounds</span><span class=p>:</span> <span class=n>Mapping</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>pr0</span><span class=o>.</span><span class=n>bin_bounds</span>
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>pr</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>data</span><span class=p>):</span>
+            <span class=k>if</span> <span class=n>n_items</span> <span class=o>!=</span> <span class=n>pr</span><span class=o>.</span><span class=n>n_items</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"n_items=</span><span class=si>{</span><span class=n>n_items</span><span class=si>}</span><span class=s2> for data[0] but "</span>
+                                 <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>n_items</span><span class=si>}</span><span class=s2> for data[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]?"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>n_different_items</span> <span class=o>!=</span> <span class=n>pr</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"n_different_items=</span><span class=si>{</span><span class=n>n_different_items</span><span class=si>}</span><span class=s2> for data[0] "</span>
+                    <span class=sa>f</span><span class=s2>"but </span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>n_different_items</span><span class=si>}</span><span class=s2> for data[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]?"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>bin_width</span> <span class=o>!=</span> <span class=n>pr</span><span class=o>.</span><span class=n>bin_width</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"bin_width=</span><span class=si>{</span><span class=n>bin_width</span><span class=si>}</span><span class=s2> for data[0] "</span>
+                    <span class=sa>f</span><span class=s2>"but </span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>bin_width</span><span class=si>}</span><span class=s2> for data[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]?"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>bin_height</span> <span class=o>!=</span> <span class=n>pr</span><span class=o>.</span><span class=n>bin_height</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"bin_height=</span><span class=si>{</span><span class=n>bin_height</span><span class=si>}</span><span class=s2> for data[0] "</span>
+                    <span class=sa>f</span><span class=s2>"but </span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>bin_height</span><span class=si>}</span><span class=s2> for data[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]?"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>used_objective</span> <span class=o>!=</span> <span class=n>pr</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>objective</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"used objective=</span><span class=si>{</span><span class=n>used_objective</span><span class=si>!r}</span><span class=s2> for data[0] "</span>
+                    <span class=sa>f</span><span class=s2>"but </span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>end_result</span><span class=o>.</span><span class=n>objective</span><span class=si>!r}</span><span class=s2> for data[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]?"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>objective_bounds</span> <span class=o>!=</span> <span class=n>pr</span><span class=o>.</span><span class=n>objective_bounds</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"objective_bounds=</span><span class=si>{</span><span class=n>objective_bounds</span><span class=si>!r}</span><span class=s2> for data[0] "</span>
+                    <span class=sa>f</span><span class=s2>"but </span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>objective_bounds</span><span class=si>!r}</span><span class=s2> for data[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]?"</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>bin_bounds</span> <span class=o>!=</span> <span class=n>pr</span><span class=o>.</span><span class=n>bin_bounds</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"bin_bounds=</span><span class=si>{</span><span class=n>bin_bounds</span><span class=si>!r}</span><span class=s2> for data[0] "</span>
+                    <span class=sa>f</span><span class=s2>"but </span><span class=si>{</span><span class=n>pr</span><span class=o>.</span><span class=n>bin_bounds</span><span class=si>!r}</span><span class=s2> for data[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]?"</span><span class=p>)</span>
+
+        <span class=n>end_stats</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>es_from_end_results</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>end_result</span> <span class=k>for</span> <span class=n>pr</span> <span class=ow>in</span> <span class=n>data</span><span class=p>))</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>end_stats</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"got </span><span class=si>{</span><span class=n>end_stats</span><span class=si>}</span><span class=s2> from </span><span class=si>{</span><span class=n>data</span><span class=si>}</span><span class=s2>?"</span><span class=p>)</span>
+
+        <span class=k>yield</span> <span class=n>PackingStatistics</span><span class=p>(</span>
+            <span class=n>end_statistics</span><span class=o>=</span><span class=n>end_stats</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span>
+            <span class=n>n_items</span><span class=o>=</span><span class=n>n_items</span><span class=p>,</span>
+            <span class=n>n_different_items</span><span class=o>=</span><span class=n>n_different_items</span><span class=p>,</span>
+            <span class=n>bin_width</span><span class=o>=</span><span class=n>bin_width</span><span class=p>,</span>
+            <span class=n>bin_height</span><span class=o>=</span><span class=n>bin_height</span><span class=p>,</span>
+            <span class=n>objectives</span><span class=o>=</span><span class=p>{</span>
+                <span class=n>o</span><span class=p>:</span> <span class=n>SampleStatistics</span><span class=o>.</span><span class=n>from_samples</span><span class=p>(</span>
+                    <span class=n>pr</span><span class=o>.</span><span class=n>objectives</span><span class=p>[</span><span class=n>o</span><span class=p>]</span> <span class=k>for</span> <span class=n>pr</span> <span class=ow>in</span> <span class=n>data</span><span class=p>)</span>
+                <span class=k>for</span> <span class=n>o</span> <span class=ow>in</span> <span class=n>objectives</span>
+            <span class=p>},</span>
+            <span class=n>objective_bounds</span><span class=o>=</span><span class=n>objective_bounds</span><span class=p>,</span>
+            <span class=n>bin_bounds</span><span class=o>=</span><span class=n>bin_bounds</span><span class=p>,</span>
+        <span class=p>)</span>
+        <span class=n>end_stats</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span></div>
+
+
+
+<div class=viewcode-block id=to_csv>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.to_csv>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>to_csv</span><span class=p>(</span><span class=n>results</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>PackingStatistics</span><span class=p>],</span> <span class=n>file</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=n>Path</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Write a sequence of packing statistics to a file in CSV format.</span>
+
+<span class=sd>    :param results: the end statistics</span>
+<span class=sd>    :param file: the path</span>
+<span class=sd>    :return: the path of the file that was written</span>
+<span class=sd>    """</span>
+    <span class=n>path</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>file</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Writing packing statistics to CSV file </span><span class=si>{</span><span class=n>path</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=n>path</span><span class=o>.</span><span class=n>ensure_parent_dir_exists</span><span class=p>()</span>
+    <span class=k>with</span> <span class=n>path</span><span class=o>.</span><span class=n>open_for_write</span><span class=p>()</span> <span class=k>as</span> <span class=n>wt</span><span class=p>:</span>
+        <span class=n>consumer</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>line_writer</span><span class=p>(</span><span class=n>wt</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>p</span> <span class=ow>in</span> <span class=n>CsvWriter</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span><span class=n>results</span><span class=p>)):</span>
+            <span class=n>consumer</span><span class=p>(</span><span class=n>p</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Done writing packing statistics to CSV file </span><span class=si>{</span><span class=n>path</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>path</span></div>
+
+
+
+<div class=viewcode-block id=from_csv>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.from_csv>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>from_csv</span><span class=p>(</span><span class=n>file</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=n>PackingStatistics</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Load the packing statistics from a CSV file.</span>
+
+<span class=sd>    :param file: the file to read from</span>
+<span class=sd>    :returns: the iterable with the packing statistics</span>
+<span class=sd>    """</span>
+    <span class=n>path</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>file_path</span><span class=p>(</span><span class=n>file</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Now reading CSV file </span><span class=si>{</span><span class=n>path</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>with</span> <span class=n>path</span><span class=o>.</span><span class=n>open_for_read</span><span class=p>()</span> <span class=k>as</span> <span class=n>rd</span><span class=p>:</span>
+        <span class=k>yield from</span> <span class=n>CsvReader</span><span class=o>.</span><span class=n>read</span><span class=p>(</span><span class=n>rd</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Done reading CSV file </span><span class=si>{</span><span class=n>path</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=CsvWriter>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.CsvWriter>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>CsvWriter</span><span class=p>(</span><span class=n>CsvWriterBase</span><span class=p>[</span><span class=n>PackingStatistics</span><span class=p>]):</span>
+<span class=w>    </span><span class=sd>"""A class for CSV writing of :class:`PackingStatistics`."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>data</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>PackingStatistics</span><span class=p>],</span>
+                 <span class=n>scope</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the csv writer.</span>
+
+<span class=sd>        :param data: the data to write</span>
+<span class=sd>        :param scope: the prefix to be pre-pended to all columns</span>
+<span class=sd>        """</span>
+        <span class=n>data</span> <span class=o>=</span> <span class=n>reiterable</span><span class=p>(</span><span class=n>data</span><span class=p>)</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>data</span><span class=p>,</span> <span class=n>scope</span><span class=p>)</span>
+        <span class=c1>#: the end statistics writer</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__es</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>EsCsvWriter</span><span class=p>]</span> <span class=o>=</span> <span class=n>EsCsvWriter</span><span class=p>((</span>
+            <span class=n>pr</span><span class=o>.</span><span class=n>end_statistics</span> <span class=k>for</span> <span class=n>pr</span> <span class=ow>in</span> <span class=n>data</span><span class=p>),</span> <span class=n>scope</span><span class=p>)</span>
+
+        <span class=n>bin_bounds_set</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=n>objectives_set</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=k>for</span> <span class=n>pr</span> <span class=ow>in</span> <span class=n>data</span><span class=p>:</span>
+            <span class=n>bin_bounds_set</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>bin_bounds</span><span class=o>.</span><span class=n>keys</span><span class=p>())</span>
+            <span class=n>objectives_set</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>pr</span><span class=o>.</span><span class=n>objectives</span><span class=o>.</span><span class=n>keys</span><span class=p>())</span>
+
+        <span class=c1>#: the bin bounds</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span> \
+            <span class=k>if</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>bin_bounds_set</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span> <span class=k>else</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>bin_bounds_set</span><span class=p>)</span>
+
+        <span class=c1>#: the objectives</span>
+        <span class=n>objectives</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>SsCsvWriter</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the objective names</span>
+        <span class=n>objective_names</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the lower bound names</span>
+        <span class=n>objective_lb_names</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the upper bound names</span>
+        <span class=n>objective_ub_names</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=k>if</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>objectives_set</span><span class=p>)</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>p</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>scope</span>
+            <span class=n>objective_names</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span><span class=n>objectives_set</span><span class=p>))</span>
+            <span class=n>objective_lb_names</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>csv_scope</span><span class=p>(</span>
+                <span class=n>oxx</span><span class=p>,</span> <span class=n>_OBJECTIVE_LOWER</span><span class=p>)</span> <span class=k>for</span> <span class=n>oxx</span> <span class=ow>in</span> <span class=n>objective_names</span><span class=p>)</span>
+            <span class=n>objective_ub_names</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>csv_scope</span><span class=p>(</span>
+                <span class=n>oxx</span><span class=p>,</span> <span class=n>_OBJECTIVE_UPPER</span><span class=p>)</span> <span class=k>for</span> <span class=n>oxx</span> <span class=ow>in</span> <span class=n>objective_names</span><span class=p>)</span>
+            <span class=n>objectives</span> <span class=o>=</span> <span class=p>[</span><span class=n>SsCsvWriter</span><span class=p>(</span>
+                <span class=n>data</span><span class=o>=</span><span class=p>(</span><span class=n>ddd</span><span class=o>.</span><span class=n>objectives</span><span class=p>[</span><span class=n>k</span><span class=p>]</span> <span class=k>for</span> <span class=n>ddd</span> <span class=ow>in</span> <span class=n>data</span><span class=p>),</span>
+                <span class=n>scope</span><span class=o>=</span><span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=n>k</span><span class=p>),</span> <span class=n>n_not_needed</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>what_short</span><span class=o>=</span><span class=n>k</span><span class=p>,</span>
+                <span class=n>what_long</span><span class=o>=</span><span class=sa>f</span><span class=s2>"objective function </span><span class=si>{</span><span class=n>k</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span> <span class=k>for</span> <span class=n>k</span> <span class=ow>in</span> <span class=n>objective_names</span><span class=p>]</span>
+
+        <span class=c1>#: the objectives</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>SsCsvWriter</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=n>objectives</span>
+        <span class=c1>#: the objective names</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__objective_names</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> \
+            <span class=o>=</span> <span class=n>objective_names</span>
+        <span class=c1>#: the lower bound names</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__objective_lb_names</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> \
+            <span class=o>=</span> <span class=n>objective_lb_names</span>
+        <span class=c1>#: the upper bound names</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__objective_ub_names</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> \
+            <span class=o>=</span> <span class=n>objective_ub_names</span>
+
+<div class=viewcode-block id=CsvWriter.get_column_titles>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.CsvWriter.get_column_titles>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>get_column_titles</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""Get the column titles."""</span>
+        <span class=n>p</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>scope</span>
+        <span class=k>yield from</span> <span class=bp>self</span><span class=o>.</span><span class=n>__es</span><span class=o>.</span><span class=n>get_column_titles</span><span class=p>()</span>
+
+        <span class=k>yield</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=n>KEY_BIN_HEIGHT</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=n>KEY_BIN_WIDTH</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=n>KEY_N_ITEMS</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=n>KEY_N_DIFFERENT_ITEMS</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>b</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span>
+                <span class=k>yield</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=n>b</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objective_names</span> <span class=ow>and</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>o</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>):</span>
+                <span class=k>yield</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objective_lb_names</span><span class=p>[</span><span class=n>i</span><span class=p>])</span>
+                <span class=k>yield from</span> <span class=n>o</span><span class=o>.</span><span class=n>get_column_titles</span><span class=p>()</span>
+                <span class=k>yield</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objective_ub_names</span><span class=p>[</span><span class=n>i</span><span class=p>])</span></div>
+
+
+<div class=viewcode-block id=CsvWriter.get_row>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.CsvWriter.get_row>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>get_row</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>data</span><span class=p>:</span> <span class=n>PackingStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Render a single packing result record to a CSV row.</span>
+
+<span class=sd>        :param data: the end result record</span>
+<span class=sd>        :returns: the iterable with the row text</span>
+<span class=sd>        """</span>
+        <span class=k>yield from</span> <span class=bp>self</span><span class=o>.</span><span class=n>__es</span><span class=o>.</span><span class=n>get_row</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>end_statistics</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=nb>repr</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>bin_height</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=nb>repr</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>bin_width</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=nb>repr</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>n_items</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=nb>repr</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>bb</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span>
+                <span class=k>yield</span> <span class=p>(</span><span class=nb>repr</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>bin_bounds</span><span class=p>[</span><span class=n>bb</span><span class=p>])</span>
+                       <span class=k>if</span> <span class=n>bb</span> <span class=ow>in</span> <span class=n>data</span><span class=o>.</span><span class=n>bin_bounds</span> <span class=k>else</span> <span class=s2>""</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objective_names</span> <span class=ow>and</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>:</span>
+            <span class=n>lb</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objective_lb_names</span>
+            <span class=n>ub</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objective_ub_names</span>
+            <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>ob</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__objective_names</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>lb</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=n>ox</span> <span class=o>=</span> <span class=n>lb</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+                    <span class=k>yield</span> <span class=p>(</span><span class=n>num_to_str</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>objective_bounds</span><span class=p>[</span><span class=n>ox</span><span class=p>])</span>
+                           <span class=k>if</span> <span class=n>ox</span> <span class=ow>in</span> <span class=n>data</span><span class=o>.</span><span class=n>objective_bounds</span> <span class=k>else</span> <span class=s2>""</span><span class=p>)</span>
+                <span class=k>yield from</span> <span class=n>SsCsvWriter</span><span class=o>.</span><span class=n>get_optional_row</span><span class=p>(</span>
+                    <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>[</span><span class=n>i</span><span class=p>],</span> <span class=n>data</span><span class=o>.</span><span class=n>objectives</span><span class=o>.</span><span class=n>get</span><span class=p>(</span><span class=n>ob</span><span class=p>))</span>
+                <span class=k>if</span> <span class=n>ub</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=n>ox</span> <span class=o>=</span> <span class=n>ub</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+                    <span class=k>yield</span> <span class=p>(</span><span class=n>num_to_str</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>objective_bounds</span><span class=p>[</span><span class=n>ox</span><span class=p>])</span>
+                           <span class=k>if</span> <span class=n>ox</span> <span class=ow>in</span> <span class=n>data</span><span class=o>.</span><span class=n>objective_bounds</span> <span class=k>else</span> <span class=s2>""</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=CsvWriter.get_header_comments>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.CsvWriter.get_header_comments>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>get_header_comments</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get any possible header comments.</span>
+
+<span class=sd>        :returns: the header comments</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=s2>"End Statistics of Bin Packing Experiments"</span><span class=p>,</span>
+                <span class=s2>"See the description at the bottom of the file."</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=CsvWriter.get_footer_comments>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.CsvWriter.get_footer_comments>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>get_footer_comments</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get any possible footer comments.</span>
+
+<span class=sd>        :returns: the footer comments</span>
+<span class=sd>        """</span>
+        <span class=k>yield from</span> <span class=bp>self</span><span class=o>.</span><span class=n>__es</span><span class=o>.</span><span class=n>get_footer_comments</span><span class=p>()</span>
+        <span class=k>yield</span> <span class=s2>""</span>
+        <span class=n>p</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>scope</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>bb</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span>
+                <span class=k>yield</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span><span class=w> </span><span class=n>bb</span><span class=p>)</span><span class=si>}</span><span class=s2> is a lower "</span>
+                       <span class=s2>"bound for the number of bins."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span> <span class=ow>and</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objective_names</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>obb</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__objective_names</span><span class=p>):</span>
+                <span class=n>ob</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>p</span><span class=p>,</span> <span class=n>obb</span><span class=p>)</span>
+                <span class=n>ox</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>ob</span><span class=p>,</span> <span class=n>_OBJECTIVE_LOWER</span><span class=p>)</span>
+                <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ox</span><span class=si>}</span><span class=s2>: a lower bound of the </span><span class=si>{</span><span class=n>ob</span><span class=si>}</span><span class=s2> objective function."</span>
+                <span class=k>yield from</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>[</span><span class=n>i</span><span class=p>]</span><span class=o>.</span><span class=n>get_footer_comments</span><span class=p>()</span>
+                <span class=n>ox</span> <span class=o>=</span> <span class=n>csv_scope</span><span class=p>(</span><span class=n>ob</span><span class=p>,</span> <span class=n>_OBJECTIVE_UPPER</span><span class=p>)</span>
+                <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ox</span><span class=si>}</span><span class=s2>: an upper bound of the </span><span class=si>{</span><span class=n>ob</span><span class=si>}</span><span class=s2> objective function."</span></div>
+
+
+<div class=viewcode-block id=CsvWriter.get_footer_bottom_comments>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.CsvWriter.get_footer_bottom_comments>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>get_footer_bottom_comments</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""Get the bottom footer comments."""</span>
+        <span class=k>yield from</span> <span class=n>motipyapps_footer_bottom_comments</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=s2>"The packing data is assembled using module "</span>
+                  <span class=s2>"moptipyapps.binpacking2d.packing_statistics."</span><span class=p>)</span>
+        <span class=k>yield from</span> <span class=n>EsCsvWriter</span><span class=o>.</span><span class=n>get_footer_bottom_comments</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__es</span><span class=p>)</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=CsvReader>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.CsvReader>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>CsvReader</span><span class=p>(</span><span class=n>CsvReaderBase</span><span class=p>[</span><span class=n>PackingStatistics</span><span class=p>]):</span>
+<span class=w>    </span><span class=sd>"""A class for CSV parsing to get :class:`PackingStatistics`."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>columns</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a CSV parser for :class:`EndResult`.</span>
+
+<span class=sd>        :param columns: the columns</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>columns</span><span class=p>)</span>
+        <span class=c1>#: the end result csv reader</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__es</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>EsCsvReader</span><span class=p>]</span> <span class=o>=</span> <span class=n>EsCsvReader</span><span class=p>(</span><span class=n>columns</span><span class=p>)</span>
+        <span class=c1>#: the index of the n-items column</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__idx_n_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>csv_column</span><span class=p>(</span><span class=n>columns</span><span class=p>,</span> <span class=n>KEY_N_ITEMS</span><span class=p>)</span>
+        <span class=c1>#: the index of the n different items column</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__idx_n_different</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>csv_column</span><span class=p>(</span>
+            <span class=n>columns</span><span class=p>,</span> <span class=n>KEY_N_DIFFERENT_ITEMS</span><span class=p>)</span>
+        <span class=c1>#: the index of the bin width column</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__idx_bin_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>csv_column</span><span class=p>(</span>
+            <span class=n>columns</span><span class=p>,</span> <span class=n>KEY_BIN_WIDTH</span><span class=p>)</span>
+        <span class=c1>#: the index of the bin height column</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__idx_bin_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>csv_column</span><span class=p>(</span>
+            <span class=n>columns</span><span class=p>,</span> <span class=n>KEY_BIN_HEIGHT</span><span class=p>)</span>
+        <span class=c1>#: the indices for the objective bounds</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> \
+            <span class=n>csv_select_scope</span><span class=p>(</span>
+                <span class=k>lambda</span> <span class=n>x</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(((</span><span class=n>k</span><span class=p>,</span> <span class=n>v</span><span class=p>)</span> <span class=k>for</span> <span class=n>k</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=n>x</span><span class=o>.</span><span class=n>items</span><span class=p>()))),</span>
+                <span class=n>columns</span><span class=p>,</span> <span class=n>LOWER_BOUNDS_BIN_COUNT</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"No bin bounds found?"</span><span class=p>)</span>
+        <span class=c1>#: the objective bounds columns</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__objective_bounds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> \
+            <span class=n>csv_select_scope</span><span class=p>(</span>
+                <span class=k>lambda</span> <span class=n>x</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(((</span><span class=n>k</span><span class=p>,</span> <span class=n>v</span><span class=p>)</span> <span class=k>for</span> <span class=n>k</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=n>x</span><span class=o>.</span><span class=n>items</span><span class=p>()))),</span>
+                <span class=n>columns</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span>
+                <span class=n>skip_orig_key</span><span class=o>=</span><span class=k>lambda</span> <span class=n>s</span><span class=p>:</span> <span class=ow>not</span> <span class=nb>str</span><span class=o>.</span><span class=n>endswith</span><span class=p>(</span>
+                    <span class=n>s</span><span class=p>,</span> <span class=p>(</span><span class=n>_OBJECTIVE_LOWER</span><span class=p>,</span> <span class=n>_OBJECTIVE_UPPER</span><span class=p>)))</span>
+        <span class=n>n_bounds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__objective_bounds</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>n_bounds</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"No objective function bounds found?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>n_bounds</span> <span class=o>&</span> <span class=mi>1</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Number of bounds </span><span class=si>{</span><span class=n>n_bounds</span><span class=si>}</span><span class=s2> should be even."</span><span class=p>)</span>
+        <span class=n>n_val</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>((</span><span class=n>KEY_N</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__es</span><span class=o>.</span><span class=n>idx_n</span><span class=p>),</span> <span class=p>)</span>
+        <span class=c1>#: the parsers for the per-objective statistics</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>SsCsvReader</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> \
+            <span class=nb>tuple</span><span class=p>((</span><span class=n>ss</span><span class=p>,</span> <span class=n>csv_select_scope</span><span class=p>(</span><span class=n>SsCsvReader</span><span class=p>,</span> <span class=n>columns</span><span class=p>,</span> <span class=n>ss</span><span class=p>,</span> <span class=n>n_val</span><span class=p>))</span>
+                  <span class=k>for</span> <span class=n>ss</span> <span class=ow>in</span> <span class=nb>sorted</span><span class=p>({</span><span class=n>s</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=k>for</span> <span class=n>s</span> <span class=ow>in</span> <span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=n>split</span><span class=p>(</span>
+                      <span class=n>kk</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=n>SCOPE_SEPARATOR</span><span class=p>)</span> <span class=k>for</span> <span class=n>kk</span> <span class=ow>in</span>
+                      <span class=bp>self</span><span class=o>.</span><span class=n>__objective_bounds</span><span class=p>)</span> <span class=k>if</span> <span class=p>(</span><span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>s</span><span class=p>)</span> <span class=o>></span> <span class=mi>1</span><span class=p>)</span>
+                      <span class=ow>and</span> <span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>s</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span> <span class=o>></span> <span class=mi>0</span><span class=p>)}))</span>
+        <span class=n>n_objectives</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>n_objectives</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"No objectives found?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=mi>2</span> <span class=o>*</span> <span class=n>n_objectives</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_bounds</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Number </span><span class=si>{</span><span class=n>n_objectives</span><span class=si>}</span><span class=s2> of objectives "</span>
+                <span class=sa>f</span><span class=s2>"inconsistent with number </span><span class=si>{</span><span class=n>n_bounds</span><span class=si>}</span><span class=s2> of bounds."</span><span class=p>)</span>
+
+<div class=viewcode-block id=CsvReader.parse_row>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_statistics.CsvReader.parse_row>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>parse_row</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>data</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>])</span> <span class=o>-></span> <span class=n>PackingStatistics</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Parse a row of data.</span>
+
+<span class=sd>        :param data: the data row</span>
+<span class=sd>        :return: the end result statistics</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>PackingStatistics</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__es</span><span class=o>.</span><span class=n>parse_row</span><span class=p>(</span><span class=n>data</span><span class=p>),</span>
+            <span class=nb>int</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=bp>self</span><span class=o>.</span><span class=n>__idx_n_items</span><span class=p>]),</span>
+            <span class=nb>int</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=bp>self</span><span class=o>.</span><span class=n>__idx_n_different</span><span class=p>]),</span>
+            <span class=nb>int</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=bp>self</span><span class=o>.</span><span class=n>__idx_bin_width</span><span class=p>]),</span>
+            <span class=nb>int</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=bp>self</span><span class=o>.</span><span class=n>__idx_bin_height</span><span class=p>]),</span>
+            <span class=p>{</span><span class=n>o</span><span class=p>:</span> <span class=n>v</span><span class=o>.</span><span class=n>parse_row</span><span class=p>(</span><span class=n>data</span><span class=p>)</span> <span class=k>for</span> <span class=n>o</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objectives</span><span class=p>},</span>
+            <span class=p>{</span><span class=n>o</span><span class=p>:</span> <span class=n>str_to_num</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=n>v</span><span class=p>])</span> <span class=k>for</span> <span class=n>o</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>__objective_bounds</span><span class=p>},</span>
+            <span class=p>{</span><span class=n>o</span><span class=p>:</span> <span class=nb>int</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=n>v</span><span class=p>])</span> <span class=k>for</span> <span class=n>o</span><span class=p>,</span> <span class=n>v</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>__bin_bounds</span><span class=p>},</span>
+        <span class=p>)</span></div>
+</div>
+
+
+
+<span class=c1># Run packing-results to stat file if executed as script</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span> <span class=s2>"Build an end-results statistics CSV file."</span><span class=p>,</span>
+        <span class=s2>"This program computes statistics over packing results"</span><span class=p>)</span>
+    <span class=n>def_src</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>"./evaluation/end_results.txt"</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=n>os</span><span class=o>.</span><span class=n>path</span><span class=o>.</span><span class=n>isfile</span><span class=p>(</span><span class=n>def_src</span><span class=p>):</span>
+        <span class=n>def_src</span> <span class=o>=</span> <span class=s2>"./results"</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"source"</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=n>def_src</span><span class=p>,</span>
+        <span class=n>help</span><span class=o>=</span><span class=s2>"either the directory with moptipy log files or the path to the "</span>
+             <span class=s2>"end-results CSV file"</span><span class=p>,</span> <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span>
+        <span class=n>default</span><span class=o>=</span><span class=s2>"./evaluation/end_statistics.txt"</span><span class=p>,</span>
+        <span class=n>help</span><span class=o>=</span><span class=s2>"the path to the end results statistics CSV file to be created"</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+
+    <span class=n>src_path</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>args</span><span class=o>.</span><span class=n>source</span>
+    <span class=n>packing_results</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>PackingResult</span><span class=p>]</span>
+    <span class=k>if</span> <span class=n>src_path</span><span class=o>.</span><span class=n>is_file</span><span class=p>():</span>
+        <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>src_path</span><span class=si>!r}</span><span class=s2> identifies as file, load as end-results csv"</span><span class=p>)</span>
+        <span class=n>packing_results</span> <span class=o>=</span> <span class=n>pr_from_csv</span><span class=p>(</span><span class=n>src_path</span><span class=p>)</span>
+    <span class=k>else</span><span class=p>:</span>
+        <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>src_path</span><span class=si>!r}</span><span class=s2> identifies as directory, load it as log files"</span><span class=p>)</span>
+        <span class=n>packing_results</span> <span class=o>=</span> <span class=n>pr_from_logs</span><span class=p>(</span><span class=n>src_path</span><span class=p>)</span>
+    <span class=n>to_csv</span><span class=p>(</span><span class=n>from_packing_results</span><span class=p>(</span><span class=n>results</span><span class=o>=</span><span class=n>packing_results</span><span class=p>),</span> <span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.packing_statistics</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

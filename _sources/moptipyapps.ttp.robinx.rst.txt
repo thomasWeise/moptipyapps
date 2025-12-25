@@ -1,0 +1,7 @@
+moptipyapps.ttp.robinx package
+==============================
+
+.. automodule:: moptipyapps.ttp.robinx
+   :members:
+   :show-inheritance:
+   :undoc-members:

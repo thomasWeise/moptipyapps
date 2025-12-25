@@ -1,0 +1,219 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.multistatistics — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/multistatistics.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.multistatistics</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.multistatistics</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A statistics record for multiple simulations.</span>
+
+<span class=sd>:class:`~MultiStatistics` are records that hold multiple simulation</span>
+<span class=sd>:class:`~moptipyapps.prodsched.statistics.Statistics`, each of which computed</span>
+<span class=sd>over a separate :class:`~moptipyapps.prodsched.simulation.Simulation` based on</span>
+<span class=sd>a separate :mod:`~moptipyapps.prodsched.instance` of the material flow</span>
+<span class=sd>problem.</span>
+<span class=sd>These records are filled with data by via the</span>
+<span class=sd>:class:`moptipyapps.prodsched.rop_multisimulation.ROPMultiSimulation`</span>
+<span class=sd>mechanism, which performs the multiple simulations.</span>
+
+<span class=sd>We cn use this record as the solution space when optimizing for the MFC</span>
+<span class=sd>scenario.</span>
+<span class=sd>Such a record holds comprehensive statistics across several simulation runs.</span>
+<span class=sd>This makes it suitable as source of data for objective functions</span>
+<span class=sd>(:class:`~moptipy.api.objective.Objective`).</span>
+<span class=sd>The objective functions can then access these statistics.</span>
+
+<span class=sd>Since we use :class:`~MultiStatistics` as solution space, we also need an</span>
+<span class=sd>implementation of moptipy's :class:`~moptipy.api.space.Space`-API to plug it</span>
+<span class=sd>into the optimization process.</span>
+<span class=sd>Sucha space implementation is provided as class</span>
+<span class=sd>:class:`~MultiStatisticsSpace`.</span>
+<span class=sd>It can create, copy, and serialize these objects to text, so that they can</span>
+<span class=sd>appear in the log files.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>dataclasses</span><span class=w> </span><span class=kn>import</span> <span class=n>dataclass</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Generator</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.space</span><span class=w> </span><span class=kn>import</span> <span class=n>Space</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>KeyValueLogSection</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>Statistics</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>to_stream</span> <span class=k>as</span> <span class=n>stat_to_stream</span>
+
+
+<div class=viewcode-block id=MultiStatistics>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatistics>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>MultiStatistics</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""A set of statistics gathered over multiple instances."""</span>
+
+    <span class=c1>#: the per-instance statistics</span>
+    <span class=n>per_instance</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Statistics</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+    <span class=c1>#: the instance names</span>
+    <span class=n>inst_names</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instances</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Instance</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the multi-statistics object.</span>
+
+<span class=sd>        :param instances: the instances for which we create the statistics</span>
+<span class=sd>        """</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"per_instance"</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>(</span>
+            <span class=n>Statistics</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>n_products</span><span class=p>)</span> <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>instances</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"inst_names"</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>(</span>
+            <span class=n>inst</span><span class=o>.</span><span class=n>name</span> <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>instances</span><span class=p>))</span></div>
+
+
+
+<div class=viewcode-block id=to_stream>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.to_stream>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>to_stream</span><span class=p>(</span><span class=n>multi</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=n>Generator</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span> <span class=kc>None</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert a multi-statistics object to a stream.</span>
+
+<span class=sd>    :param multi: the multi-statistics object</span>
+<span class=sd>    :return: the stream of strings</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>multi</span><span class=p>,</span> <span class=n>MultiStatistics</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>multi</span><span class=p>,</span> <span class=s2>"multi"</span><span class=p>,</span> <span class=n>MultiStatistics</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>ss</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>multi</span><span class=o>.</span><span class=n>per_instance</span><span class=p>):</span>
+        <span class=k>yield</span> <span class=sa>f</span><span class=s2>"-------- Instance </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>multi</span><span class=o>.</span><span class=n>inst_names</span><span class=p>[</span><span class=n>i</span><span class=p>]</span><span class=si>!r}</span><span class=s2> -------"</span>
+        <span class=k>yield from</span> <span class=n>stat_to_stream</span><span class=p>(</span><span class=n>ss</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=MultiStatisticsSpace>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>MultiStatisticsSpace</span><span class=p>(</span><span class=n>Space</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An implementation of the `Space` API of for multiple statistics."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instances</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Instance</span><span class=p>,</span> <span class=o>...</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a multi-statistics space.</span>
+
+<span class=sd>        :param instances: the instances</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instances</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instances</span><span class=p>,</span> <span class=s2>"instances"</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>instances</span><span class=p>:</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=c1>#: The instance to which the packings apply.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instances</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Instance</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>instances</span>
+
+<div class=viewcode-block id=MultiStatisticsSpace.copy>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace.copy>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>copy</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>dest</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>,</span> <span class=n>source</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Copy one multi-statistics to another one.</span>
+
+<span class=sd>        :param dest: the destination multi-statistics</span>
+<span class=sd>        :param source: the source multi-statistics</span>
+<span class=sd>        """</span>
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>d</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>dest</span><span class=o>.</span><span class=n>per_instance</span><span class=p>):</span>
+            <span class=n>d</span><span class=o>.</span><span class=n>copy_from</span><span class=p>(</span><span class=n>source</span><span class=o>.</span><span class=n>per_instance</span><span class=p>[</span><span class=n>i</span><span class=p>])</span></div>
+
+
+<div class=viewcode-block id=MultiStatisticsSpace.create>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace.create>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>create</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>MultiStatistics</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create an empty multi-statistics record.</span>
+
+<span class=sd>        :return: the empty multi-statistics record</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>MultiStatistics</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instances</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=MultiStatisticsSpace.to_str>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace.to_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>to_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert a multi-statistics to a string.</span>
+
+<span class=sd>        :param x: the packing</span>
+<span class=sd>        :return: a string corresponding to the multi-statistics</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>to_stream</span><span class=p>(</span><span class=n>x</span><span class=p>))</span></div>
+
+
+<div class=viewcode-block id=MultiStatisticsSpace.is_equal>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace.is_equal>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>is_equal</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x1</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>,</span> <span class=n>x2</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Check if two multi-statistics have the same contents.</span>
+
+<span class=sd>        :param x1: the first multi-statistics</span>
+<span class=sd>        :param x2: the second multi-statistics</span>
+<span class=sd>        :return: `True` if both multi-statistics have the same content</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=n>x1</span> <span class=ow>is</span> <span class=n>x2</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>x1</span><span class=o>.</span><span class=n>per_instance</span> <span class=o>==</span> <span class=n>x2</span><span class=o>.</span><span class=n>per_instance</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=MultiStatisticsSpace.from_str>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace.from_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>text</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=n>MultiStatistics</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert a string to a multi-statistics.</span>
+
+<span class=sd>        :param text: the string</span>
+<span class=sd>        :return: the multi-statistics</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=s2>"text"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=k>raise</span> <span class=ne>NotImplementedError</span></div>
+
+
+<div class=viewcode-block id=MultiStatisticsSpace.validate>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace.validate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>validate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Check if a multi-statistics is valid.</span>
+
+<span class=sd>        :param x: the multi-statistics</span>
+<span class=sd>        :raises TypeError: if any component of the multi-statistics is of the</span>
+<span class=sd>            wrong type</span>
+<span class=sd>        :raises ValueError: if the multi-statistics is not feasible</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>MultiStatistics</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=s2>"x"</span><span class=p>,</span> <span class=n>MultiStatistics</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=o>.</span><span class=n>per_instance</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>x</span><span class=o>.</span><span class=n>per_instance</span><span class=p>,</span> <span class=s2>"x.per_instance"</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>s</span> <span class=ow>in</span> <span class=n>x</span><span class=o>.</span><span class=n>per_instance</span><span class=p>:</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>s</span><span class=p>,</span> <span class=n>Statistics</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>s</span><span class=p>,</span> <span class=s2>"x.per_instance[i]"</span><span class=p>,</span> <span class=n>Statistics</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=MultiStatisticsSpace.n_points>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace.n_points>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>n_points</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the number of possible multi-statistics.</span>
+
+<span class=sd>        :return: just some arbitrary very large number</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mi>100</span> <span class=o>**</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instances</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the multi-statistics space.</span>
+
+<span class=sd>        :return: the name</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=sa>f</span><span class=s2>"multistats_</span><span class=si>{</span><span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instances</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span>
+
+<div class=viewcode-block id=MultiStatisticsSpace.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.multistatistics.MultiStatisticsSpace.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of the space to the given logger.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>inst</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instances</span><span class=p>):</span>
+            <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=sa>f</span><span class=s2>"inst_</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>inst</span><span class=o>.</span><span class=n>name</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.multistatistics</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

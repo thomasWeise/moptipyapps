@@ -1,0 +1,229 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.tests.on_tsp — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/tests/on_tsp.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.tests.on_tsp</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.tests.on_tsp</h1><div class=highlight><pre>
+<span></span><span class=sd>"""Perform tests on the Traveling Salesperson Problem."""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>time</span><span class=w> </span><span class=kn>import</span> <span class=n>monotonic_ns</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.algorithm</span><span class=w> </span><span class=kn>import</span> <span class=n>Algorithm</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.permutations</span><span class=w> </span><span class=kn>import</span> <span class=n>Permutations</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.tests.algorithm</span><span class=w> </span><span class=kn>import</span> <span class=n>validate_algorithm</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.tests.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>validate_objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>numpy.random</span><span class=w> </span><span class=kn>import</span> <span class=n>Generator</span><span class=p>,</span> <span class=n>default_rng</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.tsp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.tsp.tour_length</span><span class=w> </span><span class=kn>import</span> <span class=n>TourLength</span>
+
+<span class=c1>#: the internal random number generator</span>
+<span class=n>__RANDOM</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Generator</span><span class=p>]</span> <span class=o>=</span> <span class=n>default_rng</span><span class=p>()</span>
+
+
+<div class=viewcode-block id=tsp_instances_for_tests>
+<a class=viewcode-back href=../../../moptipyapps.tests.html#moptipyapps.tests.on_tsp.tsp_instances_for_tests>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>tsp_instances_for_tests</span><span class=p>(</span>
+        <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span> <span class=o>=</span> <span class=n>__RANDOM</span><span class=p>,</span>
+        <span class=n>symmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>,</span>
+        <span class=n>asymmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get a sequence of TSP instances to test on.</span>
+
+<span class=sd>    :param random: the random number generator to use</span>
+<span class=sd>    :param symmetric: include symmetric instances</span>
+<span class=sd>    :param asymmetric: include asymmetric instances</span>
+<span class=sd>    :returns: an iterable of TSP instance names</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>symmetric</span><span class=p>,</span> <span class=nb>bool</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>symmetric</span><span class=p>,</span> <span class=s2>"symmetric"</span><span class=p>,</span> <span class=nb>bool</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>asymmetric</span><span class=p>,</span> <span class=nb>bool</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>asymmetric</span><span class=p>,</span> <span class=s2>"asymmetric"</span><span class=p>,</span> <span class=nb>bool</span><span class=p>)</span>
+
+    <span class=n>instances</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+    <span class=k>if</span> <span class=n>symmetric</span> <span class=ow>and</span> <span class=n>asymmetric</span><span class=p>:</span>
+        <span class=n>instances</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>list_resources</span><span class=p>(</span><span class=kc>True</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+    <span class=k>elif</span> <span class=n>symmetric</span><span class=p>:</span>
+        <span class=n>instances</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>list_resources</span><span class=p>(</span><span class=kc>True</span><span class=p>,</span> <span class=kc>False</span><span class=p>)</span>
+    <span class=k>elif</span> <span class=n>asymmetric</span><span class=p>:</span>
+        <span class=n>instances</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>list_resources</span><span class=p>(</span><span class=kc>False</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+    <span class=k>else</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+            <span class=s2>"at least of one symmetric or asymmetric must be TRUE"</span><span class=p>)</span>
+    <span class=n>use_insts</span> <span class=o>=</span> <span class=nb>list</span><span class=p>(</span><span class=n>instances</span><span class=p>)</span>
+    <span class=k>while</span> <span class=nb>len</span><span class=p>(</span><span class=n>use_insts</span><span class=p>)</span> <span class=o>></span> <span class=mi>20</span><span class=p>:</span>
+        <span class=k>del</span> <span class=n>use_insts</span><span class=p>[</span><span class=n>random</span><span class=o>.</span><span class=n>integers</span><span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>use_insts</span><span class=p>))]</span>
+    <span class=n>random</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>use_insts</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>use_insts</span></div>
+
+
+
+<div class=viewcode-block id=make_tour_valid>
+<a class=viewcode-back href=../../../moptipyapps.tests.html#moptipyapps.tests.on_tsp.make_tour_valid>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>make_tour_valid</span><span class=p>(</span><span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>,</span> <span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create valid TSP tours.</span>
+
+<span class=sd>    :param random: the random number generator to use</span>
+<span class=sd>    :param y: the input tour</span>
+<span class=sd>    :returns: the valid version of `y`</span>
+<span class=sd>    """</span>
+    <span class=n>y</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=nb>len</span><span class=p>(</span><span class=n>y</span><span class=p>)]</span> <span class=o>=</span> <span class=nb>range</span><span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>y</span><span class=p>))</span>
+    <span class=n>random</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>y</span></div>
+
+
+
+<div class=viewcode-block id=make_tour_invalid>
+<a class=viewcode-back href=../../../moptipyapps.tests.html#moptipyapps.tests.on_tsp.make_tour_invalid>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>make_tour_invalid</span><span class=p>(</span><span class=n>random</span><span class=p>:</span> <span class=n>Generator</span><span class=p>,</span> <span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create invalid tours.</span>
+
+<span class=sd>    :param random: the random number generator to use</span>
+<span class=sd>    :param y: the input tour</span>
+<span class=sd>    :returns: the invalid version of `y`</span>
+<span class=sd>    """</span>
+    <span class=n>ly</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>
+    <span class=n>y</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>ly</span><span class=p>]</span> <span class=o>=</span> <span class=nb>range</span><span class=p>(</span><span class=n>ly</span><span class=p>)</span>
+    <span class=n>random</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>
+    <span class=n>yorig</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>copy</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>
+
+    <span class=n>ri</span> <span class=o>=</span> <span class=n>random</span><span class=o>.</span><span class=n>integers</span>
+    <span class=n>end_time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>monotonic_ns</span><span class=p>()</span> <span class=o>+</span> <span class=mi>20_000_000_000</span>
+    <span class=k>while</span> <span class=n>np</span><span class=o>.</span><span class=n>all</span><span class=p>(</span><span class=n>y</span> <span class=o>==</span> <span class=n>yorig</span><span class=p>):</span>
+        <span class=k>if</span> <span class=n>monotonic_ns</span><span class=p>()</span> <span class=o>>=</span> <span class=n>end_time</span><span class=p>:</span>
+            <span class=n>y</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>y</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span>
+            <span class=k>return</span> <span class=n>y</span>
+        <span class=k>if</span> <span class=n>ri</span><span class=p>(</span><span class=mi>2</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>z1</span> <span class=o>=</span> <span class=n>z2</span> <span class=o>=</span> <span class=n>ri</span><span class=p>(</span><span class=n>ly</span><span class=p>)</span>
+            <span class=k>while</span> <span class=n>z1</span> <span class=o>==</span> <span class=n>z2</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>monotonic_ns</span><span class=p>()</span> <span class=o>>=</span> <span class=n>end_time</span><span class=p>:</span>
+                    <span class=n>y</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>y</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span>
+                    <span class=k>return</span> <span class=n>y</span>
+                <span class=n>z2</span> <span class=o>=</span> <span class=n>ri</span><span class=p>(</span><span class=n>ly</span><span class=p>)</span>
+            <span class=n>y</span><span class=p>[</span><span class=n>z1</span><span class=p>]</span> <span class=o>=</span> <span class=n>y</span><span class=p>[</span><span class=n>z2</span><span class=p>]</span>
+        <span class=k>if</span> <span class=n>ri</span><span class=p>(</span><span class=mi>2</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>y</span><span class=p>[</span><span class=n>ri</span><span class=p>(</span><span class=n>ly</span><span class=p>)]</span> <span class=o>=</span> <span class=n>ri</span><span class=p>(</span><span class=n>ly</span><span class=p>,</span> <span class=mi>10</span> <span class=o>*</span> <span class=n>ly</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>ri</span><span class=p>(</span><span class=mi>2</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>y</span><span class=p>[</span><span class=n>ri</span><span class=p>(</span><span class=n>ly</span><span class=p>)]</span> <span class=o>=</span> <span class=n>ri</span><span class=p>(</span><span class=o>-</span><span class=mi>2</span> <span class=o>*</span> <span class=n>ly</span><span class=p>,</span> <span class=o>-</span><span class=mi>1</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>y</span></div>
+
+
+
+<div class=viewcode-block id=validate_algorithm_on_1_tsp>
+<a class=viewcode-back href=../../../moptipyapps.tests.html#moptipyapps.tests.on_tsp.validate_algorithm_on_1_tsp>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>validate_algorithm_on_1_tsp</span><span class=p>(</span>
+        <span class=n>algorithm</span><span class=p>:</span> <span class=n>Algorithm</span> <span class=o>|</span> <span class=n>Callable</span><span class=p>[</span>
+            <span class=p>[</span><span class=n>Instance</span><span class=p>,</span> <span class=n>Permutations</span><span class=p>],</span> <span class=n>Algorithm</span><span class=p>],</span>
+        <span class=n>instance</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span> <span class=n>max_fes</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>256</span><span class=p>,</span>
+        <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span> <span class=o>=</span> <span class=n>__RANDOM</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Check the validity of a black-box algorithm on one TSP instance.</span>
+
+<span class=sd>    :param algorithm: the algorithm or algorithm factory</span>
+<span class=sd>    :param instance: the instance name, or `None` to randomly pick one</span>
+<span class=sd>    :param max_fes: the maximum number of FEs</span>
+<span class=sd>    :param random: the default random generator to use</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=nb>isinstance</span><span class=p>(</span><span class=n>algorithm</span><span class=p>,</span> <span class=n>Algorithm</span><span class=p>)</span> <span class=ow>or</span> <span class=nb>callable</span><span class=p>(</span><span class=n>algorithm</span><span class=p>)):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>algorithm</span><span class=p>,</span> <span class=s2>"algorithm"</span><span class=p>,</span> <span class=n>Algorithm</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>instance</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>instance</span> <span class=o>=</span> <span class=nb>str</span><span class=p>(</span><span class=n>random</span><span class=o>.</span><span class=n>choice</span><span class=p>(</span><span class=n>Instance</span><span class=o>.</span><span class=n>list_resources</span><span class=p>()))</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"TSP instance name"</span><span class=p>,</span> <span class=p>(</span><span class=nb>str</span><span class=p>,</span> <span class=kc>None</span><span class=p>))</span>
+    <span class=n>inst</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"loaded bin TSP instance </span><span class=si>{</span><span class=n>instance</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span>
+                         <span class=n>Instance</span><span class=p>)</span>
+
+    <span class=n>search_space</span> <span class=o>=</span> <span class=n>Permutations</span><span class=o>.</span><span class=n>standard</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>n_cities</span><span class=p>)</span>
+    <span class=n>objective</span> <span class=o>=</span> <span class=n>TourLength</span><span class=p>(</span><span class=n>inst</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>callable</span><span class=p>(</span><span class=n>algorithm</span><span class=p>):</span>
+        <span class=n>algorithm</span> <span class=o>=</span> <span class=n>algorithm</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=n>search_space</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>algorithm</span><span class=p>,</span> <span class=n>Algorithm</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>algorithm</span><span class=p>,</span> <span class=s2>"algorithm"</span><span class=p>,</span> <span class=n>Algorithm</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+
+    <span class=n>validate_algorithm</span><span class=p>(</span><span class=n>algorithm</span><span class=o>=</span><span class=n>algorithm</span><span class=p>,</span>
+                       <span class=n>solution_space</span><span class=o>=</span><span class=n>search_space</span><span class=p>,</span>
+                       <span class=n>objective</span><span class=o>=</span><span class=n>objective</span><span class=p>,</span>
+                       <span class=n>max_fes</span><span class=o>=</span><span class=n>max_fes</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=validate_algorithm_on_tsp>
+<a class=viewcode-back href=../../../moptipyapps.tests.html#moptipyapps.tests.on_tsp.validate_algorithm_on_tsp>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>validate_algorithm_on_tsp</span><span class=p>(</span>
+        <span class=n>algorithm</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>,</span> <span class=n>Permutations</span><span class=p>],</span> <span class=n>Algorithm</span><span class=p>],</span>
+        <span class=n>symmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>,</span> <span class=n>asymmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>,</span>
+        <span class=n>max_fes</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>256</span><span class=p>,</span> <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span> <span class=o>=</span> <span class=n>__RANDOM</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Validate an algorithm on a set of TSP instances.</span>
+
+<span class=sd>    :param algorithm: the algorithm factory</span>
+<span class=sd>    :param symmetric: include symmetric instances</span>
+<span class=sd>    :param asymmetric: include asymmetric instances</span>
+<span class=sd>    :param max_fes: the maximum FEs</span>
+<span class=sd>    :param random: the random number generator</span>
+<span class=sd>    """</span>
+    <span class=n>end_time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>monotonic_ns</span><span class=p>()</span> <span class=o>+</span> <span class=mi>20_000_000_000</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=n>tsp_instances_for_tests</span><span class=p>(</span><span class=n>random</span><span class=p>,</span> <span class=n>symmetric</span><span class=p>,</span> <span class=n>asymmetric</span><span class=p>):</span>
+        <span class=k>if</span> <span class=n>monotonic_ns</span><span class=p>()</span> <span class=o>>=</span> <span class=n>end_time</span><span class=p>:</span>
+            <span class=k>return</span>
+        <span class=n>validate_algorithm_on_1_tsp</span><span class=p>(</span><span class=n>algorithm</span><span class=p>,</span> <span class=n>i</span><span class=p>,</span> <span class=n>max_fes</span><span class=p>,</span> <span class=n>random</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=validate_objective_on_1_tsp>
+<a class=viewcode-back href=../../../moptipyapps.tests.html#moptipyapps.tests.on_tsp.validate_objective_on_1_tsp>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>validate_objective_on_1_tsp</span><span class=p>(</span>
+        <span class=n>objective</span><span class=p>:</span> <span class=n>Objective</span> <span class=o>|</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>],</span>
+        <span class=n>instance</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+        <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span> <span class=o>=</span> <span class=n>__RANDOM</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Validate an objective function on 1 TSP instance.</span>
+
+<span class=sd>    :param objective: the objective function or a factory creating it</span>
+<span class=sd>    :param instance: the instance name</span>
+<span class=sd>    :param random: the random number generator</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=n>instance</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>instance</span> <span class=o>=</span> <span class=nb>str</span><span class=p>(</span><span class=n>random</span><span class=o>.</span><span class=n>choice</span><span class=p>(</span><span class=n>Instance</span><span class=o>.</span><span class=n>list_resources</span><span class=p>()))</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"TSP instance name"</span><span class=p>,</span> <span class=p>(</span><span class=nb>str</span><span class=p>,</span> <span class=kc>None</span><span class=p>))</span>
+    <span class=n>inst</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"loaded TSP instance </span><span class=si>{</span><span class=n>instance</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span>
+                         <span class=n>Instance</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=nb>callable</span><span class=p>(</span><span class=n>objective</span><span class=p>):</span>
+        <span class=n>objective</span> <span class=o>=</span> <span class=n>objective</span><span class=p>(</span><span class=n>inst</span><span class=p>)</span>
+
+    <span class=n>validate_objective</span><span class=p>(</span>
+        <span class=n>objective</span><span class=o>=</span><span class=n>objective</span><span class=p>,</span>
+        <span class=n>solution_space</span><span class=o>=</span><span class=n>Permutations</span><span class=o>.</span><span class=n>standard</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>n_cities</span><span class=p>),</span>
+        <span class=n>make_solution_space_element_valid</span><span class=o>=</span><span class=n>make_tour_valid</span><span class=p>,</span>
+        <span class=n>is_deterministic</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=validate_objective_on_tsp>
+<a class=viewcode-back href=../../../moptipyapps.tests.html#moptipyapps.tests.on_tsp.validate_objective_on_tsp>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>validate_objective_on_tsp</span><span class=p>(</span>
+        <span class=n>objective</span><span class=p>:</span> <span class=n>Objective</span> <span class=o>|</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>],</span>
+        <span class=n>symmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>,</span> <span class=n>asymmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>,</span>
+        <span class=n>random</span><span class=p>:</span> <span class=n>Generator</span> <span class=o>=</span> <span class=n>__RANDOM</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Validate an objective function on TSP instances.</span>
+
+<span class=sd>    :param objective: the objective function or a factory creating it</span>
+<span class=sd>    :param symmetric: include symmetric instances</span>
+<span class=sd>    :param asymmetric: include asymmetric instances</span>
+<span class=sd>    :param random: the random number generator</span>
+<span class=sd>    """</span>
+    <span class=n>end_time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>monotonic_ns</span><span class=p>()</span> <span class=o>+</span> <span class=mi>20_000_000_000</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=n>tsp_instances_for_tests</span><span class=p>(</span><span class=n>random</span><span class=p>,</span> <span class=n>symmetric</span><span class=p>,</span> <span class=n>asymmetric</span><span class=p>):</span>
+        <span class=k>if</span> <span class=n>monotonic_ns</span><span class=p>()</span> <span class=o>>=</span> <span class=n>end_time</span><span class=p>:</span>
+            <span class=k>return</span>
+        <span class=n>validate_objective_on_1_tsp</span><span class=p>(</span><span class=n>objective</span><span class=p>,</span> <span class=n>i</span><span class=p>,</span> <span class=n>random</span><span class=p>)</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.tests.on_tsp</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

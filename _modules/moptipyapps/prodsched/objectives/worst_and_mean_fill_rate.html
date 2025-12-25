@@ -1,0 +1,65 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.objectives.worst_and_mean_fill_rate — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/objectives/worst_and_mean_fill_rate.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.objectives.worst_and_mean_fill_rate</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.objectives.worst_and_mean_fill_rate</h1><div class=highlight><pre>
+<span></span><span class=sd>"""Maximize the worst and average immediate rates."""</span>
+
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.multistatistics</span><span class=w> </span><span class=kn>import</span> <span class=n>MultiStatistics</span>
+
+
+<div class=viewcode-block id=WorstAndMeanFillRate>
+<a class=viewcode-back href=../../../../moptipyapps.prodsched.objectives.html#moptipyapps.prodsched.objectives.worst_and_mean_fill_rate.WorstAndMeanFillRate>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>WorstAndMeanFillRate</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""Compute the worst immediate rate and return `1 -` of it."""</span>
+
+<div class=viewcode-block id=WorstAndMeanFillRate.evaluate>
+<a class=viewcode-back href=../../../../moptipyapps.prodsched.objectives.html#moptipyapps.prodsched.objectives.worst_and_mean_fill_rate.WorstAndMeanFillRate.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the negated worst immediate rate.</span>
+
+<span class=sd>        :param x: the multi-statistics</span>
+<span class=sd>        :return: the worst stock level</span>
+<span class=sd>        """</span>
+        <span class=n>min_imm</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=n>avg_imm</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=k>for</span> <span class=n>stat</span> <span class=ow>in</span> <span class=n>x</span><span class=o>.</span><span class=n>per_instance</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>sl</span> <span class=ow>in</span> <span class=n>stat</span><span class=o>.</span><span class=n>immediate_rates</span><span class=p>:</span>
+                <span class=n>min_imm</span> <span class=o>=</span> <span class=mi>0</span> <span class=k>if</span> <span class=n>sl</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=nb>min</span><span class=p>(</span><span class=n>min_imm</span><span class=p>,</span> <span class=n>sl</span><span class=p>)</span>
+            <span class=n>avg_imm</span> <span class=o>=</span> <span class=mi>0</span> <span class=k>if</span> <span class=n>stat</span><span class=o>.</span><span class=n>immediate_rate</span> <span class=ow>is</span> <span class=kc>None</span> <span class=k>else</span> <span class=nb>min</span><span class=p>(</span>
+                <span class=n>avg_imm</span><span class=p>,</span> <span class=n>stat</span><span class=o>.</span><span class=n>immediate_rate</span><span class=p>)</span>
+        <span class=k>return</span> <span class=p>(</span><span class=mi>1</span> <span class=o>-</span> <span class=n>min_imm</span><span class=p>)</span> <span class=o>*</span> <span class=mi>100</span> <span class=o>+</span> <span class=p>(</span><span class=mi>1</span> <span class=o>-</span> <span class=n>avg_imm</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=WorstAndMeanFillRate.lower_bound>
+<a class=viewcode-back href=../../../../moptipyapps.prodsched.objectives.html#moptipyapps.prodsched.objectives.worst_and_mean_fill_rate.WorstAndMeanFillRate.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of the inverted minimum immediate rate.</span>
+
+<span class=sd>        :retval 0: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mi>0</span></div>
+
+
+<div class=viewcode-block id=WorstAndMeanFillRate.upper_bound>
+<a class=viewcode-back href=../../../../moptipyapps.prodsched.objectives.html#moptipyapps.prodsched.objectives.worst_and_mean_fill_rate.WorstAndMeanFillRate.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the upper bound of the inverted minimum immediate rate.</span>
+
+<span class=sd>        :retval 1: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mi>101</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the objective function.</span>
+
+<span class=sd>        :return: `worstMinAndMeanFillRate`</span>
+<span class=sd>        :retval "worstMinAndMeanFillRate": always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"worstAndMeanFillRate"</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.objectives.worst_and_mean_fill_rate</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

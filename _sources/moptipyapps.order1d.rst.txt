@@ -1,0 +1,34 @@
+moptipyapps.order1d package
+===========================
+
+.. automodule:: moptipyapps.order1d
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.order1d.distances module
+------------------------------------
+
+.. automodule:: moptipyapps.order1d.distances
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.order1d.instance module
+-----------------------------------
+
+.. automodule:: moptipyapps.order1d.instance
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.order1d.space module
+--------------------------------
+
+.. automodule:: moptipyapps.order1d.space
+   :members:
+   :show-inheritance:
+   :undoc-members:

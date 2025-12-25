@@ -1,0 +1,263 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.instgen.errors — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/instgen/errors.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.errors</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.instgen.errors</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An objective function counting deviations from the instance definition.</span>
+
+<span class=sd>This objective function will be the smaller, the closer the structure</span>
+<span class=sd>of an instance is to the original instance.</span>
+<span class=sd>Due to our encoding, we create instances whose bin width, bin height,</span>
+<span class=sd>and the number of items is the same as in an existing instance. The</span>
+<span class=sd>lower bound for the required number of bins is also the same.</span>
+
+<span class=sd>This objective function here also incorporates some additional features, such</span>
+<span class=sd>as:</span>
+
+<span class=sd>1. Is the number of different items similar to those in the original instance?</span>
+<span class=sd>   In an existing instance, some items of same width and height could be</span>
+<span class=sd>   grouped together. We may have 10 items to pack, but only 3 different item</span>
+<span class=sd>   sizes exist. We here compare the number of different item sizes of a</span>
+<span class=sd>   generated instance with the number in the instance definition.</span>
+<span class=sd>2. In a given instance, we can observe the minimum and maximum width and</span>
+<span class=sd>   height of any item. If an item in the generated instance is smaller than</span>
+<span class=sd>   the minimum or larger than the maximum permitted value in one dimension,</span>
+<span class=sd>   this will increase the error count.</span>
+<span class=sd>3. Additionally, we want the actual minimum and maximum width and height of</span>
+<span class=sd>   any item in the generated instance is the same as in the original instance.</span>
+<span class=sd>4. Finally, we want that the total area covered by all items is the same in</span>
+<span class=sd>   the generated instance as in the original instance.</span>
+
+<span class=sd>All of these potential violations are counted and added up. Using this</span>
+<span class=sd>objective function should drive the search towards generating instances that</span>
+<span class=sd>are structurally similar to an existing instance, at least in some parameters.</span>
+
+<span class=sd>We could push this arbitrarily further, trying to emulate the exact</span>
+<span class=sd>distribution of the item sizes, etc. But this may just lead to the</span>
+<span class=sd>reproduction of the original instance by the search and not add anything</span>
+<span class=sd>interesting.</span>
+
+<span class=sd>>>> orig = Instance.from_resource("a04")</span>
+<span class=sd>>>> space = InstanceSpace(orig)</span>
+<span class=sd>>>> print(f"{space.inst_name!r} with {space.n_different_items}/"</span>
+<span class=sd>...       f"{space.n_items} items with area {space.total_item_area} "</span>
+<span class=sd>...       f"in {space.min_bins} bins of "</span>
+<span class=sd>...       f"size {space.bin_width}*{space.bin_height}.")</span>
+<span class=sd>'a04n' with 2/16 items with area 7305688 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> from moptipyapps.binpacking2d.instgen.inst_decoding import InstanceDecoder</span>
+<span class=sd>>>> decoder = InstanceDecoder(space)</span>
+<span class=sd>>>> import numpy as np</span>
+<span class=sd>>>> x = np.array([ 0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, ])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 15/16 items with area 10065000 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\</span>
+<span class=sd>441,122;1649,122;2750,10;2750,1,2;2750,3;1649,1098;2750,878;2750,58;660,122</span>
+
+<span class=sd>>>> errors = Errors(space)</span>
+<span class=sd>>>> errors.lower_bound()</span>
+<span class=sd>0.0</span>
+<span class=sd>>>> errors.upper_bound()</span>
+<span class=sd>1.0</span>
+<span class=sd>>>> errors.evaluate(y)</span>
+<span class=sd>0.614714632631273</span>
+
+<span class=sd>>>> y[0] = orig</span>
+<span class=sd>>>> errors.evaluate(y)</span>
+<span class=sd>0.0</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>sqrt</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>IDX_HEIGHT</span><span class=p>,</span>
+    <span class=n>IDX_REPETITION</span><span class=p>,</span>
+    <span class=n>IDX_WIDTH</span><span class=p>,</span>
+    <span class=n>Instance</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instgen.instance_space</span><span class=w> </span><span class=kn>import</span> <span class=n>InstanceSpace</span>
+
+
+<div class=viewcode-block id=Errors>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.errors.Errors>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Errors</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""Compute the deviation of an instance from the definition."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>space</span><span class=p>:</span> <span class=n>InstanceSpace</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the errors objective function.</span>
+
+<span class=sd>        :param instance: the instance to load the bounds from</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>space</span><span class=p>,</span> <span class=n>InstanceSpace</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>space</span><span class=p>,</span> <span class=s2>"space"</span><span class=p>,</span> <span class=n>InstanceSpace</span><span class=p>)</span>
+        <span class=c1>#: the instance description</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>InstanceSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span>
+
+        <span class=c1># These errors are permitted.</span>
+        <span class=n>max_errors</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span>
+            <span class=n>space</span><span class=o>.</span><span class=n>n_different_items</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span>
+            <span class=n>space</span><span class=o>.</span><span class=n>n_items</span> <span class=o>-</span> <span class=n>space</span><span class=o>.</span><span class=n>n_different_items</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+
+        <span class=n>goal_min_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>item_width_min</span>
+        <span class=n>goal_max_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>item_width_max</span>
+        <span class=n>goal_min_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>item_height_min</span>
+        <span class=n>goal_max_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>item_height_max</span>
+        <span class=n>bin_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>bin_width</span>
+        <span class=n>bin_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>bin_height</span>
+
+        <span class=n>n_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>n_items</span>
+        <span class=n>max_errors</span> <span class=o>+=</span> <span class=n>n_items</span> <span class=o>*</span> <span class=nb>max</span><span class=p>(</span>
+            <span class=n>goal_min_width</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span> <span class=n>bin_width</span> <span class=o>-</span> <span class=n>goal_max_width</span><span class=p>)</span>
+        <span class=n>max_errors</span> <span class=o>+=</span> <span class=n>n_items</span> <span class=o>*</span> <span class=nb>max</span><span class=p>(</span>
+            <span class=n>goal_min_height</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span> <span class=n>bin_height</span> <span class=o>-</span> <span class=n>goal_max_height</span><span class=p>)</span>
+        <span class=n>max_errors</span> <span class=o>+=</span> <span class=nb>max</span><span class=p>(</span><span class=n>goal_min_width</span><span class=p>,</span> <span class=n>bin_width</span> <span class=o>-</span> <span class=n>goal_min_width</span><span class=p>)</span>
+        <span class=n>max_errors</span> <span class=o>+=</span> <span class=nb>max</span><span class=p>(</span><span class=n>goal_max_width</span><span class=p>,</span> <span class=n>bin_width</span> <span class=o>-</span> <span class=n>goal_max_width</span><span class=p>)</span>
+        <span class=n>max_errors</span> <span class=o>+=</span> <span class=nb>max</span><span class=p>(</span><span class=n>goal_min_height</span><span class=p>,</span> <span class=n>bin_height</span> <span class=o>-</span> <span class=n>goal_min_height</span><span class=p>)</span>
+        <span class=n>max_errors</span> <span class=o>+=</span> <span class=nb>max</span><span class=p>(</span><span class=n>goal_max_height</span><span class=p>,</span> <span class=n>bin_height</span> <span class=o>-</span> <span class=n>goal_max_height</span><span class=p>)</span>
+
+        <span class=n>alt_area</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>space</span><span class=o>.</span><span class=n>min_bins</span> <span class=o>*</span> <span class=n>bin_width</span> <span class=o>*</span> <span class=n>bin_height</span>
+                                <span class=o>-</span> <span class=n>space</span><span class=o>.</span><span class=n>total_item_area</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>alt_area</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Invalid item area in space?"</span><span class=p>)</span>
+        <span class=n>max_errors</span> <span class=o>+=</span> <span class=nb>max</span><span class=p>(</span><span class=n>space</span><span class=o>.</span><span class=n>total_item_area</span><span class=p>,</span> <span class=n>alt_area</span><span class=p>)</span>
+
+        <span class=c1>#: the maximum number of errors</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__max_errors</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>max_errors</span>
+
+<div class=viewcode-block id=Errors.evaluate>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.errors.Errors.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>|</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute the deviations from the instance definition.</span>
+
+<span class=sd>        :param x: the instance</span>
+<span class=sd>        :return: the number of deviations divided by the maximum of</span>
+<span class=sd>            the deviations</span>
+<span class=sd>        """</span>
+        <span class=n>errors</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=nb>list</span><span class=p>)</span> <span class=k>else</span> <span class=n>x</span>
+        <span class=n>space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>InstanceSpace</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>space</span>
+
+        <span class=c1># Some errors are not permitted.</span>
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>bin_width</span> <span class=o>-</span> <span class=n>space</span><span class=o>.</span><span class=n>bin_width</span><span class=p>)</span>  <span class=c1># should be 0!</span>
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>bin_height</span> <span class=o>-</span> <span class=n>space</span><span class=o>.</span><span class=n>bin_height</span><span class=p>)</span>  <span class=c1># should be 0!</span>
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>n_items</span> <span class=o>-</span> <span class=n>space</span><span class=o>.</span><span class=n>n_items</span><span class=p>)</span>  <span class=c1># should be 0!</span>
+        <span class=k>if</span> <span class=n>errors</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Instance </span><span class=si>{</span><span class=n>inst</span><span class=si>}</span><span class=s2> is inconsistent with space </span><span class=si>{</span><span class=n>space</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=c1># These errors are permitted.</span>
+        <span class=n>n_different</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_different_items</span>
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>n_different</span> <span class=o>-</span> <span class=n>space</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>)</span>  <span class=c1># > 0</span>
+        <span class=n>goal_min_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>item_width_min</span>
+        <span class=n>goal_max_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>item_width_max</span>
+        <span class=n>goal_min_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>item_height_min</span>
+        <span class=n>goal_max_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>item_height_max</span>
+
+        <span class=n>actual_min_width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>bin_width</span>
+        <span class=n>actual_max_width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>actual_min_height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>bin_height</span>
+        <span class=n>actual_max_height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>total_area</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+
+        <span class=k>for</span> <span class=n>row</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_different</span><span class=p>):</span>
+            <span class=n>width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>inst</span><span class=p>[</span><span class=n>row</span><span class=p>,</span> <span class=n>IDX_WIDTH</span><span class=p>])</span>
+            <span class=n>height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>inst</span><span class=p>[</span><span class=n>row</span><span class=p>,</span> <span class=n>IDX_HEIGHT</span><span class=p>])</span>
+            <span class=n>actual_min_width</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>actual_min_width</span><span class=p>,</span> <span class=n>width</span><span class=p>)</span>
+            <span class=n>actual_max_width</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>actual_max_width</span><span class=p>,</span> <span class=n>width</span><span class=p>)</span>
+            <span class=n>actual_min_height</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>actual_min_height</span><span class=p>,</span> <span class=n>height</span><span class=p>)</span>
+            <span class=n>actual_max_height</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>actual_max_height</span><span class=p>,</span> <span class=n>height</span><span class=p>)</span>
+
+            <span class=n>n</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>inst</span><span class=p>[</span><span class=n>row</span><span class=p>,</span> <span class=n>IDX_REPETITION</span><span class=p>])</span>
+            <span class=n>total_area</span> <span class=o>+=</span> <span class=n>n</span> <span class=o>*</span> <span class=n>width</span> <span class=o>*</span> <span class=n>height</span>
+            <span class=k>if</span> <span class=n>width</span> <span class=o><</span> <span class=n>goal_min_width</span><span class=p>:</span>
+                <span class=n>errors</span> <span class=o>+=</span> <span class=n>n</span> <span class=o>*</span> <span class=p>(</span><span class=n>goal_min_width</span> <span class=o>-</span> <span class=n>width</span><span class=p>)</span>
+            <span class=k>elif</span> <span class=n>width</span> <span class=o>></span> <span class=n>goal_max_width</span><span class=p>:</span>
+                <span class=n>errors</span> <span class=o>+=</span> <span class=n>n</span> <span class=o>*</span> <span class=p>(</span><span class=n>width</span> <span class=o>-</span> <span class=n>goal_max_width</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>height</span> <span class=o><</span> <span class=n>goal_min_height</span><span class=p>:</span>
+                <span class=n>errors</span> <span class=o>+=</span> <span class=n>n</span> <span class=o>*</span> <span class=p>(</span><span class=n>goal_min_height</span> <span class=o>-</span> <span class=n>height</span><span class=p>)</span>
+            <span class=k>elif</span> <span class=n>height</span> <span class=o>></span> <span class=n>goal_max_height</span><span class=p>:</span>
+                <span class=n>errors</span> <span class=o>+=</span> <span class=n>n</span> <span class=o>*</span> <span class=p>(</span><span class=n>height</span> <span class=o>-</span> <span class=n>goal_max_height</span><span class=p>)</span>
+
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>actual_min_width</span> <span class=o>-</span> <span class=n>goal_min_width</span><span class=p>)</span>
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>actual_max_width</span> <span class=o>-</span> <span class=n>goal_max_width</span><span class=p>)</span>
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>actual_min_height</span> <span class=o>-</span> <span class=n>goal_min_height</span><span class=p>)</span>
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>actual_max_height</span> <span class=o>-</span> <span class=n>goal_max_height</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>total_area</span> <span class=o>!=</span> <span class=n>inst</span><span class=o>.</span><span class=n>total_item_area</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Invalid total area?"</span><span class=p>)</span>
+        <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>total_area</span> <span class=o>-</span> <span class=n>space</span><span class=o>.</span><span class=n>total_item_area</span><span class=p>)</span>
+
+        <span class=k>return</span> <span class=nb>max</span><span class=p>(</span><span class=mf>0.0</span><span class=p>,</span> <span class=nb>min</span><span class=p>(</span><span class=mf>1.0</span><span class=p>,</span> <span class=n>sqrt</span><span class=p>(</span><span class=n>errors</span> <span class=o>/</span> <span class=bp>self</span><span class=o>.</span><span class=n>__max_errors</span><span class=p>)))</span></div>
+
+
+<div class=viewcode-block id=Errors.log_parameters_to>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.errors.Errors.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of this instance.</span>
+
+<span class=sd>        :param logger: the logger</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"maxErrors"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__max_errors</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Errors.lower_bound>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.errors.Errors.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of the instance template deviations.</span>
+
+<span class=sd>        :returs 0.0: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mf>0.0</span></div>
+
+
+<div class=viewcode-block id=Errors.is_always_integer>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.errors.Errors.is_always_integer>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>is_always_integer</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Return `True` because there are only integer errors.</span>
+
+<span class=sd>        :retval False: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=kc>False</span></div>
+
+
+<div class=viewcode-block id=Errors.upper_bound>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.errors.Errors.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the upper bound of the number of deviations.</span>
+
+<span class=sd>        :returs 1.0: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mf>1.0</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the errors objective function.</span>
+
+<span class=sd>        :return: `errors`</span>
+<span class=sd>        :retval "errors": always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"errors"</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.errors</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

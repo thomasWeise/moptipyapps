@@ -1,0 +1,1160 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.tsp.instance — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/tsp/instance.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.tsp.instance</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.tsp.instance</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An instance of the Traveling Salesperson Problem (TSP) as distance matrix.</span>
+
+<span class=sd>An instance of the Traveling Salesperson Problem (TSP) is defined as a</span>
+<span class=sd>fully-connected graph with :attr:`Instance.n_cities` nodes. Each edge in the</span>
+<span class=sd>graph has a weight, which identifies the distance between the nodes. The goal</span>
+<span class=sd>is to find the *shortest* tour that visits every single node in the graph</span>
+<span class=sd>exactly once and then returns back to its starting node. Then nodes are</span>
+<span class=sd>usually called cities. In this file, we present methods for loading instances</span>
+<span class=sd>of the TSP as distance matrices `A`. In other words, the value at `A[i, j]`</span>
+<span class=sd>identifies the travel distance from `i` to `j`.</span>
+
+<span class=sd>We can load files in a subset of the TSPLib format [1, 2] and also include the</span>
+<span class=sd>instances of TSPLib with no more than 2000 cities. We load instances as full</span>
+<span class=sd>distance matrices, which makes writing algorithms to solve them easier but</span>
+<span class=sd>handling instances with more than 2000 cities problematic due to the high</span>
+<span class=sd>memory consumption. Of course, you could still load them, but it would be</span>
+<span class=sd>ill-advised to do so on a normal PC (at the time of this writing).</span>
+
+<span class=sd>The TSPLib contains many instances of the symmetric TSP, where the distance</span>
+<span class=sd>`A[i, j]` from city `i` to city `j` is the same as the distance `A[j, i]` from</span>
+<span class=sd>`j` to `i`. Here, we provide 111 of them as resource. The cities of some of</span>
+<span class=sd>these instances are points in the Euclidean plain and the distances are the</span>
+<span class=sd>(approximate) Euclidean distances. Others use geographical coordinates</span>
+<span class=sd>(longitude/latitude), and yet others are provides as distances matrices</span>
+<span class=sd>directly. We also provide 19 of the asymmetric TSPLib instances, where the</span>
+<span class=sd>distance `A[i, j]` from `i` to `j` may be different from the distance</span>
+<span class=sd>`A[j, i]` from `j` to `i`.</span>
+
+<span class=sd>You can obtain lists of either all, only the symmetric, or only the asymmetric</span>
+<span class=sd>instance resources via</span>
+
+<span class=sd>>>> print(Instance.list_resources()[0:10])  # get all instances (1..10)</span>
+<span class=sd>('a280', 'ali535', 'att48', 'att532', 'bayg29', 'bays29', 'berlin52', \</span>
+<span class=sd>'bier127', 'br17', 'brazil58')</span>
+
+<span class=sd>>>> print(Instance.list_resources(asymmetric=False)[0:10])  # only symmetric</span>
+<span class=sd>('a280', 'ali535', 'att48', 'att532', 'bayg29', 'bays29', 'berlin52', \</span>
+<span class=sd>'bier127', 'brazil58', 'brg180')</span>
+
+<span class=sd>>>> print(Instance.list_resources(symmetric=False)[0:10])  # only asymmetric</span>
+<span class=sd>('br17', 'ft53', 'ft70', 'ftv170', 'ftv33', 'ftv35', 'ftv38', 'ftv44', \</span>
+<span class=sd>'ftv47', 'ftv55')</span>
+
+<span class=sd>You can load any of these instances from the resources via</span>
+<span class=sd>:meth:`Instance.from_resource` as follows:</span>
+
+<span class=sd>>>> inst = Instance.from_resource("a280")</span>
+<span class=sd>>>> print(inst.n_cities)</span>
+<span class=sd>280</span>
+
+<span class=sd>If you want to read an instance from an external TSPLib file, you can use</span>
+<span class=sd>:meth:`Instance.from_file`. Be aware that not the whole TSPLib standard is</span>
+<span class=sd>supported right now, but only a reasonably large subset.</span>
+
+<span class=sd>Every TSP instance automatically provides a lower bound</span>
+<span class=sd>:attr:`Instance.tour_length_lower_bound` and an upper bound</span>
+<span class=sd>:attr:`Instance.tour_length_upper_bound` of the lengths of valid tours.</span>
+<span class=sd>For the TSPLib instances, the globally optimal solutions and their tour</span>
+<span class=sd>lengths are known, so we can use them as lower bounds directly. Otherwise,</span>
+<span class=sd>we currently use a very crude approximation: We assume that, for each city</span>
+<span class=sd>`i`, the next city `j` to be visited would be the nearest neighbor of `i`.</span>
+<span class=sd>Of course, in reality, such a tour may not be feasible, as it could contain</span>
+<span class=sd>disjoint sets of loops. But no tour can be shorter than this.</span>
+<span class=sd>As upper bound, we do the same but assume that `j` would be the cities</span>
+<span class=sd>farthest away from `i`.</span>
+
+<span class=sd>>>> print(inst.tour_length_lower_bound)</span>
+<span class=sd>2579</span>
+<span class=sd>>>> print(inst.tour_length_upper_bound)</span>
+<span class=sd>65406</span>
+
+<span class=sd>It should be noted that all TSPLib instances by definition have integer</span>
+<span class=sd>distances. This means that there are never floating point distances and, for</span>
+<span class=sd>example, Euclidean distances are rounded and are only approximate Euclidean.</span>
+<span class=sd>Then again, since floating point numbers could also only represent things such</span>
+<span class=sd>as `sqrt(2)` approximately, using integers instead of floating point numbers</span>
+<span class=sd>does not really change anything - distances would be approximately Euclidean</span>
+<span class=sd>or approximately geographical either way.</span>
+
+<span class=sd>TSPLib also provides some known optimal solutions in path representation,</span>
+<span class=sd>i.e., as permutations of the numbers `0` to `n_cities-1`. The optimal</span>
+<span class=sd>solutions corresponding to the instances provides as resources can be obtained</span>
+<span class=sd>via :mod:`~moptipyapps.tsp.known_optima`.</span>
+
+<span class=sd>>>> inst = Instance.from_resource("si175")</span>
+<span class=sd>>>> print(inst.n_cities)</span>
+<span class=sd>175</span>
+<span class=sd>>>> int(inst[0, 1])</span>
+<span class=sd>113</span>
+<span class=sd>>>> int(inst[173, 174])</span>
+<span class=sd>337</span>
+<span class=sd>>>> int(inst[1, 174])</span>
+<span class=sd>384</span>
+<span class=sd>>>> int(inst[2, 174])</span>
+<span class=sd>384</span>
+<span class=sd>>>> int(inst[2, 3])</span>
+<span class=sd>248</span>
+<span class=sd>>>> int(inst[3, 5])</span>
+<span class=sd>335</span>
+<span class=sd>>>> int(inst[4, 6])</span>
+<span class=sd>134</span>
+
+<span class=sd>The original data of TSPLib can be found at</span>
+<span class=sd>&LThttp://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/>. Before doing</span>
+<span class=sd>anything with these data directly, you should make sure to read the FAQ</span>
+<span class=sd>&LThttp://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/TSPFAQ.html> and the</span>
+<span class=sd>documentation</span>
+<span class=sd>&LThttp://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf>.</span>
+
+<span class=sd>On 2024-10-18, we added a small eleven city instance based on the car travel</span>
+<span class=sd>distances in km between the Chinese cities</span>
+<span class=sd>Shanghai (上海), Beijing (北京), Nanjing (南京), Hefei (合肥),</span>
+<span class=sd>Harbin (哈尔滨), Kunming (昆明), Wuhan (武汉),</span>
+<span class=sd>Xi'an (西安), Chongqing (重庆), Changsha (长沙),</span>
+<span class=sd>and Hong Kong (香港), determined using BaiDu Maps on 2024-10-18.</span>
+<span class=sd>The optimal solution for this instance has length 9547 (km) and visits the</span>
+<span class=sd>cities in the following order: Shanghai (上海),</span>
+<span class=sd>Nanjing (南京), Hefei (合肥), Wuhan (武汉), Changsha (长沙),</span>
+<span class=sd>Hong Kong (香港), Kunming (昆明), Chongqing (重庆),</span>
+<span class=sd>Xi'an (西安), Beijing (北京), Harbin (哈尔滨).</span>
+<span class=sd>This instance can be used to validate and santity-test algorithms, as its</span>
+<span class=sd>solution can easily be determined using exhaustive enumeration.</span>
+
+<span class=sd>Interestingly, it holds that the calculated travel distance from</span>
+<span class=sd>Harbin (哈尔滨) to Kunming (昆明) is longer than the travel distance</span>
+<span class=sd>from Harbin (哈尔滨) to Xi'an (西安) and then from</span>
+<span class=sd>Xi'an (西安) to Kunming (昆明).</span>
+
+<span class=sd>- Harbin (哈尔滨) - Kunming (昆明) = 3781 km</span>
+<span class=sd>- Harbin (哈尔滨) - Xi'an (西安) = 2291 km</span>
+<span class=sd>- Xi'an (西安) - Kunming (昆明) = 1483 km</span>
+<span class=sd>- 2291 km + 1483 km = 3774 km, which is less than 3781 km</span>
+
+<span class=sd>This may be because BaiduMaps ranked the paths by travel time and not travel</span>
+<span class=sd>distance, or by any other strange effect I cannot account for. Maybe it is</span>
+<span class=sd>related to which lane of a road one would naturally drive on or lengths of</span>
+<span class=sd>intersections depending on the direction one is coming from.</span>
+<span class=sd>Either way, this shows that this simple instance `cn11` may already have</span>
+<span class=sd>interesting properties. It violates the triangle equation and it is</span>
+<span class=sd>non-Euclidean. It is also not based on Geo-coordinates, but on actual street</span>
+<span class=sd>distances and times.</span>
+
+<span class=sd>>>> inst = Instance.from_resource("cn11")</span>
+<span class=sd>>>> int(inst[0, 0])</span>
+<span class=sd>0</span>
+<span class=sd>>>> int(inst[1, 2])</span>
+<span class=sd>1007</span>
+<span class=sd>>>> int(inst[1, 3])</span>
+<span class=sd>1017</span>
+<span class=sd>>>> int(inst[9, 10])</span>
+<span class=sd>830</span>
+<span class=sd>>>> int(inst[5, 6])</span>
+<span class=sd>1560</span>
+
+<span class=sd>Important initial work on this code has been contributed by Mr. Tianyu LIANG</span>
+<span class=sd>(梁天宇), &LTliangty@stu.hfuu.edu.cn> a Master's student at the Institute of</span>
+<span class=sd>Applied Optimization (应用优化研究所) of the School</span>
+<span class=sd>of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei</span>
+<span class=sd>University (合肥大学) in Hefei, Anhui, China (中国安徽省合肥市) under the</span>
+<span class=sd>supervision of Prof. Dr. Thomas Weise (汤卫思教授).</span>
+
+<span class=sd>1. Gerhard Reinelt. TSPLIB - A Traveling Salesman Problem Library.</span>
+<span class=sd>   *ORSA Journal on Computing* 3(4):376-384. November 1991.</span>
+<span class=sd>   https://doi.org/10.1287/ijoc.3.4.376.</span>
+<span class=sd>   http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/</span>
+<span class=sd>2. Gerhard Reinelt. *TSPLIB95.* Heidelberg, Germany: Universität</span>
+<span class=sd>   Heidelberg, Institut für Angewandte Mathematik. 1995.</span>
+<span class=sd>   http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf</span>
+<span class=sd>3. David Lee Applegate, Robert E. Bixby, Vašek Chvátal, and William John Cook.</span>
+<span class=sd>   *The Traveling Salesman Problem: A Computational Study.* Second Edition,</span>
+<span class=sd>   2007. Princeton, NJ, USA: Princeton University Press. Volume 17 of</span>
+<span class=sd>   Princeton Series in Applied Mathematics. ISBN: 0-691-12993-2.</span>
+<span class=sd>4. Gregory Z. Gutin and Abraham P. Punnen. *The Traveling Salesman Problem and</span>
+<span class=sd>   its Variations.* 2002. Kluwer Academic Publishers. Volume 12 of</span>
+<span class=sd>   Combinatorial Optimization. https://doi.org/10.1007/b101971.</span>
+<span class=sd>5. Pedro Larrañaga, Cindy M. H. Kuijpers, Roberto H. Murga, Iñaki Inza, and</span>
+<span class=sd>   Sejla Dizdarevic. Genetic Algorithms for the Travelling Salesman Problem: A</span>
+<span class=sd>   Review of Representations and Operators. *Artificial Intelligence Review*</span>
+<span class=sd>   13(2):129-170. April 1999. https://doi.org/10.1023/A:1006529012972.</span>
+<span class=sd>6. Eugene Leighton Lawler, Jan Karel Lenstra, Alexander Hendrik George Rinnooy</span>
+<span class=sd>   Kan, and David B. Shmoys. *The Traveling Salesman Problem: A Guided Tour of</span>
+<span class=sd>   Combinatorial Optimization.* September 1985. Chichester, West Sussex, UK:</span>
+<span class=sd>   Wiley Interscience. In Estimation, Simulation, and</span>
+<span class=sd>   Control - Wiley-Interscience Series in Discrete Mathematics and</span>
+<span class=sd>   Optimization. ISBN: 0-471-90413-9</span>
+<span class=sd>7. Tianyu Liang, Zhize Wu, Jörg Lässig, Daan van den Berg, and Thomas Weise.</span>
+<span class=sd>   Solving the Traveling Salesperson Problem using Frequency Fitness</span>
+<span class=sd>   Assignment. In *Proceedings of the IEEE Symposium on Foundations of</span>
+<span class=sd>   Computational Intelligence (IEEE FOCI'22),* part of the *IEEE Symposium</span>
+<span class=sd>   Series on Computational Intelligence (SSCI'22),* December 4-7, 2022,</span>
+<span class=sd>   Singapore. Pages 360-367. IEEE.</span>
+<span class=sd>   https://doi.org/10.1109/SSCI51031.2022.10022296.</span>
+<span class=sd>8. Thomas Weise, Raymond Chiong, Ke Tang, Jörg Lässig, Shigeyoshi Tsutsui,</span>
+<span class=sd>   Wenxiang Chen, Zbigniew Michalewicz, and Xin Yao. Benchmarking Optimization</span>
+<span class=sd>   Algorithms: An Open Source Framework for the Traveling Salesman Problem.</span>
+<span class=sd>   *IEEE Computational Intelligence Magazine.* 9(3):40-52. August 2014.</span>
+<span class=sd>   https://doi.org/10.1109/MCI.2014.2326101.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>acos</span><span class=p>,</span> <span class=n>cos</span><span class=p>,</span> <span class=n>isfinite</span><span class=p>,</span> <span class=n>sqrt</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>string</span><span class=w> </span><span class=kn>import</span> <span class=n>digits</span>
+
+<span class=c1># pylint: disable=W0611</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>TextIO</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>npu</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.component</span><span class=w> </span><span class=kn>import</span> <span class=n>Component</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>int_range_to_dtype</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.strings</span><span class=w> </span><span class=kn>import</span> <span class=n>sanitize_name</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span><span class=p>,</span> <span class=n>file_path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>check_to_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.tsp.tsplib</span><span class=w> </span><span class=kn>import</span> <span class=n>open_resource_stream</span>
+
+<span class=c1>#: the known optimal tour lengths and lower bounds of TSP Lib</span>
+<span class=n>_LOWER_BOUNDS</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>{</span>
+    <span class=s2>"a280"</span><span class=p>:</span> <span class=mi>2579</span><span class=p>,</span> <span class=s2>"ali535"</span><span class=p>:</span> <span class=mi>202339</span><span class=p>,</span> <span class=s2>"att48"</span><span class=p>:</span> <span class=mi>10628</span><span class=p>,</span> <span class=s2>"att532"</span><span class=p>:</span> <span class=mi>27686</span><span class=p>,</span>
+    <span class=s2>"bayg29"</span><span class=p>:</span> <span class=mi>1610</span><span class=p>,</span> <span class=s2>"bays29"</span><span class=p>:</span> <span class=mi>2020</span><span class=p>,</span> <span class=s2>"berlin52"</span><span class=p>:</span> <span class=mi>7542</span><span class=p>,</span> <span class=s2>"bier127"</span><span class=p>:</span> <span class=mi>118282</span><span class=p>,</span>
+    <span class=s2>"br17"</span><span class=p>:</span> <span class=mi>39</span><span class=p>,</span> <span class=s2>"brazil58"</span><span class=p>:</span> <span class=mi>25395</span><span class=p>,</span> <span class=s2>"brd14051"</span><span class=p>:</span> <span class=mi>469385</span><span class=p>,</span> <span class=s2>"brg180"</span><span class=p>:</span> <span class=mi>1950</span><span class=p>,</span>
+    <span class=s2>"burma14"</span><span class=p>:</span> <span class=mi>3323</span><span class=p>,</span> <span class=s2>"ch130"</span><span class=p>:</span> <span class=mi>6110</span><span class=p>,</span> <span class=s2>"ch150"</span><span class=p>:</span> <span class=mi>6528</span><span class=p>,</span> <span class=s2>"cn11"</span><span class=p>:</span> <span class=mi>9547</span><span class=p>,</span>
+    <span class=s2>"d1291"</span><span class=p>:</span> <span class=mi>50801</span><span class=p>,</span> <span class=s2>"d15112"</span><span class=p>:</span> <span class=mi>1573084</span><span class=p>,</span> <span class=s2>"d1655"</span><span class=p>:</span> <span class=mi>62128</span><span class=p>,</span> <span class=s2>"d18512"</span><span class=p>:</span> <span class=mi>645238</span><span class=p>,</span>
+    <span class=s2>"d198"</span><span class=p>:</span> <span class=mi>15780</span><span class=p>,</span> <span class=s2>"d2103"</span><span class=p>:</span> <span class=mi>80450</span><span class=p>,</span> <span class=s2>"d493"</span><span class=p>:</span> <span class=mi>35002</span><span class=p>,</span> <span class=s2>"d657"</span><span class=p>:</span> <span class=mi>48912</span><span class=p>,</span>
+    <span class=s2>"dantzig42"</span><span class=p>:</span> <span class=mi>699</span><span class=p>,</span> <span class=s2>"dsj1000"</span><span class=p>:</span> <span class=mi>18660188</span><span class=p>,</span> <span class=s2>"eil101"</span><span class=p>:</span> <span class=mi>629</span><span class=p>,</span> <span class=s2>"eil51"</span><span class=p>:</span> <span class=mi>426</span><span class=p>,</span>
+    <span class=s2>"eil76"</span><span class=p>:</span> <span class=mi>538</span><span class=p>,</span> <span class=s2>"fl1400"</span><span class=p>:</span> <span class=mi>20127</span><span class=p>,</span> <span class=s2>"fl1577"</span><span class=p>:</span> <span class=mi>22249</span><span class=p>,</span> <span class=s2>"fl3795"</span><span class=p>:</span> <span class=mi>28772</span><span class=p>,</span>
+    <span class=s2>"fl417"</span><span class=p>:</span> <span class=mi>11861</span><span class=p>,</span> <span class=s2>"fnl4461"</span><span class=p>:</span> <span class=mi>182566</span><span class=p>,</span> <span class=s2>"fri26"</span><span class=p>:</span> <span class=mi>937</span><span class=p>,</span> <span class=s2>"ft53"</span><span class=p>:</span> <span class=mi>6905</span><span class=p>,</span>
+    <span class=s2>"ft70"</span><span class=p>:</span> <span class=mi>38673</span><span class=p>,</span> <span class=s2>"ftv100"</span><span class=p>:</span> <span class=mi>1788</span><span class=p>,</span> <span class=s2>"ftv110"</span><span class=p>:</span> <span class=mi>1958</span><span class=p>,</span> <span class=s2>"ftv120"</span><span class=p>:</span> <span class=mi>2166</span><span class=p>,</span>
+    <span class=s2>"ftv130"</span><span class=p>:</span> <span class=mi>2307</span><span class=p>,</span> <span class=s2>"ftv140"</span><span class=p>:</span> <span class=mi>2420</span><span class=p>,</span> <span class=s2>"ftv150"</span><span class=p>:</span> <span class=mi>2611</span><span class=p>,</span> <span class=s2>"ftv160"</span><span class=p>:</span> <span class=mi>2683</span><span class=p>,</span>
+    <span class=s2>"ftv170"</span><span class=p>:</span> <span class=mi>2755</span><span class=p>,</span> <span class=s2>"ftv33"</span><span class=p>:</span> <span class=mi>1286</span><span class=p>,</span> <span class=s2>"ftv35"</span><span class=p>:</span> <span class=mi>1473</span><span class=p>,</span> <span class=s2>"ftv38"</span><span class=p>:</span> <span class=mi>1530</span><span class=p>,</span>
+    <span class=s2>"ftv44"</span><span class=p>:</span> <span class=mi>1613</span><span class=p>,</span> <span class=s2>"ftv47"</span><span class=p>:</span> <span class=mi>1776</span><span class=p>,</span> <span class=s2>"ftv55"</span><span class=p>:</span> <span class=mi>1608</span><span class=p>,</span> <span class=s2>"ftv64"</span><span class=p>:</span> <span class=mi>1839</span><span class=p>,</span>
+    <span class=s2>"ftv70"</span><span class=p>:</span> <span class=mi>1950</span><span class=p>,</span> <span class=s2>"ftv90"</span><span class=p>:</span> <span class=mi>1579</span><span class=p>,</span> <span class=s2>"gil262"</span><span class=p>:</span> <span class=mi>2378</span><span class=p>,</span> <span class=s2>"gr120"</span><span class=p>:</span> <span class=mi>6942</span><span class=p>,</span>
+    <span class=s2>"gr137"</span><span class=p>:</span> <span class=mi>69853</span><span class=p>,</span> <span class=s2>"gr17"</span><span class=p>:</span> <span class=mi>2085</span><span class=p>,</span> <span class=s2>"gr202"</span><span class=p>:</span> <span class=mi>40160</span><span class=p>,</span> <span class=s2>"gr21"</span><span class=p>:</span> <span class=mi>2707</span><span class=p>,</span>
+    <span class=s2>"gr229"</span><span class=p>:</span> <span class=mi>134602</span><span class=p>,</span> <span class=s2>"gr24"</span><span class=p>:</span> <span class=mi>1272</span><span class=p>,</span> <span class=s2>"gr431"</span><span class=p>:</span> <span class=mi>171414</span><span class=p>,</span> <span class=s2>"gr48"</span><span class=p>:</span> <span class=mi>5046</span><span class=p>,</span>
+    <span class=s2>"gr666"</span><span class=p>:</span> <span class=mi>294358</span><span class=p>,</span> <span class=s2>"gr96"</span><span class=p>:</span> <span class=mi>55209</span><span class=p>,</span> <span class=s2>"hk48"</span><span class=p>:</span> <span class=mi>11461</span><span class=p>,</span> <span class=s2>"kro124p"</span><span class=p>:</span> <span class=mi>36230</span><span class=p>,</span>
+    <span class=s2>"kroA100"</span><span class=p>:</span> <span class=mi>21282</span><span class=p>,</span> <span class=s2>"kroA150"</span><span class=p>:</span> <span class=mi>26524</span><span class=p>,</span> <span class=s2>"kroA200"</span><span class=p>:</span> <span class=mi>29368</span><span class=p>,</span> <span class=s2>"kroB100"</span><span class=p>:</span> <span class=mi>22141</span><span class=p>,</span>
+    <span class=s2>"kroB150"</span><span class=p>:</span> <span class=mi>26130</span><span class=p>,</span> <span class=s2>"kroB200"</span><span class=p>:</span> <span class=mi>29437</span><span class=p>,</span> <span class=s2>"kroC100"</span><span class=p>:</span> <span class=mi>20749</span><span class=p>,</span> <span class=s2>"kroD100"</span><span class=p>:</span> <span class=mi>21294</span><span class=p>,</span>
+    <span class=s2>"kroE100"</span><span class=p>:</span> <span class=mi>22068</span><span class=p>,</span> <span class=s2>"lin105"</span><span class=p>:</span> <span class=mi>14379</span><span class=p>,</span> <span class=s2>"lin318"</span><span class=p>:</span> <span class=mi>42029</span><span class=p>,</span> <span class=s2>"nrw1379"</span><span class=p>:</span> <span class=mi>56638</span><span class=p>,</span>
+    <span class=s2>"p43"</span><span class=p>:</span> <span class=mi>5620</span><span class=p>,</span> <span class=s2>"p654"</span><span class=p>:</span> <span class=mi>34643</span><span class=p>,</span> <span class=s2>"pa561"</span><span class=p>:</span> <span class=mi>2763</span><span class=p>,</span> <span class=s2>"pcb1173"</span><span class=p>:</span> <span class=mi>56892</span><span class=p>,</span>
+    <span class=s2>"pcb3038"</span><span class=p>:</span> <span class=mi>137694</span><span class=p>,</span> <span class=s2>"pcb442"</span><span class=p>:</span> <span class=mi>50778</span><span class=p>,</span> <span class=s2>"pla33810"</span><span class=p>:</span> <span class=mi>66048945</span><span class=p>,</span>
+    <span class=s2>"pla7397"</span><span class=p>:</span> <span class=mi>23260728</span><span class=p>,</span> <span class=s2>"pla85900"</span><span class=p>:</span> <span class=mi>142382641</span><span class=p>,</span> <span class=s2>"pr1002"</span><span class=p>:</span> <span class=mi>259045</span><span class=p>,</span>
+    <span class=s2>"pr107"</span><span class=p>:</span> <span class=mi>44303</span><span class=p>,</span> <span class=s2>"pr124"</span><span class=p>:</span> <span class=mi>59030</span><span class=p>,</span> <span class=s2>"pr136"</span><span class=p>:</span> <span class=mi>96772</span><span class=p>,</span> <span class=s2>"pr144"</span><span class=p>:</span> <span class=mi>58537</span><span class=p>,</span>
+    <span class=s2>"pr152"</span><span class=p>:</span> <span class=mi>73682</span><span class=p>,</span> <span class=s2>"pr226"</span><span class=p>:</span> <span class=mi>80369</span><span class=p>,</span> <span class=s2>"pr2392"</span><span class=p>:</span> <span class=mi>378032</span><span class=p>,</span> <span class=s2>"pr264"</span><span class=p>:</span> <span class=mi>49135</span><span class=p>,</span>
+    <span class=s2>"pr299"</span><span class=p>:</span> <span class=mi>48191</span><span class=p>,</span> <span class=s2>"pr439"</span><span class=p>:</span> <span class=mi>107217</span><span class=p>,</span> <span class=s2>"pr76"</span><span class=p>:</span> <span class=mi>108159</span><span class=p>,</span> <span class=s2>"rat195"</span><span class=p>:</span> <span class=mi>2323</span><span class=p>,</span>
+    <span class=s2>"rat575"</span><span class=p>:</span> <span class=mi>6773</span><span class=p>,</span> <span class=s2>"rat783"</span><span class=p>:</span> <span class=mi>8806</span><span class=p>,</span> <span class=s2>"rat99"</span><span class=p>:</span> <span class=mi>1211</span><span class=p>,</span> <span class=s2>"rbg323"</span><span class=p>:</span> <span class=mi>1326</span><span class=p>,</span>
+    <span class=s2>"rbg358"</span><span class=p>:</span> <span class=mi>1163</span><span class=p>,</span> <span class=s2>"rbg403"</span><span class=p>:</span> <span class=mi>2465</span><span class=p>,</span> <span class=s2>"rbg443"</span><span class=p>:</span> <span class=mi>2720</span><span class=p>,</span> <span class=s2>"rd100"</span><span class=p>:</span> <span class=mi>7910</span><span class=p>,</span>
+    <span class=s2>"rd400"</span><span class=p>:</span> <span class=mi>15281</span><span class=p>,</span> <span class=s2>"rl11849"</span><span class=p>:</span> <span class=mi>923288</span><span class=p>,</span> <span class=s2>"rl1304"</span><span class=p>:</span> <span class=mi>252948</span><span class=p>,</span> <span class=s2>"rl1323"</span><span class=p>:</span> <span class=mi>270199</span><span class=p>,</span>
+    <span class=s2>"rl1889"</span><span class=p>:</span> <span class=mi>316536</span><span class=p>,</span> <span class=s2>"rl5915"</span><span class=p>:</span> <span class=mi>565530</span><span class=p>,</span> <span class=s2>"rl5934"</span><span class=p>:</span> <span class=mi>556045</span><span class=p>,</span> <span class=s2>"ry48p"</span><span class=p>:</span> <span class=mi>14422</span><span class=p>,</span>
+    <span class=s2>"si1032"</span><span class=p>:</span> <span class=mi>92650</span><span class=p>,</span> <span class=s2>"si175"</span><span class=p>:</span> <span class=mi>21407</span><span class=p>,</span> <span class=s2>"si535"</span><span class=p>:</span> <span class=mi>48450</span><span class=p>,</span> <span class=s2>"st70"</span><span class=p>:</span> <span class=mi>675</span><span class=p>,</span>
+    <span class=s2>"swiss42"</span><span class=p>:</span> <span class=mi>1273</span><span class=p>,</span> <span class=s2>"ts225"</span><span class=p>:</span> <span class=mi>126643</span><span class=p>,</span> <span class=s2>"tsp225"</span><span class=p>:</span> <span class=mi>3916</span><span class=p>,</span> <span class=s2>"u1060"</span><span class=p>:</span> <span class=mi>224094</span><span class=p>,</span>
+    <span class=s2>"u1432"</span><span class=p>:</span> <span class=mi>152970</span><span class=p>,</span> <span class=s2>"u159"</span><span class=p>:</span> <span class=mi>42080</span><span class=p>,</span> <span class=s2>"u1817"</span><span class=p>:</span> <span class=mi>57201</span><span class=p>,</span> <span class=s2>"u2152"</span><span class=p>:</span> <span class=mi>64253</span><span class=p>,</span>
+    <span class=s2>"u2319"</span><span class=p>:</span> <span class=mi>234256</span><span class=p>,</span> <span class=s2>"u574"</span><span class=p>:</span> <span class=mi>36905</span><span class=p>,</span> <span class=s2>"u724"</span><span class=p>:</span> <span class=mi>41910</span><span class=p>,</span> <span class=s2>"ulysses16"</span><span class=p>:</span> <span class=mi>6859</span><span class=p>,</span>
+    <span class=s2>"ulysses22"</span><span class=p>:</span> <span class=mi>7013</span><span class=p>,</span> <span class=s2>"usa13509"</span><span class=p>:</span> <span class=mi>19982859</span><span class=p>,</span> <span class=s2>"vm1084"</span><span class=p>:</span> <span class=mi>239297</span><span class=p>,</span>
+    <span class=s2>"vm1748"</span><span class=p>:</span> <span class=mi>336556</span><span class=p>}</span>
+
+<span class=c1>#: the TSPLib instances</span>
+<span class=n>_SYMMETRIC_INSTANCES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+    <span class=s2>"a280"</span><span class=p>,</span> <span class=s2>"ali535"</span><span class=p>,</span> <span class=s2>"att48"</span><span class=p>,</span> <span class=s2>"att532"</span><span class=p>,</span> <span class=s2>"bayg29"</span><span class=p>,</span> <span class=s2>"bays29"</span><span class=p>,</span> <span class=s2>"berlin52"</span><span class=p>,</span>
+    <span class=s2>"bier127"</span><span class=p>,</span> <span class=s2>"brazil58"</span><span class=p>,</span> <span class=s2>"brg180"</span><span class=p>,</span> <span class=s2>"burma14"</span><span class=p>,</span> <span class=s2>"ch130"</span><span class=p>,</span> <span class=s2>"ch150"</span><span class=p>,</span> <span class=s2>"cn11"</span><span class=p>,</span>
+    <span class=s2>"d1291"</span><span class=p>,</span> <span class=s2>"d1655"</span><span class=p>,</span> <span class=s2>"d198"</span><span class=p>,</span> <span class=s2>"d493"</span><span class=p>,</span> <span class=s2>"d657"</span><span class=p>,</span> <span class=s2>"dantzig42"</span><span class=p>,</span> <span class=s2>"eil101"</span><span class=p>,</span> <span class=s2>"eil51"</span><span class=p>,</span>
+    <span class=s2>"eil76"</span><span class=p>,</span> <span class=s2>"fl1400"</span><span class=p>,</span> <span class=s2>"fl1577"</span><span class=p>,</span> <span class=s2>"fl417"</span><span class=p>,</span> <span class=s2>"fri26"</span><span class=p>,</span> <span class=s2>"gil262"</span><span class=p>,</span> <span class=s2>"gr120"</span><span class=p>,</span> <span class=s2>"gr137"</span><span class=p>,</span>
+    <span class=s2>"gr17"</span><span class=p>,</span> <span class=s2>"gr202"</span><span class=p>,</span> <span class=s2>"gr21"</span><span class=p>,</span> <span class=s2>"gr229"</span><span class=p>,</span> <span class=s2>"gr24"</span><span class=p>,</span> <span class=s2>"gr431"</span><span class=p>,</span> <span class=s2>"gr48"</span><span class=p>,</span> <span class=s2>"gr666"</span><span class=p>,</span>
+    <span class=s2>"gr96"</span><span class=p>,</span> <span class=s2>"hk48"</span><span class=p>,</span> <span class=s2>"kroA100"</span><span class=p>,</span> <span class=s2>"kroA150"</span><span class=p>,</span> <span class=s2>"kroA200"</span><span class=p>,</span> <span class=s2>"kroB100"</span><span class=p>,</span> <span class=s2>"kroB150"</span><span class=p>,</span>
+    <span class=s2>"kroB200"</span><span class=p>,</span> <span class=s2>"kroC100"</span><span class=p>,</span> <span class=s2>"kroD100"</span><span class=p>,</span> <span class=s2>"kroE100"</span><span class=p>,</span> <span class=s2>"lin105"</span><span class=p>,</span> <span class=s2>"lin318"</span><span class=p>,</span> <span class=s2>"nrw1379"</span><span class=p>,</span>
+    <span class=s2>"p654"</span><span class=p>,</span> <span class=s2>"pcb1173"</span><span class=p>,</span> <span class=s2>"pcb442"</span><span class=p>,</span> <span class=s2>"pr1002"</span><span class=p>,</span> <span class=s2>"pr107"</span><span class=p>,</span> <span class=s2>"pr124"</span><span class=p>,</span> <span class=s2>"pr136"</span><span class=p>,</span> <span class=s2>"pr144"</span><span class=p>,</span>
+    <span class=s2>"pr152"</span><span class=p>,</span> <span class=s2>"pr226"</span><span class=p>,</span> <span class=s2>"pr264"</span><span class=p>,</span> <span class=s2>"pr299"</span><span class=p>,</span> <span class=s2>"pr439"</span><span class=p>,</span> <span class=s2>"pr76"</span><span class=p>,</span> <span class=s2>"rat195"</span><span class=p>,</span> <span class=s2>"rat575"</span><span class=p>,</span>
+    <span class=s2>"rat783"</span><span class=p>,</span> <span class=s2>"rat99"</span><span class=p>,</span> <span class=s2>"rd100"</span><span class=p>,</span> <span class=s2>"rd400"</span><span class=p>,</span> <span class=s2>"rl1304"</span><span class=p>,</span> <span class=s2>"rl1323"</span><span class=p>,</span> <span class=s2>"rl1889"</span><span class=p>,</span>
+    <span class=s2>"si1032"</span><span class=p>,</span> <span class=s2>"si175"</span><span class=p>,</span> <span class=s2>"si535"</span><span class=p>,</span> <span class=s2>"st70"</span><span class=p>,</span> <span class=s2>"swiss42"</span><span class=p>,</span> <span class=s2>"ts225"</span><span class=p>,</span> <span class=s2>"tsp225"</span><span class=p>,</span> <span class=s2>"u1060"</span><span class=p>,</span>
+    <span class=s2>"u1432"</span><span class=p>,</span> <span class=s2>"u159"</span><span class=p>,</span> <span class=s2>"u1817"</span><span class=p>,</span> <span class=s2>"u574"</span><span class=p>,</span> <span class=s2>"u724"</span><span class=p>,</span> <span class=s2>"ulysses16"</span><span class=p>,</span> <span class=s2>"ulysses22"</span><span class=p>,</span>
+    <span class=s2>"vm1084"</span><span class=p>,</span> <span class=s2>"vm1748"</span><span class=p>)</span>
+
+<span class=c1>#: The set of asymmetric instances</span>
+<span class=n>_ASYMMETRIC_INSTANCES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+    <span class=s2>"br17"</span><span class=p>,</span> <span class=s2>"ft53"</span><span class=p>,</span> <span class=s2>"ft70"</span><span class=p>,</span> <span class=s2>"ftv170"</span><span class=p>,</span> <span class=s2>"ftv33"</span><span class=p>,</span> <span class=s2>"ftv35"</span><span class=p>,</span> <span class=s2>"ftv38"</span><span class=p>,</span> <span class=s2>"ftv44"</span><span class=p>,</span>
+    <span class=s2>"ftv47"</span><span class=p>,</span> <span class=s2>"ftv55"</span><span class=p>,</span> <span class=s2>"ftv64"</span><span class=p>,</span> <span class=s2>"ftv70"</span><span class=p>,</span> <span class=s2>"kro124p"</span><span class=p>,</span> <span class=s2>"p43"</span><span class=p>,</span> <span class=s2>"rbg323"</span><span class=p>,</span> <span class=s2>"rbg358"</span><span class=p>,</span>
+    <span class=s2>"rbg403"</span><span class=p>,</span> <span class=s2>"rbg443"</span><span class=p>,</span> <span class=s2>"ry48p"</span><span class=p>)</span>
+
+<span class=c1>#: The set of all TSP instances</span>
+<span class=n>_INSTANCES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span>
+    <span class=n>_SYMMETRIC_INSTANCES</span> <span class=o>+</span> <span class=n>_ASYMMETRIC_INSTANCES</span><span class=p>))</span>
+
+<span class=c1>#: the set of asymmetric resources</span>
+<span class=n>_ASYMMETRIC_RESOURCES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>(</span><span class=n>_ASYMMETRIC_INSTANCES</span><span class=p>)</span>
+
+<span class=c1>#: the problem is a symmetric tsp</span>
+<span class=n>_TYPE_SYMMETRIC_TSP</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"TSP"</span>
+<span class=c1>#: the problem is an asymmetric tsp</span>
+<span class=n>_TYPE_ASYMMETRIC_TSP</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"ATSP"</span>
+<span class=c1>#: the permitted types</span>
+<span class=n>_TYPES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{</span><span class=n>_TYPE_SYMMETRIC_TSP</span><span class=p>,</span> <span class=n>_TYPE_ASYMMETRIC_TSP</span><span class=p>}</span>
+<span class=c1>#: the name start</span>
+<span class=n>_KEY_NAME</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"NAME"</span>
+<span class=c1>#: the type start</span>
+<span class=n>_KEY_TYPE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"TYPE"</span>
+<span class=c1>#: the dimension start</span>
+<span class=n>_KEY_DIMENSION</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"DIMENSION"</span>
+<span class=c1>#: the comment start</span>
+<span class=n>_KEY_COMMENT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"COMMENT"</span>
+<span class=c1>#: EUC_2D coordinates</span>
+<span class=n>__EWT_EUC_2D</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"EUC_2D"</span>
+<span class=c1>#: geographical coordinates</span>
+<span class=n>__EWT_GEO</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"GEO"</span>
+<span class=c1>#: ATT coordinates</span>
+<span class=n>__EWT_ATT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"ATT"</span>
+<span class=c1>#: ceiling 2D coordinates</span>
+<span class=n>__EWT_CEIL2D</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"CEIL_2D"</span>
+<span class=c1>#: the explicit edge weight type</span>
+<span class=n>_EWT_EXPLICIT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"EXPLICIT"</span>
+<span class=c1>#: the edge weight type start</span>
+<span class=n>_KEY_EDGE_WEIGHT_TYPE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"EDGE_WEIGHT_TYPE"</span>
+<span class=c1>#: the permitted edge weight types</span>
+<span class=n>_EDGE_WEIGHT_TYPES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{</span>
+    <span class=n>__EWT_EUC_2D</span><span class=p>,</span> <span class=n>__EWT_GEO</span><span class=p>,</span> <span class=n>__EWT_ATT</span><span class=p>,</span> <span class=n>__EWT_CEIL2D</span><span class=p>,</span> <span class=n>_EWT_EXPLICIT</span><span class=p>}</span>
+<span class=c1>#: the edge weight format "function"</span>
+<span class=n>__EWF_FUNCTION</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"FUNCTION"</span>
+<span class=c1>#: the full matrix edge weight format</span>
+<span class=n>_EWF_FULL_MATRIX</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"FULL_MATRIX"</span>
+<span class=c1>#: the upper row edge weight format</span>
+<span class=n>_EWF_UPPER_ROW</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"UPPER_ROW"</span>
+<span class=c1>#: the lower diagonal row</span>
+<span class=n>__EWF_LOWER_DIAG_ROW</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"LOWER_DIAG_ROW"</span>
+<span class=c1>#: the upper diagonal row</span>
+<span class=n>__EWF_UPPER_DIAG_ROW</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"UPPER_DIAG_ROW"</span>
+<span class=c1>#: the edge weight format start</span>
+<span class=n>_KEY_EDGE_WEIGHT_FORMAT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"EDGE_WEIGHT_FORMAT"</span>
+<span class=c1>#: the permitted edge weight formats</span>
+<span class=n>_EDGE_WEIGHT_FORMATS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{</span>
+    <span class=n>__EWF_FUNCTION</span><span class=p>,</span> <span class=n>_EWF_FULL_MATRIX</span><span class=p>,</span> <span class=n>_EWF_UPPER_ROW</span><span class=p>,</span>
+    <span class=n>__EWF_LOWER_DIAG_ROW</span><span class=p>,</span> <span class=n>__EWF_UPPER_DIAG_ROW</span><span class=p>}</span>
+<span class=c1>#: the start of the node coord type</span>
+<span class=n>_KEY_NODE_COORD_TYPE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"NODE_COORD_TYPE"</span>
+<span class=c1>#: 2d coordinates</span>
+<span class=n>__NODE_COORD_TYPE_2D</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"TWOD_COORDS"</span>
+<span class=c1>#: no coordinates</span>
+<span class=n>__NODE_COORD_TYPE_NONE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"NO_COORDS"</span>
+<span class=c1>#: the permitted node coordinate types</span>
+<span class=n>_NODE_COORD_TYPES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{</span>
+    <span class=n>__NODE_COORD_TYPE_2D</span><span class=p>,</span> <span class=n>__NODE_COORD_TYPE_NONE</span><span class=p>}</span>
+<span class=c1>#: the node coordinate section starts</span>
+<span class=n>_START_NODE_COORD_SECTION</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"NODE_COORD_SECTION"</span>
+<span class=c1>#: start the edge weight section</span>
+<span class=n>_START_EDGE_WEIGHT_SECTION</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"EDGE_WEIGHT_SECTION"</span>
+<span class=c1>#: the end of the file</span>
+<span class=n>_EOF</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"EOF"</span>
+<span class=c1>#: the fixed edges section</span>
+<span class=n>_FIXED_EDGES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"FIXED_EDGES_SECTION"</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__line_to_nums</span><span class=p>(</span><span class=n>line</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+                   <span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span> <span class=n>Any</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Split a line to a list of integers.</span>
+
+<span class=sd>    :param line: the line string</span>
+<span class=sd>    :param collector: the collector</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>line</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>line</span><span class=p>,</span> <span class=s2>"line"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+    <span class=n>idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=n>line</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+    <span class=n>str_len</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>line</span><span class=p>)</span>
+
+    <span class=k>while</span> <span class=n>idx</span> <span class=o><</span> <span class=n>str_len</span><span class=p>:</span>
+        <span class=k>while</span> <span class=p>(</span><span class=n>idx</span> <span class=o><</span> <span class=n>str_len</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>line</span><span class=p>[</span><span class=n>idx</span><span class=p>]</span> <span class=o>==</span> <span class=s2>" "</span><span class=p>):</span>
+            <span class=n>idx</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=n>idx</span> <span class=o>>=</span> <span class=n>str_len</span><span class=p>:</span>
+            <span class=k>return</span>
+
+        <span class=n>next_space</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>find</span><span class=p>(</span><span class=s2>" "</span><span class=p>,</span> <span class=n>idx</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>next_space</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>next_space</span> <span class=o>=</span> <span class=n>str_len</span>
+
+        <span class=n>part</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>line</span><span class=p>[</span><span class=n>idx</span><span class=p>:</span><span class=n>next_space</span><span class=p>]</span>
+        <span class=k>if</span> <span class=p>(</span><span class=s2>"."</span> <span class=ow>in</span> <span class=n>part</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=s2>"E"</span> <span class=ow>in</span> <span class=n>part</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=s2>"e"</span> <span class=ow>in</span> <span class=n>part</span><span class=p>):</span>
+            <span class=n>f</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=nb>float</span><span class=p>(</span><span class=n>part</span><span class=p>)</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>f</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>part</span><span class=si>!r}</span><span class=s2> translates to non-finite float </span><span class=si>{</span><span class=n>f</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>collector</span><span class=p>(</span><span class=n>f</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>collector</span><span class=p>(</span><span class=n>check_to_int_range</span><span class=p>(</span>
+                <span class=n>part</span><span class=p>,</span> <span class=s2>"line fragment"</span><span class=p>,</span> <span class=o>-</span><span class=mi>1_000_000_000_000</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>))</span>
+        <span class=n>idx</span> <span class=o>=</span> <span class=n>next_space</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__nint</span><span class=p>(</span><span class=n>v</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get the nearest integer in the TSPLIB format.</span>
+
+<span class=sd>    :param v: the value</span>
+<span class=sd>    :return: the integer</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>v</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+        <span class=k>return</span> <span class=n>v</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>v</span><span class=p>,</span> <span class=nb>float</span><span class=p>):</span>
+        <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=mf>0.5</span> <span class=o>+</span> <span class=n>v</span><span class=p>)</span>
+    <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>v</span><span class=p>,</span> <span class=s2>"value"</span><span class=p>,</span> <span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=nb>float</span><span class=p>))</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__dist_2deuc</span><span class=p>(</span><span class=n>a</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span> <span class=n>b</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>])</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the two-dimensional Euclidean distance function.</span>
+
+<span class=sd>    :param a: the first point</span>
+<span class=sd>    :param b: the second point</span>
+<span class=sd>    :return: the distance</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=n>__nint</span><span class=p>(</span><span class=n>sqrt</span><span class=p>(((</span><span class=n>a</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>-</span> <span class=n>b</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span> <span class=o>**</span> <span class=mi>2</span><span class=p>)</span> <span class=o>+</span> <span class=p>((</span><span class=n>a</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>-</span> <span class=n>b</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span> <span class=o>**</span> <span class=mi>2</span><span class=p>)))</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__matrix_from_points</span><span class=p>(</span>
+        <span class=n>n_cities</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>coord_dim</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>stream</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>],</span>
+        <span class=n>dist_func</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]],</span> <span class=nb>int</span><span class=p>])</span> \
+        <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Load a distance matrix from 2D coordinates.</span>
+
+<span class=sd>    :param n_cities: the dimension</span>
+<span class=sd>    :param coord_dim: the coordinate dimension</span>
+<span class=sd>    :param stream: the stream</span>
+<span class=sd>    :param dist_func: the distance function</span>
+<span class=sd>    :return: the matrix</span>
+<span class=sd>    """</span>
+    <span class=n>index</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=n>coordinates</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>row</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=k>for</span> <span class=n>the_line</span> <span class=ow>in</span> <span class=n>stream</span><span class=p>:</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>the_line</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>the_line</span><span class=p>,</span> <span class=s2>"line"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=n>line</span> <span class=o>=</span> <span class=n>the_line</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>line</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=k>if</span> <span class=n>line</span> <span class=o>==</span> <span class=n>_EOF</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=n>__line_to_nums</span><span class=p>(</span><span class=n>line</span><span class=p>,</span> <span class=n>row</span><span class=o>.</span><span class=n>append</span><span class=p>)</span>
+        <span class=n>index</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>row</span><span class=p>)</span> <span class=o>!=</span> <span class=p>(</span><span class=n>coord_dim</span> <span class=o>+</span> <span class=mi>1</span><span class=p>))</span> <span class=ow>or</span> <span class=p>(</span><span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=nb>int</span><span class=p>))</span> \
+                <span class=ow>or</span> <span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>!=</span> <span class=n>index</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"invalid row </span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> at index </span><span class=si>{</span><span class=n>index</span><span class=si>}</span><span class=s2>, "</span>
+                             <span class=sa>f</span><span class=s2>"gives values </span><span class=si>{</span><span class=n>row</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>coordinates</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>1</span><span class=p>:])</span>
+        <span class=n>row</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+    <span class=k>if</span> <span class=n>index</span> <span class=o>!=</span> <span class=n>n_cities</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"only found </span><span class=si>{</span><span class=n>index</span><span class=si>}</span><span class=s2> rows, but expected </span><span class=si>{</span><span class=n>n_cities</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+    <span class=c1># now construct the matrix</span>
+    <span class=n>matrix</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=n>n_cities</span><span class=p>,</span> <span class=n>n_cities</span><span class=p>),</span>
+                                         <span class=n>npu</span><span class=o>.</span><span class=n>DEFAULT_INT</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_cities</span><span class=p>):</span>
+        <span class=n>a</span> <span class=o>=</span> <span class=n>coordinates</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+        <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>i</span><span class=p>):</span>
+            <span class=n>b</span> <span class=o>=</span> <span class=n>coordinates</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>
+            <span class=n>dist</span> <span class=o>=</span> <span class=n>dist_func</span><span class=p>(</span><span class=n>a</span><span class=p>,</span> <span class=n>b</span><span class=p>)</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>dist</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>dist</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"distance[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>,</span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2>]"</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>dist</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Cannot have node distance </span><span class=si>{</span><span class=n>dist</span><span class=si>}</span><span class=s2>: (</span><span class=si>{</span><span class=n>a</span><span class=si>}</span><span class=s2>) at index="</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>i</span><span class=w> </span><span class=o>+</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2> and (</span><span class=si>{</span><span class=n>b</span><span class=si>}</span><span class=s2> at index=</span><span class=si>{</span><span class=n>j</span><span class=w> </span><span class=o>+</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>matrix</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>=</span> <span class=n>dist</span>
+            <span class=n>matrix</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>dist</span>
+    <span class=k>return</span> <span class=n>matrix</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__coord_to_rad</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert coordinates to longitude/latitude.</span>
+
+<span class=sd>    :param x: the coordinate</span>
+<span class=sd>    """</span>
+    <span class=n>degrees</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+    <span class=k>return</span> <span class=p>(</span><span class=mf>3.141592</span> <span class=o>*</span> <span class=p>(</span><span class=n>degrees</span> <span class=o>+</span> <span class=p>(</span><span class=mf>5.0</span> <span class=o>*</span> <span class=p>(</span>  <span class=c1># noqa: FURB152</span>
+        <span class=n>x</span> <span class=o>-</span> <span class=n>degrees</span><span class=p>))</span> <span class=o>/</span> <span class=mf>3.0</span><span class=p>))</span> <span class=o>/</span> <span class=mf>180.0</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__dist_loglat</span><span class=p>(</span><span class=n>a</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span> <span class=n>b</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>])</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert a longitude-latitude pair to a distance.</span>
+
+<span class=sd>    :param a: the first point</span>
+<span class=sd>    :param b: the second point</span>
+<span class=sd>    :return: the distance</span>
+<span class=sd>    """</span>
+    <span class=n>lat1</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>__coord_to_rad</span><span class=p>(</span><span class=n>a</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span>
+    <span class=n>long1</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>__coord_to_rad</span><span class=p>(</span><span class=n>a</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+    <span class=n>lat2</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>__coord_to_rad</span><span class=p>(</span><span class=n>b</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span>
+    <span class=n>long2</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>__coord_to_rad</span><span class=p>(</span><span class=n>b</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+    <span class=n>q1</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>cos</span><span class=p>(</span><span class=n>long1</span> <span class=o>-</span> <span class=n>long2</span><span class=p>)</span>
+    <span class=n>q2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>cos</span><span class=p>(</span><span class=n>lat1</span> <span class=o>-</span> <span class=n>lat2</span><span class=p>)</span>
+    <span class=n>q3</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>cos</span><span class=p>(</span><span class=n>lat1</span> <span class=o>+</span> <span class=n>lat2</span><span class=p>)</span>
+    <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=mf>6378.388</span> <span class=o>*</span> <span class=n>acos</span><span class=p>(</span><span class=mf>0.5</span> <span class=o>*</span> <span class=p>(</span>
+        <span class=p>(</span><span class=mf>1.0</span> <span class=o>+</span> <span class=n>q1</span><span class=p>)</span> <span class=o>*</span> <span class=n>q2</span> <span class=o>-</span> <span class=p>(</span><span class=mf>1.0</span> <span class=o>-</span> <span class=n>q1</span><span class=p>)</span> <span class=o>*</span> <span class=n>q3</span><span class=p>))</span> <span class=o>+</span> <span class=mf>1.0</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__dist_att</span><span class=p>(</span><span class=n>a</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span> <span class=n>b</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>])</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the ATT Pseudo-Euclidean distance function.</span>
+
+<span class=sd>    :param a: the first point</span>
+<span class=sd>    :param b: the second point</span>
+<span class=sd>    :return: the distance</span>
+<span class=sd>    """</span>
+    <span class=n>xd</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>a</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>-</span> <span class=n>b</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+    <span class=n>yd</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>a</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>-</span> <span class=n>b</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span>
+    <span class=n>rij</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>sqrt</span><span class=p>((</span><span class=n>xd</span> <span class=o>*</span> <span class=n>xd</span> <span class=o>+</span> <span class=n>yd</span> <span class=o>*</span> <span class=n>yd</span><span class=p>)</span> <span class=o>/</span> <span class=mf>10.0</span><span class=p>)</span>
+    <span class=n>tij</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>__nint</span><span class=p>(</span><span class=n>rij</span><span class=p>)</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>tij</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=k>if</span> <span class=n>tij</span> <span class=o><</span> <span class=n>rij</span> <span class=k>else</span> <span class=n>tij</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__dist_2dceil</span><span class=p>(</span><span class=n>a</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span> <span class=n>b</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>])</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the ceiling of the two-dimensional Euclidean distance function.</span>
+
+<span class=sd>    :param a: the first point</span>
+<span class=sd>    :param b: the second point</span>
+<span class=sd>    :return: the distance</span>
+<span class=sd>    """</span>
+    <span class=n>dist</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>sqrt</span><span class=p>(((</span><span class=n>a</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>-</span> <span class=n>b</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span> <span class=o>**</span> <span class=mi>2</span><span class=p>)</span> <span class=o>+</span> <span class=p>((</span><span class=n>a</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>-</span> <span class=n>b</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span> <span class=o>**</span> <span class=mi>2</span><span class=p>))</span>
+    <span class=n>disti</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>dist</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>disti</span> <span class=k>if</span> <span class=n>dist</span> <span class=o>==</span> <span class=n>disti</span> <span class=k>else</span> <span class=p>(</span><span class=n>disti</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_matrix_from_node_coord_section</span><span class=p>(</span>
+        <span class=n>n_cities</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span> <span class=n>edge_weight_type</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span>
+        <span class=n>node_coord_type</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span> <span class=n>stream</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>])</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get a data matrix from a node coordinate section.</span>
+
+<span class=sd>    :param n_cities: the dimension</span>
+<span class=sd>    :param edge_weight_type: the edge weight type</span>
+<span class=sd>    :param node_coord_type: the node coordinate type</span>
+<span class=sd>    :param stream: the node coordinate stream</span>
+<span class=sd>    :return: the data matrix</span>
+<span class=sd>    """</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_cities</span><span class=p>,</span> <span class=s2>"n_cities"</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>node_coord_type</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> \
+            <span class=p>(</span><span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>node_coord_type</span><span class=p>,</span> <span class=nb>str</span><span class=p>)):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>node_coord_type</span><span class=p>,</span> <span class=s2>"node_coord_type"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>edge_weight_type</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>edge_weight_type</span><span class=p>,</span> <span class=s2>"edge_weight_type"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+
+    <span class=n>dist_fun</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>coord_dim</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>edge_weight_type</span> <span class=o>==</span> <span class=n>__EWT_EUC_2D</span><span class=p>)</span> \
+            <span class=ow>and</span> <span class=p>(</span><span class=n>node_coord_type</span> <span class=ow>in</span> <span class=p>{</span><span class=kc>None</span><span class=p>,</span> <span class=n>__NODE_COORD_TYPE_2D</span><span class=p>}):</span>
+        <span class=n>coord_dim</span> <span class=o>=</span> <span class=mi>2</span>
+        <span class=n>dist_fun</span> <span class=o>=</span> <span class=n>__dist_2deuc</span>
+    <span class=k>elif</span> <span class=p>(</span><span class=n>edge_weight_type</span> <span class=o>==</span> <span class=n>__EWT_GEO</span><span class=p>)</span> \
+            <span class=ow>and</span> <span class=p>(</span><span class=n>node_coord_type</span> <span class=ow>in</span> <span class=p>{</span><span class=kc>None</span><span class=p>,</span> <span class=n>__NODE_COORD_TYPE_2D</span><span class=p>}):</span>
+        <span class=n>coord_dim</span> <span class=o>=</span> <span class=mi>2</span>
+        <span class=n>dist_fun</span> <span class=o>=</span> <span class=n>__dist_loglat</span>
+    <span class=k>elif</span> <span class=p>(</span><span class=n>edge_weight_type</span> <span class=o>==</span> <span class=n>__EWT_ATT</span><span class=p>)</span> \
+            <span class=ow>and</span> <span class=p>(</span><span class=n>node_coord_type</span> <span class=ow>in</span> <span class=p>{</span><span class=kc>None</span><span class=p>,</span> <span class=n>__NODE_COORD_TYPE_2D</span><span class=p>}):</span>
+        <span class=n>coord_dim</span> <span class=o>=</span> <span class=mi>2</span>
+        <span class=n>dist_fun</span> <span class=o>=</span> <span class=n>__dist_att</span>
+    <span class=k>elif</span> <span class=p>(</span><span class=n>edge_weight_type</span> <span class=o>==</span> <span class=n>__EWT_CEIL2D</span><span class=p>)</span> \
+            <span class=ow>and</span> <span class=p>(</span><span class=n>node_coord_type</span> <span class=ow>in</span> <span class=p>{</span><span class=kc>None</span><span class=p>,</span> <span class=n>__NODE_COORD_TYPE_2D</span><span class=p>}):</span>
+        <span class=n>coord_dim</span> <span class=o>=</span> <span class=mi>2</span>
+        <span class=n>dist_fun</span> <span class=o>=</span> <span class=n>__dist_2dceil</span>
+
+    <span class=k>if</span> <span class=p>(</span><span class=n>coord_dim</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>dist_fun</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>):</span>
+        <span class=k>return</span> <span class=n>__matrix_from_points</span><span class=p>(</span><span class=n>n_cities</span><span class=p>,</span> <span class=n>coord_dim</span><span class=p>,</span> <span class=n>stream</span><span class=p>,</span> <span class=n>dist_fun</span><span class=p>)</span>
+
+    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"invalid combination of </span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_TYPE</span><span class=si>}</span><span class=s2> "</span>
+                     <span class=sa>f</span><span class=s2>"and </span><span class=si>{</span><span class=n>_KEY_NODE_COORD_TYPE</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__read_n_ints</span><span class=p>(</span><span class=n>n</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>stream</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>])</span> <span class=o>-></span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Read exactly `n` integers from a stream.</span>
+
+<span class=sd>    :param n: the number of integers to read</span>
+<span class=sd>    :param stream: the stream to read from</span>
+<span class=sd>    :return: the list of integers</span>
+<span class=sd>    """</span>
+    <span class=n>res</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__append</span><span class=p>(</span><span class=n>i</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>,</span> <span class=n>fwd</span><span class=o>=</span><span class=n>res</span><span class=o>.</span><span class=n>append</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>i</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+            <span class=n>fwd</span><span class=p>(</span><span class=n>i</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>i2</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>i</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>i2</span> <span class=o>!=</span> <span class=n>i</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> is not integer"</span><span class=p>)</span>
+            <span class=n>fwd</span><span class=p>(</span><span class=n>i2</span><span class=p>)</span>
+
+    <span class=k>for</span> <span class=n>line</span> <span class=ow>in</span> <span class=n>stream</span><span class=p>:</span>
+        <span class=n>__line_to_nums</span><span class=p>(</span><span class=n>line</span><span class=p>,</span> <span class=n>__append</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>res</span><span class=p>)</span> <span class=o>==</span> <span class=n>n</span><span class=p>:</span>
+            <span class=k>break</span>
+
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>res</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"expected </span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2> integers, got </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>res</span><span class=p>)</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>res</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_matrix_from_edge_weights</span><span class=p>(</span>
+        <span class=n>n_cities</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span> <span class=n>edge_weight_type</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span>
+        <span class=n>edge_weight_format</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span> <span class=n>stream</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>])</span> <span class=o>-></span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get a data matrix from a edge weights section.</span>
+
+<span class=sd>    :param n_cities: the dimension</span>
+<span class=sd>    :param edge_weight_type: the edge weight type</span>
+<span class=sd>    :param edge_weight_format: the edge weight format</span>
+<span class=sd>    :param stream: the node coordinate stream</span>
+<span class=sd>    :return: the data matrix</span>
+<span class=sd>    """</span>
+    <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_cities</span><span class=p>,</span> <span class=s2>"n_cities"</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>edge_weight_type</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>edge_weight_type</span><span class=p>,</span> <span class=s2>"node_coord_type"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>edge_weight_type</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>edge_weight_type</span><span class=p>,</span> <span class=s2>"edge_weight_type"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>edge_weight_type</span> <span class=o>==</span> <span class=n>_EWT_EXPLICIT</span><span class=p>:</span>
+        <span class=k>if</span> <span class=n>edge_weight_format</span> <span class=o>==</span> <span class=n>_EWF_FULL_MATRIX</span><span class=p>:</span>
+            <span class=n>res</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span><span class=n>__read_n_ints</span><span class=p>(</span><span class=n>n_cities</span> <span class=o>*</span> <span class=n>n_cities</span><span class=p>,</span> <span class=n>stream</span><span class=p>),</span>
+                           <span class=n>dtype</span><span class=o>=</span><span class=n>npu</span><span class=o>.</span><span class=n>DEFAULT_INT</span><span class=p>)</span><span class=o>.</span><span class=n>reshape</span><span class=p>(</span>
+                <span class=p>(</span><span class=n>n_cities</span><span class=p>,</span> <span class=n>n_cities</span><span class=p>))</span>
+            <span class=n>np</span><span class=o>.</span><span class=n>fill_diagonal</span><span class=p>(</span><span class=n>res</span><span class=p>,</span> <span class=mi>0</span><span class=p>)</span>
+            <span class=k>return</span> <span class=n>res</span>
+        <span class=k>if</span> <span class=n>edge_weight_format</span> <span class=o>==</span> <span class=n>_EWF_UPPER_ROW</span><span class=p>:</span>
+            <span class=n>ints</span> <span class=o>=</span> <span class=n>__read_n_ints</span><span class=p>((</span><span class=n>n_cities</span> <span class=o>*</span> <span class=p>(</span><span class=n>n_cities</span> <span class=o>-</span> <span class=mi>1</span><span class=p>))</span> <span class=o>//</span> <span class=mi>2</span><span class=p>,</span> <span class=n>stream</span><span class=p>)</span>
+            <span class=n>res</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=n>n_cities</span><span class=p>,</span> <span class=n>n_cities</span><span class=p>),</span> <span class=n>dtype</span><span class=o>=</span><span class=n>npu</span><span class=o>.</span><span class=n>DEFAULT_INT</span><span class=p>)</span>
+            <span class=n>i</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span>
+            <span class=n>j</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=k>for</span> <span class=n>v</span> <span class=ow>in</span> <span class=n>ints</span><span class=p>:</span>
+                <span class=n>res</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>res</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>=</span> <span class=n>v</span>
+                <span class=n>i</span> <span class=o>+=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>>=</span> <span class=n>n_cities</span><span class=p>:</span>
+                    <span class=n>j</span> <span class=o>+=</span> <span class=mi>1</span>
+                    <span class=n>i</span> <span class=o>=</span> <span class=n>j</span> <span class=o>+</span> <span class=mi>1</span>
+            <span class=k>return</span> <span class=n>res</span>
+        <span class=k>if</span> <span class=n>edge_weight_format</span> <span class=o>==</span> <span class=n>__EWF_LOWER_DIAG_ROW</span><span class=p>:</span>
+            <span class=n>ints</span> <span class=o>=</span> <span class=n>__read_n_ints</span><span class=p>(</span>
+                <span class=n>n_cities</span> <span class=o>+</span> <span class=p>((</span><span class=n>n_cities</span> <span class=o>*</span> <span class=p>(</span><span class=n>n_cities</span> <span class=o>-</span> <span class=mi>1</span><span class=p>))</span> <span class=o>//</span> <span class=mi>2</span><span class=p>),</span> <span class=n>stream</span><span class=p>)</span>
+            <span class=n>res</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=n>n_cities</span><span class=p>,</span> <span class=n>n_cities</span><span class=p>),</span> <span class=n>dtype</span><span class=o>=</span><span class=n>npu</span><span class=o>.</span><span class=n>DEFAULT_INT</span><span class=p>)</span>
+            <span class=n>i</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=n>j</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=k>for</span> <span class=n>v</span> <span class=ow>in</span> <span class=n>ints</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>!=</span> <span class=n>j</span><span class=p>:</span>
+                    <span class=n>res</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>res</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>=</span> <span class=n>v</span>
+                <span class=n>i</span> <span class=o>+=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>></span> <span class=n>j</span><span class=p>:</span>
+                    <span class=n>j</span> <span class=o>+=</span> <span class=mi>1</span>
+                    <span class=n>i</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=k>return</span> <span class=n>res</span>
+        <span class=k>if</span> <span class=n>edge_weight_format</span> <span class=o>==</span> <span class=n>__EWF_UPPER_DIAG_ROW</span><span class=p>:</span>
+            <span class=n>ints</span> <span class=o>=</span> <span class=n>__read_n_ints</span><span class=p>(</span>
+                <span class=n>n_cities</span> <span class=o>+</span> <span class=p>((</span><span class=n>n_cities</span> <span class=o>*</span> <span class=p>(</span><span class=n>n_cities</span> <span class=o>-</span> <span class=mi>1</span><span class=p>))</span> <span class=o>//</span> <span class=mi>2</span><span class=p>),</span> <span class=n>stream</span><span class=p>)</span>
+            <span class=n>res</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=n>n_cities</span><span class=p>,</span> <span class=n>n_cities</span><span class=p>),</span> <span class=n>dtype</span><span class=o>=</span><span class=n>npu</span><span class=o>.</span><span class=n>DEFAULT_INT</span><span class=p>)</span>
+            <span class=n>i</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=n>j</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=k>for</span> <span class=n>v</span> <span class=ow>in</span> <span class=n>ints</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>!=</span> <span class=n>j</span><span class=p>:</span>
+                    <span class=n>res</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>res</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>=</span> <span class=n>v</span>
+                <span class=n>i</span> <span class=o>+=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>>=</span> <span class=n>n_cities</span><span class=p>:</span>
+                    <span class=n>j</span> <span class=o>+=</span> <span class=mi>1</span>
+                    <span class=n>i</span> <span class=o>=</span> <span class=n>j</span>
+            <span class=k>return</span> <span class=n>res</span>
+    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+        <span class=sa>f</span><span class=s2>"unsupported combination of </span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_TYPE</span><span class=si>}</span><span class=s2>="</span>
+        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>edge_weight_type</span><span class=si>!r}</span><span class=s2> and </span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_FORMAT</span><span class=si>}</span><span class=s2>="</span>
+        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>edge_weight_format</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_from_stream</span><span class=p>(</span>
+        <span class=n>stream</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>],</span>
+        <span class=n>lower_bound_getter</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>int</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span>
+        <span class=n>_LOWER_BOUNDS</span><span class=o>.</span><span class=fm>__getitem__</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Read a TSP Lib instance from a TSP-lib formatted stream.</span>
+
+<span class=sd>    :param stream: the text stream</span>
+<span class=sd>    :param lower_bound_getter: a function returning a lower bound for an</span>
+<span class=sd>        instance name, or `None` to use a simple lower bound approximation</span>
+<span class=sd>    :return: the instance</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>lower_bound_getter</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> \
+            <span class=ow>and</span> <span class=p>(</span><span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>lower_bound_getter</span><span class=p>)):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+            <span class=n>lower_bound_getter</span><span class=p>,</span> <span class=s2>"lower_bound_getter"</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+
+    <span class=n>the_name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>the_type</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>the_n_cities</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>the_ewt</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>the_ewf</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>the_nct</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>the_matrix</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+
+    <span class=k>for</span> <span class=n>the_line</span> <span class=ow>in</span> <span class=n>stream</span><span class=p>:</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>the_line</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>the_line</span><span class=p>,</span> <span class=s2>"line"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=n>line</span> <span class=o>=</span> <span class=n>the_line</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>line</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>continue</span>
+
+        <span class=n>sep_idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>find</span><span class=p>(</span><span class=s2>":"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>sep_idx</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>key</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>line</span><span class=p>[:</span><span class=n>sep_idx</span><span class=p>]</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+            <span class=n>value</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>line</span><span class=p>[</span><span class=n>sep_idx</span> <span class=o>+</span> <span class=mi>1</span><span class=p>:]</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+            <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>value</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> has empty value "</span>
+                                 <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>value</span><span class=si>!r}</span><span class=s2> for key </span><span class=si>{</span><span class=n>key</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+            <span class=k>if</span> <span class=n>key</span> <span class=o>==</span> <span class=n>_KEY_NAME</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>the_name</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> cannot come at this position,"</span>
+                        <span class=sa>f</span><span class=s2>" already got </span><span class=si>{</span><span class=n>_KEY_NAME</span><span class=si>}</span><span class=s2>=</span><span class=si>{</span><span class=n>the_name</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>value</span><span class=o>.</span><span class=n>endswith</span><span class=p>(</span><span class=s2>".tsp"</span><span class=p>):</span>
+                    <span class=n>value</span> <span class=o>=</span> <span class=n>value</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=o>-</span><span class=mi>4</span><span class=p>]</span>
+                <span class=n>the_name</span> <span class=o>=</span> <span class=n>value</span>
+                <span class=k>continue</span>
+
+            <span class=k>if</span> <span class=n>key</span> <span class=o>==</span> <span class=n>_KEY_TYPE</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>the_type</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> cannot come at this position, already "</span>
+                        <span class=sa>f</span><span class=s2>"got </span><span class=si>{</span><span class=n>_KEY_TYPE</span><span class=si>}</span><span class=s2>=</span><span class=si>{</span><span class=n>the_type</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=n>the_type</span> <span class=o>=</span> <span class=n>_TYPE_SYMMETRIC_TSP</span> \
+                    <span class=k>if</span> <span class=n>value</span> <span class=o>==</span> <span class=s2>"TSP (M.~Hofmeister)"</span> <span class=k>else</span> <span class=n>value</span>
+                <span class=k>if</span> <span class=n>the_type</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>_TYPES</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"only </span><span class=si>{</span><span class=n>_TYPES</span><span class=si>!r}</span><span class=s2> are permitted as </span><span class=si>{</span><span class=n>_KEY_TYPE</span><span class=si>}</span><span class=s2>, "</span>
+                        <span class=sa>f</span><span class=s2>"but got </span><span class=si>{</span><span class=n>the_type</span><span class=si>!r}</span><span class=s2> from </span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=k>continue</span>
+
+            <span class=k>if</span> <span class=n>key</span> <span class=o>==</span> <span class=n>_KEY_DIMENSION</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>the_n_cities</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> cannot come at this position,"</span>
+                        <span class=sa>f</span><span class=s2>" already got </span><span class=si>{</span><span class=n>_KEY_DIMENSION</span><span class=si>}</span><span class=s2>=</span><span class=si>{</span><span class=n>the_n_cities</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=n>the_n_cities</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>value</span><span class=p>,</span> <span class=s2>"dimension"</span><span class=p>,</span>
+                                                  <span class=mi>2</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+
+            <span class=k>if</span> <span class=n>key</span> <span class=o>==</span> <span class=n>_KEY_EDGE_WEIGHT_TYPE</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>the_ewt</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> cannot come at this position, already "</span>
+                        <span class=sa>f</span><span class=s2>"got </span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_TYPE</span><span class=si>}</span><span class=s2>=</span><span class=si>{</span><span class=n>the_ewt</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=n>the_ewt</span> <span class=o>=</span> <span class=n>value</span>
+                <span class=k>if</span> <span class=n>the_ewt</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>_EDGE_WEIGHT_TYPES</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"only </span><span class=si>{</span><span class=n>_EDGE_WEIGHT_TYPES</span><span class=si>!r}</span><span class=s2> are permitted as "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_TYPE</span><span class=si>}</span><span class=s2>, but got </span><span class=si>{</span><span class=n>the_ewt</span><span class=si>!r}</span><span class=s2> "</span>
+                        <span class=sa>f</span><span class=s2>"in </span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>continue</span>
+
+            <span class=k>if</span> <span class=n>key</span> <span class=o>==</span> <span class=n>_KEY_EDGE_WEIGHT_FORMAT</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>the_ewf</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> cannot come at this position, already "</span>
+                        <span class=sa>f</span><span class=s2>"got </span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_FORMAT</span><span class=si>}</span><span class=s2>=</span><span class=si>{</span><span class=n>the_ewf</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=n>the_ewf</span> <span class=o>=</span> <span class=n>value</span>
+                <span class=k>if</span> <span class=n>the_ewf</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>_EDGE_WEIGHT_FORMATS</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"only </span><span class=si>{</span><span class=n>_EDGE_WEIGHT_FORMATS</span><span class=si>!r}</span><span class=s2> are permitted as "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_FORMAT</span><span class=si>}</span><span class=s2>, but got </span><span class=si>{</span><span class=n>the_ewf</span><span class=si>}</span><span class=s2> "</span>
+                        <span class=sa>f</span><span class=s2>"in </span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>continue</span>
+            <span class=k>if</span> <span class=n>key</span> <span class=o>==</span> <span class=n>_KEY_NODE_COORD_TYPE</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>the_nct</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> cannot come at this position, already "</span>
+                        <span class=sa>f</span><span class=s2>"got </span><span class=si>{</span><span class=n>_KEY_NODE_COORD_TYPE</span><span class=si>}</span><span class=s2>=</span><span class=si>{</span><span class=n>the_nct</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=n>the_nct</span> <span class=o>=</span> <span class=n>value</span>
+                <span class=k>if</span> <span class=n>the_nct</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>_NODE_COORD_TYPES</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"only </span><span class=si>{</span><span class=n>_NODE_COORD_TYPES</span><span class=si>!r}</span><span class=s2> are permitted as node "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_NODE_COORD_TYPE</span><span class=si>}</span><span class=s2>, but got </span><span class=si>{</span><span class=n>the_nct</span><span class=si>!r}</span><span class=s2> "</span>
+                        <span class=sa>f</span><span class=s2>"in </span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>continue</span>
+        <span class=k>elif</span> <span class=n>line</span> <span class=o>==</span> <span class=n>_START_NODE_COORD_SECTION</span><span class=p>:</span>
+            <span class=k>if</span> <span class=n>the_matrix</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"already got matrix, cannot have </span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> here!"</span><span class=p>)</span>
+            <span class=n>the_matrix</span> <span class=o>=</span> <span class=n>_matrix_from_node_coord_section</span><span class=p>(</span>
+                <span class=n>the_n_cities</span><span class=p>,</span> <span class=n>the_ewt</span><span class=p>,</span> <span class=n>the_nct</span><span class=p>,</span> <span class=n>stream</span><span class=p>)</span>
+            <span class=k>continue</span>
+        <span class=k>elif</span> <span class=n>line</span> <span class=o>==</span> <span class=n>_START_EDGE_WEIGHT_SECTION</span><span class=p>:</span>
+            <span class=k>if</span> <span class=n>the_matrix</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"already got matrix, cannot have </span><span class=si>{</span><span class=n>line</span><span class=si>!r}</span><span class=s2> here!"</span><span class=p>)</span>
+            <span class=n>the_matrix</span> <span class=o>=</span> <span class=n>_matrix_from_edge_weights</span><span class=p>(</span>
+                <span class=n>the_n_cities</span><span class=p>,</span> <span class=n>the_ewt</span><span class=p>,</span> <span class=n>the_ewf</span><span class=p>,</span> <span class=n>stream</span><span class=p>)</span>
+            <span class=k>continue</span>
+        <span class=k>elif</span> <span class=n>line</span> <span class=o>==</span> <span class=n>_EOF</span><span class=p>:</span>
+            <span class=k>break</span>
+        <span class=k>elif</span> <span class=n>line</span> <span class=o>==</span> <span class=n>_FIXED_EDGES</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_FIXED_EDGES</span><span class=si>!r}</span><span class=s2> not supported"</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=n>the_name</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"did not find any name."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>the_matrix</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"did not find any matrix for </span><span class=si>{</span><span class=n>the_name</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>Instance</span><span class=p>(</span>
+        <span class=n>the_name</span><span class=p>,</span> <span class=mi>0</span> <span class=k>if</span> <span class=p>(</span><span class=n>lower_bound_getter</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>)</span> <span class=k>else</span>
+        <span class=n>lower_bound_getter</span><span class=p>(</span><span class=n>the_name</span><span class=p>),</span> <span class=n>the_matrix</span><span class=p>)</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>the_type</span> <span class=o>==</span> <span class=n>_TYPE_SYMMETRIC_TSP</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=ow>not</span> <span class=n>inst</span><span class=o>.</span><span class=n>is_symmetric</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"found asymmetric TSP instance but expected "</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>the_name</span><span class=si>!r}</span><span class=s2> to be a symmetric one?"</span><span class=p>)</span>
+
+    <span class=k>return</span> <span class=n>inst</span>
+
+
+<div class=viewcode-block id=ncities_from_tsplib_name>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.instance.ncities_from_tsplib_name>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>ncities_from_tsplib_name</span><span class=p>(</span><span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the instance scale from the instance name.</span>
+
+<span class=sd>    :param name: the instance name</span>
+<span class=sd>    :return: the instance scale</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=n>name</span> <span class=o>==</span> <span class=s2>"kro124p"</span><span class=p>:</span>
+        <span class=k>return</span> <span class=mi>100</span>
+    <span class=k>if</span> <span class=n>name</span> <span class=o>==</span> <span class=s2>"ry48p"</span><span class=p>:</span>
+        <span class=k>return</span> <span class=mi>48</span>
+    <span class=n>idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+    <span class=k>while</span> <span class=n>name</span><span class=p>[</span><span class=n>idx</span> <span class=o>-</span> <span class=mi>1</span><span class=p>]</span> <span class=ow>in</span> <span class=n>digits</span><span class=p>:</span>
+        <span class=n>idx</span> <span class=o>-=</span> <span class=mi>1</span>
+    <span class=n>scale</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>name</span><span class=p>[</span><span class=n>idx</span><span class=p>:])</span>
+    <span class=k>if</span> <span class=n>name</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=s2>"ftv"</span><span class=p>):</span>
+        <span class=k>return</span> <span class=n>scale</span> <span class=o>+</span> <span class=mi>1</span>
+    <span class=k>return</span> <span class=n>scale</span></div>
+
+
+
+<div class=viewcode-block id=Instance>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.instance.Instance>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Instance</span><span class=p>(</span><span class=n>Component</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An instance of the Traveling Salesperson Problem."""</span>
+
+    <span class=c1>#: the name of the instance</span>
+    <span class=n>name</span><span class=p>:</span> <span class=nb>str</span>
+    <span class=c1>#: the number of cities</span>
+    <span class=n>n_cities</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the lower bound of the tour length</span>
+    <span class=n>tour_length_lower_bound</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the upper bound of the tour length</span>
+    <span class=n>tour_length_upper_bound</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: is the TSP instance symmetric?</span>
+    <span class=n>is_symmetric</span><span class=p>:</span> <span class=nb>bool</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__new__</span><span class=p>(</span><span class=bp>cls</span><span class=p>,</span> <span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>tour_length_lower_bound</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                <span class=n>matrix</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                <span class=n>upper_bound_range_multiplier</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create an instance of the Traveling Salesperson Problem.</span>
+
+<span class=sd>        :param cls: the class</span>
+<span class=sd>        :param name: the name of the instance</span>
+<span class=sd>        :param tour_length_lower_bound: the lower bound of the tour length</span>
+<span class=sd>        :param matrix: the matrix with the data (will be copied)</span>
+<span class=sd>        :param upper_bound_range_multiplier: a multiplier for the upper bound</span>
+<span class=sd>            to fix the data range, by default `1`</span>
+<span class=sd>        """</span>
+        <span class=n>use_name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>sanitize_name</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>name</span> <span class=o>!=</span> <span class=n>use_name</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Name </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2> is not a valid name."</span><span class=p>)</span>
+
+        <span class=n>check_int_range</span><span class=p>(</span><span class=n>tour_length_lower_bound</span><span class=p>,</span> <span class=s2>"tour_length_lower_bound"</span><span class=p>,</span>
+                        <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000_000_000_000</span><span class=p>)</span>
+
+        <span class=n>n_cities</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>matrix</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>n_cities</span> <span class=o><=</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"There must be at least two cities in a TSP "</span>
+                             <span class=sa>f</span><span class=s2>"instance, but we got </span><span class=si>{</span><span class=n>n_cities</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>use_shape</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n_cities</span><span class=p>,</span> <span class=n>n_cities</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>matrix</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+            <span class=k>if</span> <span class=n>matrix</span><span class=o>.</span><span class=n>shape</span> <span class=o>!=</span> <span class=n>use_shape</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Unexpected shape </span><span class=si>{</span><span class=n>matrix</span><span class=o>.</span><span class=n>shape</span><span class=si>}</span><span class=s2> for </span><span class=si>{</span><span class=n>n_cities</span><span class=si>}</span><span class=s2> cities, "</span>
+                    <span class=sa>f</span><span class=s2>"expected </span><span class=si>{</span><span class=n>use_shape</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>matrix</span><span class=p>,</span> <span class=s2>"matrix"</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span>
+
+        <span class=c1># validate the matrix and compute the upper bound</span>
+        <span class=n>upper_bound</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>lower_bound_2</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>is_symmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_cities</span><span class=p>):</span>
+            <span class=n>farthest_neighbor</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+            <span class=n>nearest_neighbor</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>9_223_372_036_854_775_807</span>
+
+            <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_cities</span><span class=p>):</span>
+                <span class=n>dist</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>matrix</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>])</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>==</span> <span class=n>j</span><span class=p>:</span>
+                    <span class=k>if</span> <span class=n>dist</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                            <span class=sa>f</span><span class=s2>"if i=j=</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>, then dist must be zero "</span>
+                            <span class=sa>f</span><span class=s2>"but is </span><span class=si>{</span><span class=n>dist</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+                    <span class=k>continue</span>
+                <span class=n>farthest_neighbor</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>farthest_neighbor</span><span class=p>,</span> <span class=n>dist</span><span class=p>)</span>
+                <span class=n>nearest_neighbor</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>nearest_neighbor</span><span class=p>,</span> <span class=n>dist</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>dist</span> <span class=o>!=</span> <span class=n>matrix</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>i</span><span class=p>]:</span>
+                    <span class=n>is_symmetric</span> <span class=o>=</span> <span class=kc>False</span>
+            <span class=k>if</span> <span class=n>farthest_neighbor</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"farthest neighbor distance of node </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> is"</span>
+                                 <span class=sa>f</span><span class=s2>" </span><span class=si>{</span><span class=n>farthest_neighbor</span><span class=si>}</span><span class=s2>?"</span><span class=p>)</span>
+            <span class=n>upper_bound</span> <span class=o>+=</span> <span class=n>farthest_neighbor</span>
+            <span class=n>lower_bound_2</span> <span class=o>+=</span> <span class=n>nearest_neighbor</span>
+
+        <span class=n>tour_length_lower_bound</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span>
+            <span class=n>tour_length_lower_bound</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+                <span class=n>lower_bound_2</span><span class=p>,</span> <span class=s2>"lower_bound_2"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000_000_000_000</span><span class=p>))</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=n>upper_bound</span><span class=p>,</span> <span class=s2>"upper_bound"</span><span class=p>,</span>
+                        <span class=n>tour_length_lower_bound</span><span class=p>,</span> <span class=mi>1_000_000_000_000_001</span><span class=p>)</span>
+
+        <span class=c1># create the object and ensure that the backing integer type is</span>
+        <span class=c1># large enough to accommodate all possible tour lengths</span>
+        <span class=n>limit</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>upper_bound_range_multiplier</span><span class=p>,</span> <span class=s2>"upper_bound_range_multiplier"</span><span class=p>,</span> <span class=mi>1</span><span class=p>)</span>
+            <span class=o>*</span> <span class=nb>max</span><span class=p>(</span><span class=n>upper_bound</span><span class=p>,</span> <span class=n>n_cities</span><span class=p>))</span>
+        <span class=n>obj</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__new__</span><span class=p>(</span>
+            <span class=bp>cls</span><span class=p>,</span> <span class=n>use_shape</span><span class=p>,</span> <span class=n>int_range_to_dtype</span><span class=p>(</span>
+                <span class=n>min_value</span><span class=o>=-</span><span class=n>limit</span><span class=p>,</span> <span class=n>max_value</span><span class=o>=</span><span class=n>limit</span><span class=p>))</span>
+        <span class=n>np</span><span class=o>.</span><span class=n>copyto</span><span class=p>(</span><span class=n>obj</span><span class=p>,</span> <span class=n>matrix</span><span class=p>,</span> <span class=s2>"unsafe"</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_cities</span><span class=p>):</span>
+            <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_cities</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>obj</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>!=</span> <span class=n>matrix</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"error when copying: </span><span class=si>{</span><span class=n>obj</span><span class=p>[</span><span class=n>i</span><span class=p>,</span><span class=w> </span><span class=n>j</span><span class=p>]</span><span class=si>}</span><span class=s2> != </span><span class=si>{</span><span class=n>matrix</span><span class=p>[</span><span class=n>i</span><span class=p>,</span><span class=w> </span><span class=n>j</span><span class=p>]</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=c1>#: the name of the instance</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>name</span> <span class=o>=</span> <span class=n>use_name</span>
+        <span class=c1>#: the number of cities</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>n_cities</span> <span class=o>=</span> <span class=n>n_cities</span>
+        <span class=c1>#: the lower bound of the tour length</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>tour_length_lower_bound</span> <span class=o>=</span> <span class=n>tour_length_lower_bound</span>
+        <span class=c1>#: the upper bound of the tour length</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>tour_length_upper_bound</span> <span class=o>=</span> <span class=n>upper_bound</span>
+        <span class=c1>#: is this instance symmetric?</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>is_symmetric</span> <span class=o>=</span> <span class=n>is_symmetric</span>
+        <span class=k>return</span> <span class=n>obj</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this instance.</span>
+
+<span class=sd>        :return: the name of this instance</span>
+
+<span class=sd>        >>> str(Instance.from_resource("gr17"))</span>
+<span class=sd>        'gr17'</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>name</span>
+
+<div class=viewcode-block id=Instance.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.instance.Instance.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of the instance to the given logger.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+
+<span class=sd>        >>> from moptipy.utils.logger import InMemoryLogger</span>
+<span class=sd>        >>> with InMemoryLogger() as l:</span>
+<span class=sd>        ...     with l.key_values("I") as kv:</span>
+<span class=sd>        ...         Instance.from_resource("kroE100").log_parameters_to(kv)</span>
+<span class=sd>        ...     print(repr('@'.join(l.get_log())))</span>
+<span class=sd>        'BEGIN_I@name: kroE100@class: moptipyapps.tsp.instance.Instance\</span>
+<span class=sd>@nCities: 100@tourLengthLowerBound: 22068@tourLengthUpperBound: 330799@\</span>
+<span class=sd>symmetric: T@dtype: i@END_I'</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"nCities"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_cities</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"tourLengthLowerBound"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>tour_length_lower_bound</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"tourLengthUpperBound"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>tour_length_upper_bound</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"symmetric"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>is_symmetric</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=n>npu</span><span class=o>.</span><span class=n>KEY_NUMPY_TYPE</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>dtype</span><span class=o>.</span><span class=n>char</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.from_file>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.instance.Instance.from_file>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_file</span><span class=p>(</span>
+            <span class=n>path</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+            <span class=n>lower_bound_getter</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>int</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span>
+            <span class=n>_LOWER_BOUNDS</span><span class=o>.</span><span class=fm>__getitem__</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Read a TSP Lib instance from a TSP-lib formatted file.</span>
+
+<span class=sd>        :param path: the path to the file</span>
+<span class=sd>        :param lower_bound_getter: a function returning a lower bound for an</span>
+<span class=sd>            instance name, or `None` to use a simple lower bound approximation</span>
+<span class=sd>        :return: the instance</span>
+
+<span class=sd>        >>> from os.path import dirname</span>
+<span class=sd>        >>> inst = Instance.from_file(dirname(__file__) + "/tsplib/br17.atsp")</span>
+<span class=sd>        >>> inst.name</span>
+<span class=sd>        'br17'</span>
+<span class=sd>        """</span>
+        <span class=n>file</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>file_path</span><span class=p>(</span><span class=n>path</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>file</span><span class=o>.</span><span class=n>open_for_read</span><span class=p>()</span> <span class=k>as</span> <span class=n>stream</span><span class=p>:</span>
+            <span class=k>try</span><span class=p>:</span>
+                <span class=k>return</span> <span class=n>_from_stream</span><span class=p>(</span>
+                    <span class=n>cast</span><span class=p>(</span><span class=s2>"TextIO"</span><span class=p>,</span> <span class=n>stream</span><span class=p>),</span> <span class=n>lower_bound_getter</span><span class=p>)</span>
+            <span class=k>except</span> <span class=p>(</span><span class=ne>TypeError</span><span class=p>,</span> <span class=ne>ValueError</span><span class=p>)</span> <span class=k>as</span> <span class=n>err</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"error when parsing file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span> <span class=kn>from</span><span class=w> </span><span class=nn>err</span></div>
+
+
+<div class=viewcode-block id=Instance.from_resource>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.instance.Instance.from_resource>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_resource</span><span class=p>(</span><span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Load a TSP instance from a resource.</span>
+
+<span class=sd>        :param name: the name string</span>
+<span class=sd>        :return: the instance</span>
+
+<span class=sd>        >>> Instance.from_resource("br17").n_cities</span>
+<span class=sd>        17</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=s2>"name"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=n>container</span><span class=p>:</span> <span class=n>Final</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span>
+        <span class=n>inst_attr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"__inst_</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>"</span>
+        <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>):</span>  <span class=c1># instance loaded?</span>
+            <span class=k>return</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Instance"</span><span class=p>,</span> <span class=nb>getattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>))</span>
+
+        <span class=n>is_symmetric</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>bool</span><span class=p>]</span> <span class=o>=</span> <span class=n>name</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>_ASYMMETRIC_INSTANCES</span>
+        <span class=n>suffix</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>".tsp"</span> <span class=k>if</span> <span class=n>is_symmetric</span> <span class=k>else</span> <span class=s2>".atsp"</span>
+        <span class=k>with</span> <span class=n>open_resource_stream</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}{</span><span class=n>suffix</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span> <span class=k>as</span> <span class=n>stream</span><span class=p>:</span>
+            <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>_from_stream</span><span class=p>(</span><span class=n>stream</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>name</span> <span class=o>!=</span> <span class=n>name</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"got </span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>name</span><span class=si>!r}</span><span class=s2> for instance </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>?"</span><span class=p>)</span>
+        <span class=n>sc</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>ncities_from_tsplib_name</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>sc</span> <span class=o>!=</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_cities</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"expected to get n_cities=</span><span class=si>{</span><span class=n>sc</span><span class=si>}</span><span class=s2> from name "</span>
+                             <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2> but got </span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>n_cities</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>is_symmetric</span> <span class=ow>and</span> <span class=p>(</span><span class=ow>not</span> <span class=n>inst</span><span class=o>.</span><span class=n>is_symmetric</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2> should be symmetric but is not?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_cities</span> <span class=o><=</span> <span class=mi>1000</span><span class=p>:</span>
+            <span class=nb>setattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>,</span> <span class=n>inst</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>inst</span></div>
+
+
+<div class=viewcode-block id=Instance.list_resources>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.instance.Instance.list_resources>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>list_resources</span><span class=p>(</span><span class=n>symmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>,</span>
+                       <span class=n>asymmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get a tuple of all the TSP instances available as resource.</span>
+
+<span class=sd>        :param symmetric: include the symmetric instances</span>
+<span class=sd>        :param asymmetric: include the asymmetric instances</span>
+<span class=sd>        :return: the tuple with the instance names</span>
+
+<span class=sd>        >>> a = len(Instance.list_resources(True, True))</span>
+<span class=sd>        >>> print(a)</span>
+<span class=sd>        111</span>
+<span class=sd>        >>> b = len(Instance.list_resources(True, False))</span>
+<span class=sd>        >>> print(b)</span>
+<span class=sd>        92</span>
+<span class=sd>        >>> c = len(Instance.list_resources(False, True))</span>
+<span class=sd>        >>> print(c)</span>
+<span class=sd>        19</span>
+<span class=sd>        >>> print(a == (b + c))</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> print(len(Instance.list_resources(False, False)))</span>
+<span class=sd>        0</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>_INSTANCES</span> <span class=k>if</span> <span class=p>(</span><span class=n>symmetric</span> <span class=ow>and</span> <span class=n>asymmetric</span><span class=p>)</span> <span class=k>else</span> <span class=p>(</span>
+            <span class=n>_SYMMETRIC_INSTANCES</span> <span class=k>if</span> <span class=n>symmetric</span> <span class=k>else</span> <span class=p>(</span>
+                <span class=n>_ASYMMETRIC_INSTANCES</span> <span class=k>if</span> <span class=n>asymmetric</span> <span class=k>else</span> <span class=p>()))</span></div>
+
+
+<div class=viewcode-block id=Instance.to_stream>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.instance.Instance.to_stream>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>to_stream</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=n>Any</span><span class=p>],</span>
+                  <span class=n>comments</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>())</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert this instance to a stream.</span>
+
+<span class=sd>        :param collector: the string collector</span>
+<span class=sd>        :param comments: a stream of comments</span>
+
+<span class=sd>        >>> orig = Instance.from_resource("br17")</span>
+<span class=sd>        >>> text = []</span>
+<span class=sd>        >>> orig.to_stream(text.append)</span>
+<span class=sd>        >>> reload = _from_stream(iter(text),</span>
+<span class=sd>        ...     lambda _: orig.tour_length_lower_bound)</span>
+<span class=sd>        >>> orig.n_cities == reload.n_cities</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> orig.name == reload.name</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> list(orig.flatten()) == list(reload.flatten())</span>
+<span class=sd>        True</span>
+
+<span class=sd>        >>> orig = Instance.from_resource("att48")</span>
+<span class=sd>        >>> text = []</span>
+<span class=sd>        >>> orig.to_stream(text.append)</span>
+<span class=sd>        >>> reload = _from_stream(iter(text),</span>
+<span class=sd>        ...     lambda _: orig.tour_length_lower_bound)</span>
+<span class=sd>        >>> orig.n_cities == reload.n_cities</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> orig.name == reload.name</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> list(orig.flatten()) == list(reload.flatten())</span>
+<span class=sd>        True</span>
+
+<span class=sd>        >>> orig = Instance.from_resource("berlin52")</span>
+<span class=sd>        >>> text = []</span>
+<span class=sd>        >>> orig.to_stream(text.append)</span>
+<span class=sd>        >>> reload = _from_stream(iter(text),</span>
+<span class=sd>        ...     lambda _: orig.tour_length_lower_bound)</span>
+<span class=sd>        >>> orig.n_cities == reload.n_cities</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> orig.name == reload.name</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> list(orig.flatten()) == list(reload.flatten())</span>
+<span class=sd>        True</span>
+
+<span class=sd>        >>> orig = Instance.from_resource("ft53")</span>
+<span class=sd>        >>> text = []</span>
+<span class=sd>        >>> orig.to_stream(text.append)</span>
+<span class=sd>        >>> reload = _from_stream(iter(text),</span>
+<span class=sd>        ...     lambda _: orig.tour_length_lower_bound)</span>
+<span class=sd>        >>> orig.n_cities == reload.n_cities</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> orig.name == reload.name</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> list(orig.flatten()) == list(reload.flatten())</span>
+<span class=sd>        True</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>collector</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>collector</span><span class=p>,</span> <span class=s2>"collector"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>comments</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>comments</span><span class=p>,</span> <span class=s2>"comments"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+        <span class=n>collector</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_NAME</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>t</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>_TYPE_SYMMETRIC_TSP</span> <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>is_symmetric</span> \
+            <span class=k>else</span> <span class=n>_TYPE_ASYMMETRIC_TSP</span>
+        <span class=n>collector</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_TYPE</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>t</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>comment</span> <span class=ow>in</span> <span class=n>comments</span><span class=p>:</span>
+            <span class=n>collector</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_COMMENT</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>comment</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>collector</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_DIMENSION</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>n_cities</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>collector</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_TYPE</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>_EWT_EXPLICIT</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>t</span> <span class=o>=</span> <span class=n>_EWF_UPPER_ROW</span> <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>is_symmetric</span> <span class=k>else</span> <span class=n>_EWF_FULL_MATRIX</span>
+        <span class=n>collector</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_KEY_EDGE_WEIGHT_FORMAT</span><span class=si>}</span><span class=s2>: </span><span class=si>{</span><span class=n>t</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>collector</span><span class=p>(</span><span class=n>_START_EDGE_WEIGHT_SECTION</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>is_symmetric</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>n_cities</span><span class=p>):</span>
+                <span class=n>collector</span><span class=p>(</span><span class=s2>" "</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=p>,</span> <span class=nb>list</span><span class=p>(</span><span class=bp>self</span><span class=p>[</span><span class=n>i</span><span class=p>][</span><span class=n>i</span> <span class=o>+</span> <span class=mi>1</span><span class=p>:]))))</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>n_cities</span><span class=p>):</span>
+                <span class=n>collector</span><span class=p>(</span><span class=s2>" "</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=p>,</span> <span class=bp>self</span><span class=p>[</span><span class=n>i</span><span class=p>])))</span>
+        <span class=n>collector</span><span class=p>(</span><span class=n>_EOF</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.tsp.instance</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

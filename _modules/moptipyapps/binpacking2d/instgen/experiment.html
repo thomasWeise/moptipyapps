@@ -1,0 +1,101 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.instgen.experiment — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/instgen/experiment.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.experiment</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.instgen.experiment</h1><div class=highlight><pre>
+<span></span><span class=sd>"""An example experiment for generating bin packing instances."""</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>argparse</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.so.vector.cmaes_lib</span><span class=w> </span><span class=kn>import</span> <span class=n>BiPopCMAES</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.execution</span><span class=w> </span><span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.experiment</span><span class=w> </span><span class=kn>import</span> <span class=n>run_experiment</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instgen.errors_and_hardness</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>ErrorsAndHardness</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instgen.problem</span><span class=w> </span><span class=kn>import</span> <span class=n>Problem</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>moptipyapps_argparser</span>
+
+<span class=c1>#: the maximum number of FEs</span>
+<span class=n>MAX_FES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>10_000</span>
+
+<span class=c1>#: the maximum number of FEs in for the algorithm runs inside the objective</span>
+<span class=n>INNER_MAX_FES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>225_000</span>
+
+<span class=c1>#: the number of runs of the algorithms inside the objective</span>
+<span class=n>INNER_RUNS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>2</span>
+
+
+<div class=viewcode-block id=cmaes>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.experiment.cmaes>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>cmaes</span><span class=p>(</span><span class=n>problem</span><span class=p>:</span> <span class=n>Problem</span><span class=p>)</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the basic BiPop-CMA-ES setup.</span>
+
+<span class=sd>    :param problem: the problem to solve</span>
+<span class=sd>    :return: the execution</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>Execution</span><span class=p>()</span>
+            <span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>BiPopCMAES</span><span class=p>(</span><span class=n>problem</span><span class=o>.</span><span class=n>search_space</span><span class=p>))</span>
+            <span class=o>.</span><span class=n>set_search_space</span><span class=p>(</span><span class=n>problem</span><span class=o>.</span><span class=n>search_space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>problem</span><span class=o>.</span><span class=n>solution_space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_encoding</span><span class=p>(</span><span class=n>problem</span><span class=o>.</span><span class=n>encoding</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>ErrorsAndHardness</span><span class=p>(</span>
+                <span class=n>problem</span><span class=o>.</span><span class=n>solution_space</span><span class=p>,</span> <span class=n>INNER_MAX_FES</span><span class=p>,</span> <span class=n>INNER_RUNS</span><span class=p>))</span>
+            <span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=n>MAX_FES</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_log_improvements</span><span class=p>(</span><span class=kc>True</span><span class=p>))</span></div>
+
+
+
+<span class=c1>#: the instances to use as blueprints</span>
+<span class=n>__USE_INSTANCES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+    <span class=s2>"beng01"</span><span class=p>,</span> <span class=s2>"beng02"</span><span class=p>,</span> <span class=s2>"beng03"</span><span class=p>,</span> <span class=s2>"beng04"</span><span class=p>,</span> <span class=s2>"beng05"</span><span class=p>,</span> <span class=s2>"beng06"</span><span class=p>,</span> <span class=s2>"beng07"</span><span class=p>,</span>
+    <span class=s2>"beng08"</span><span class=p>,</span> <span class=s2>"beng09"</span><span class=p>,</span> <span class=s2>"beng10"</span><span class=p>,</span> <span class=s2>"cl01_020_01"</span><span class=p>,</span> <span class=s2>"cl01_040_01"</span><span class=p>,</span> <span class=s2>"cl01_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl01_080_01"</span><span class=p>,</span> <span class=s2>"cl01_100_01"</span><span class=p>,</span> <span class=s2>"cl02_020_01"</span><span class=p>,</span> <span class=s2>"cl02_040_01"</span><span class=p>,</span> <span class=s2>"cl02_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl02_080_01"</span><span class=p>,</span> <span class=s2>"cl02_100_01"</span><span class=p>,</span> <span class=s2>"cl03_020_01"</span><span class=p>,</span> <span class=s2>"cl03_040_01"</span><span class=p>,</span> <span class=s2>"cl03_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl03_080_01"</span><span class=p>,</span> <span class=s2>"cl03_100_01"</span><span class=p>,</span> <span class=s2>"cl04_020_01"</span><span class=p>,</span> <span class=s2>"cl04_040_01"</span><span class=p>,</span> <span class=s2>"cl04_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl04_080_01"</span><span class=p>,</span> <span class=s2>"cl04_100_01"</span><span class=p>,</span> <span class=s2>"cl05_020_01"</span><span class=p>,</span> <span class=s2>"cl05_040_01"</span><span class=p>,</span> <span class=s2>"cl05_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl05_080_01"</span><span class=p>,</span> <span class=s2>"cl05_100_01"</span><span class=p>,</span> <span class=s2>"cl06_020_01"</span><span class=p>,</span> <span class=s2>"cl06_040_01"</span><span class=p>,</span> <span class=s2>"cl06_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl06_080_01"</span><span class=p>,</span> <span class=s2>"cl06_100_01"</span><span class=p>,</span> <span class=s2>"cl07_020_01"</span><span class=p>,</span> <span class=s2>"cl07_040_01"</span><span class=p>,</span> <span class=s2>"cl07_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl07_080_01"</span><span class=p>,</span> <span class=s2>"cl07_100_01"</span><span class=p>,</span> <span class=s2>"cl08_020_01"</span><span class=p>,</span> <span class=s2>"cl08_040_01"</span><span class=p>,</span> <span class=s2>"cl08_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl08_080_01"</span><span class=p>,</span> <span class=s2>"cl08_100_01"</span><span class=p>,</span> <span class=s2>"cl09_020_01"</span><span class=p>,</span> <span class=s2>"cl09_040_01"</span><span class=p>,</span> <span class=s2>"cl09_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl09_080_01"</span><span class=p>,</span> <span class=s2>"cl09_100_01"</span><span class=p>,</span> <span class=s2>"cl10_020_01"</span><span class=p>,</span> <span class=s2>"cl10_040_01"</span><span class=p>,</span> <span class=s2>"cl10_060_01"</span><span class=p>,</span>
+    <span class=s2>"cl10_080_01"</span><span class=p>,</span> <span class=s2>"cl10_100_01"</span><span class=p>,</span> <span class=s2>"cl10_100_10"</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=run>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.experiment.run>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>run</span><span class=p>(</span><span class=n>base_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Run the experiment.</span>
+
+<span class=sd>    :param base_dir: the base directory</span>
+<span class=sd>    """</span>
+    <span class=n>use_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>base_dir</span><span class=p>)</span>
+    <span class=n>use_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+
+    <span class=n>inst_creators</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>Instance</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=n>cast</span><span class=p>(</span>
+        <span class=s2>"Callable[[], Instance]"</span><span class=p>,</span> <span class=k>lambda</span> <span class=n>__s</span><span class=o>=</span><span class=n>sss</span><span class=p>,</span> <span class=n>__t</span><span class=o>=</span><span class=n>ttt</span><span class=p>:</span> <span class=n>Problem</span><span class=p>(</span><span class=n>__s</span><span class=p>,</span> <span class=n>__t</span><span class=p>))</span>
+        <span class=k>for</span> <span class=n>sss</span> <span class=ow>in</span> <span class=n>__USE_INSTANCES</span> <span class=k>for</span> <span class=n>ttt</span> <span class=ow>in</span> <span class=p>(</span><span class=mf>0.25</span><span class=p>,</span> <span class=mf>0.125</span><span class=p>)]</span>
+
+    <span class=n>run_experiment</span><span class=p>(</span>
+        <span class=n>base_dir</span><span class=o>=</span><span class=n>use_dir</span><span class=p>,</span>
+        <span class=n>instances</span><span class=o>=</span><span class=n>inst_creators</span><span class=p>,</span>
+        <span class=n>setups</span><span class=o>=</span><span class=p>[</span><span class=n>cmaes</span><span class=p>],</span>
+        <span class=n>n_runs</span><span class=o>=</span><span class=p>[</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>7</span><span class=p>,</span> <span class=mi>11</span><span class=p>,</span> <span class=mi>13</span><span class=p>,</span> <span class=mi>17</span><span class=p>,</span> <span class=mi>20</span><span class=p>,</span> <span class=mi>23</span><span class=p>,</span> <span class=mi>29</span><span class=p>,</span> <span class=mi>30</span><span class=p>,</span> <span class=mi>31</span><span class=p>],</span>
+        <span class=n>perform_warmup</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span>
+        <span class=n>perform_pre_warmup</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span></div>
+
+
+
+<span class=c1># Run the experiment from the command line</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span> <span class=s2>"2D Bin Packing Instance Generator"</span><span class=p>,</span>
+        <span class=s2>"Run the 2D Bin Packing Instance Generator experiment."</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the directory to store the experimental results under"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./results/"</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+    <span class=n>run</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.experiment</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

@@ -1,0 +1,152 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.experiment — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/experiment.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.experiment</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.experiment</h1><div class=highlight><pre>
+<span></span><span class=sd>"""An example experiment for bin packing."""</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>argparse</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.so.ffa.fea1plus1</span><span class=w> </span><span class=kn>import</span> <span class=n>FEA1plus1</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.so.rls</span><span class=w> </span><span class=kn>import</span> <span class=n>RLS</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.encoding</span><span class=w> </span><span class=kn>import</span> <span class=n>Encoding</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.execution</span><span class=w> </span><span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.experiment</span><span class=w> </span><span class=kn>import</span> <span class=n>run_experiment</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.signed_permutations.op0_shuffle_and_flip</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Op0ShuffleAndFlip</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.signed_permutations.op1_swap_2_or_flip</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Op1Swap2OrFlip</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.signed_permutations</span><span class=w> </span><span class=kn>import</span> <span class=n>SignedPermutations</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.encodings.ibl_encoding_1</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>ImprovedBottomLeftEncoding1</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing_result</span><span class=w> </span><span class=kn>import</span> <span class=n>DEFAULT_OBJECTIVES</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing_space</span><span class=w> </span><span class=kn>import</span> <span class=n>PackingSpace</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>moptipyapps_argparser</span>
+
+<span class=c1>#: the maximum number of FEs</span>
+<span class=n>MAX_FES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1_000_000</span>
+
+
+<div class=viewcode-block id=base_setup>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.experiment.base_setup>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>,</span>
+               <span class=n>encoding</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Encoding</span><span class=p>],</span>
+               <span class=n>objective</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>])</span> \
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>SignedPermutations</span><span class=p>,</span> <span class=n>Execution</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the basic setup.</span>
+
+<span class=sd>    :param instance: the instance to use</span>
+<span class=sd>    :param encoding: the encoding function</span>
+<span class=sd>    :param objective: the objective function</span>
+<span class=sd>    :return: the search space and the basic execution</span>
+<span class=sd>    """</span>
+    <span class=n>space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>SignedPermutations</span><span class=p>]</span> <span class=o>=</span> <span class=n>SignedPermutations</span><span class=p>(</span>
+        <span class=n>instance</span><span class=o>.</span><span class=n>get_standard_item_sequence</span><span class=p>())</span>
+
+    <span class=k>return</span> <span class=p>(</span><span class=n>space</span><span class=p>,</span> <span class=n>Execution</span><span class=p>()</span><span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=n>MAX_FES</span><span class=p>)</span><span class=o>.</span><span class=n>set_log_improvements</span><span class=p>(</span><span class=kc>True</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>objective</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span>
+            <span class=o>.</span><span class=n>set_encoding</span><span class=p>(</span><span class=n>encoding</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span>
+            <span class=o>.</span><span class=n>set_search_space</span><span class=p>(</span><span class=n>space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>PackingSpace</span><span class=p>(</span><span class=n>instance</span><span class=p>)))</span></div>
+
+
+
+<div class=viewcode-block id=rls>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.experiment.rls>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>rls</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>,</span>
+        <span class=n>encoding</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Encoding</span><span class=p>],</span>
+        <span class=n>objective</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>])</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the RLS setup.</span>
+
+<span class=sd>    :param instance: the instance to use</span>
+<span class=sd>    :param encoding: the encoding function</span>
+<span class=sd>    :param objective: the objective function</span>
+<span class=sd>    :return: the RLS execution</span>
+<span class=sd>    """</span>
+    <span class=n>space</span><span class=p>,</span> <span class=n>execute</span> <span class=o>=</span> <span class=n>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>encoding</span><span class=p>,</span> <span class=n>objective</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>execute</span><span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span>
+        <span class=n>RLS</span><span class=p>(</span><span class=n>Op0ShuffleAndFlip</span><span class=p>(</span><span class=n>space</span><span class=p>),</span> <span class=n>Op1Swap2OrFlip</span><span class=p>()))</span></div>
+
+
+
+<div class=viewcode-block id=fea>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.experiment.fea>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>fea</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>,</span>
+        <span class=n>encoding</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Encoding</span><span class=p>],</span>
+        <span class=n>objective</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Objective</span><span class=p>])</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the FEA setup.</span>
+
+<span class=sd>    :param instance: the instance to use</span>
+<span class=sd>    :param encoding: the encoding function</span>
+<span class=sd>    :param objective: the objective function</span>
+<span class=sd>    :return: the RLS execution</span>
+<span class=sd>    """</span>
+    <span class=n>space</span><span class=p>,</span> <span class=n>execute</span> <span class=o>=</span> <span class=n>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>encoding</span><span class=p>,</span> <span class=n>objective</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>execute</span><span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span>
+        <span class=n>FEA1plus1</span><span class=p>(</span><span class=n>Op0ShuffleAndFlip</span><span class=p>(</span><span class=n>space</span><span class=p>),</span> <span class=n>Op1Swap2OrFlip</span><span class=p>()))</span></div>
+
+
+
+<div class=viewcode-block id=run>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.experiment.run>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>run</span><span class=p>(</span><span class=n>base_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>n_runs</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>23</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Run the experiment.</span>
+
+<span class=sd>    :param base_dir: the base directory</span>
+<span class=sd>    :param n_runs: the number of runs, by default `23`</span>
+<span class=sd>    """</span>
+    <span class=n>use_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>base_dir</span><span class=p>)</span>
+    <span class=n>use_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+
+    <span class=n>encodings</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>Encoding</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+        <span class=n>ImprovedBottomLeftEncoding1</span><span class=p>,</span>
+    <span class=p>)</span>
+    <span class=n>instances</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span>
+        <span class=n>inst</span> <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>Instance</span><span class=o>.</span><span class=n>list_resources</span><span class=p>()</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>startswith</span><span class=p>((</span><span class=s2>"b"</span><span class=p>,</span> <span class=s2>"a"</span><span class=p>))]</span>
+    <span class=n>inst_creators</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>Instance</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=n>cast</span><span class=p>(</span>
+        <span class=s2>"Callable[[], Instance]"</span><span class=p>,</span> <span class=k>lambda</span> <span class=n>__s</span><span class=o>=</span><span class=n>sss</span><span class=p>:</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span><span class=p>(</span><span class=n>__s</span><span class=p>))</span>
+        <span class=k>for</span> <span class=n>sss</span> <span class=ow>in</span> <span class=n>instances</span><span class=p>]</span>
+    <span class=n>namer</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span><span class=p>(</span><span class=n>instances</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span>
+
+    <span class=k>for</span> <span class=n>objective</span> <span class=ow>in</span> <span class=n>DEFAULT_OBJECTIVES</span><span class=p>:</span>
+        <span class=n>objective_dir</span><span class=p>:</span> <span class=n>Path</span> <span class=o>=</span> <span class=n>use_dir</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=nb>str</span><span class=p>(</span><span class=n>objective</span><span class=p>(</span><span class=n>namer</span><span class=p>)))</span>
+        <span class=n>objective_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+        <span class=k>for</span> <span class=n>encoding</span> <span class=ow>in</span> <span class=n>encodings</span><span class=p>:</span>
+            <span class=n>encoding_dir</span><span class=p>:</span> <span class=n>Path</span> <span class=o>=</span> <span class=n>objective_dir</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span>
+                <span class=nb>str</span><span class=p>(</span><span class=n>encoding</span><span class=p>(</span><span class=n>namer</span><span class=p>)))</span>
+            <span class=n>encoding_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+            <span class=n>run_experiment</span><span class=p>(</span>
+                <span class=n>base_dir</span><span class=o>=</span><span class=n>encoding_dir</span><span class=p>,</span>
+                <span class=n>instances</span><span class=o>=</span><span class=n>inst_creators</span><span class=p>,</span>
+                <span class=n>setups</span><span class=o>=</span><span class=p>[</span>
+                    <span class=n>cast</span><span class=p>(</span><span class=s2>"Callable"</span><span class=p>,</span>
+                         <span class=k>lambda</span> <span class=n>ins</span><span class=p>,</span> <span class=n>_e</span><span class=o>=</span><span class=n>encoding</span><span class=p>,</span> <span class=n>_o</span><span class=o>=</span><span class=n>objective</span><span class=p>:</span> <span class=n>rls</span><span class=p>(</span>
+                             <span class=n>ins</span><span class=p>,</span> <span class=n>_e</span><span class=p>,</span> <span class=n>_o</span><span class=p>)),</span>
+                    <span class=n>cast</span><span class=p>(</span><span class=s2>"Callable"</span><span class=p>,</span>
+                         <span class=k>lambda</span> <span class=n>ins</span><span class=p>,</span> <span class=n>_e</span><span class=o>=</span><span class=n>encoding</span><span class=p>,</span> <span class=n>_o</span><span class=o>=</span><span class=n>objective</span><span class=p>:</span> <span class=n>fea</span><span class=p>(</span>
+                             <span class=n>ins</span><span class=p>,</span> <span class=n>_e</span><span class=p>,</span> <span class=n>_o</span><span class=p>))],</span>
+                <span class=n>n_runs</span><span class=o>=</span><span class=n>n_runs</span><span class=p>,</span>
+                <span class=n>perform_warmup</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span>
+                <span class=n>perform_pre_warmup</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span></div>
+
+
+
+<span class=c1># Run the experiment from the command line</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span> <span class=s2>"2D Bin Packing"</span><span class=p>,</span> <span class=s2>"Run the 2D Bin Packing experiment."</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the directory to store the experimental results under"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./results/"</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+    <span class=n>run</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.experiment</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

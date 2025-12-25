@@ -1,0 +1,135 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.objectives.bin_count_and_small — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/objectives/bin_count_and_small.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.objectives.bin_count_and_small</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.objectives.bin_count_and_small</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An objective function indirectly minimizing the number of bins in packings.</span>
+
+<span class=sd>This objective function computes the number of bins used. Let's call it</span>
+<span class=sd>`n_bins`. We know the area `bin_area` of a bin as well. We then compute the</span>
+<span class=sd>minimum area occupied in any bin, `min_area`. Now we return</span>
+<span class=sd>`(bin_area * (n_bins - 1)) + min_area`.</span>
+
+<span class=sd>This function always prefers a packing that has fewer bins over a packing</span>
+<span class=sd>with more bins duw to the term `bin_area * (n_bins - 1)` and</span>
+<span class=sd>`bin_area >= min_area` (let us ignore the case where `bin_area == min_area`,</span>
+<span class=sd>which does not make practical sense). Since `min_area < bin_area` in all</span>
+<span class=sd>practically relevant cases, the offset `min_area` just distinguishes</span>
+<span class=sd>packings that have same number of bins. Amongst such packings, those whose</span>
+<span class=sd>least-occupied bin is closer to being empty are preferred (regardless where</span>
+<span class=sd>this bin is). The idea is that this will eventually allow us to get rid of</span>
+<span class=sd>that least-occupied bin in subsequent optimization steps, i.e., to reduce</span>
+<span class=sd>the number of bins.</span>
+
+<span class=sd>This is similar to the :mod:`~moptipyapps.binpacking2d.objectives.\</span>
+<span class=sd>bin_count_and_small` objective, except that we do not try to expunge the last</span>
+<span class=sd>bin, but any bin. It has the same lower and upper bound, though.</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.objectives.bin_count_and_last_small</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BinCountAndLastSmall</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>IDX_BIN</span><span class=p>,</span>
+    <span class=n>IDX_BOTTOM_Y</span><span class=p>,</span>
+    <span class=n>IDX_LEFT_X</span><span class=p>,</span>
+    <span class=n>IDX_RIGHT_X</span><span class=p>,</span>
+    <span class=n>IDX_TOP_Y</span><span class=p>,</span>
+<span class=p>)</span>
+
+
+<div class=viewcode-block id=bin_count_and_small>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_small.bin_count_and_small>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>bin_count_and_small</span><span class=p>(</span><span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>bin_area</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                        <span class=n>temp</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the number of bins and the smallest occupied area in any bin.</span>
+
+<span class=sd>    We compute the total number of bins minus 1 and multiply it with the</span>
+<span class=sd>    total area of items. We then add the area of items in the smallest bin.</span>
+
+<span class=sd>    :param y: the packing</span>
+<span class=sd>    :param bin_area: the area of a single bin</span>
+<span class=sd>    :param temp: a temporary array to hold the current area counters</span>
+<span class=sd>    :return: the objective value</span>
+
+<span class=sd>    >>> tempa = np.empty(10, int)</span>
+<span class=sd>    >>> bin_count_and_small(np.array([[1, 1, 10, 10, 20, 20],</span>
+<span class=sd>    ...                               [1, 1, 30, 30, 40, 40],</span>
+<span class=sd>    ...                               [1, 1, 20, 20, 30, 30]], int),</span>
+<span class=sd>    ...                              50*50, tempa)</span>
+<span class=sd>    300</span>
+<span class=sd>    >>> bin_count_and_small(np.array([[1, 1, 10, 10, 20, 20],</span>
+<span class=sd>    ...                               [1, 2, 30, 30, 40, 40],  # bin 2!</span>
+<span class=sd>    ...                               [1, 1, 20, 20, 30, 30]], int),</span>
+<span class=sd>    ...                              50*50, tempa)</span>
+<span class=sd>    2600</span>
+<span class=sd>    >>> bin_count_and_small(np.array([[1, 2, 10, 10, 20, 20],  # bin 2!</span>
+<span class=sd>    ...                               [1, 2, 30, 30, 40, 40],  # bin 2!</span>
+<span class=sd>    ...                               [1, 1, 20, 20, 30, 30]], int),</span>
+<span class=sd>    ...                               50*50, tempa)</span>
+<span class=sd>    2600</span>
+<span class=sd>    >>> bin_count_and_small(np.array([[1, 3, 10, 10, 20, 20],  # bin 3!</span>
+<span class=sd>    ...                               [1, 2, 30, 30, 40, 40],  # bin 2!</span>
+<span class=sd>    ...                               [1, 1, 20, 20, 30, 30]], int),</span>
+<span class=sd>    ...                              50*50, tempa)</span>
+<span class=sd>    5100</span>
+<span class=sd>    >>> bin_count_and_small(np.array([[1, 3, 10, 10, 50, 50],  # bin 3!</span>
+<span class=sd>    ...                               [1, 2, 30, 30, 60, 60],  # bin 2!</span>
+<span class=sd>    ...                               [1, 1, 20, 20, 30, 30]], np.int8),</span>
+<span class=sd>    ...                              50*50, tempa)</span>
+<span class=sd>    5100</span>
+<span class=sd>    """</span>
+    <span class=n>total_bins</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># the current idea of the number of bins</span>
+    <span class=n>n_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>  <span class=c1># the number of rows in the matrix</span>
+    <span class=n>temp</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>  <span class=c1># fill temp with zeros</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_items</span><span class=p>):</span>  <span class=c1># iterate over all packed items</span>
+        <span class=n>bin_idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BIN</span><span class=p>])</span> <span class=o>-</span> <span class=mi>1</span>  <span class=c1># get the bin index of the item</span>
+        <span class=n>temp</span><span class=p>[</span><span class=n>bin_idx</span><span class=p>]</span> <span class=o>+=</span> <span class=p>((</span><span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]</span> <span class=o>-</span> <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>])</span>
+                          <span class=o>*</span> <span class=p>(</span><span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]</span> <span class=o>-</span> <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>]))</span>
+        <span class=n>total_bins</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>total_bins</span><span class=p>,</span> <span class=n>bin_idx</span><span class=p>)</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>bin_area</span> <span class=o>*</span> <span class=n>total_bins</span><span class=p>)</span> <span class=o>+</span> <span class=n>temp</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>total_bins</span> <span class=o>+</span> <span class=mi>1</span><span class=p>]</span><span class=o>.</span><span class=n>min</span><span class=p>()</span></div>
+
+
+
+<div class=viewcode-block id=BinCountAndSmall>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_small.BinCountAndSmall>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>BinCountAndSmall</span><span class=p>(</span><span class=n>BinCountAndLastSmall</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""Compute the number of bins and the area in the smallest one."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the objective function.</span>
+
+<span class=sd>        :param instance: the instance to load the bounds from</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+        <span class=c1>#: the internal temporary array</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__temp</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>n_items</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span>
+
+<div class=viewcode-block id=BinCountAndSmall.evaluate>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_small.BinCountAndSmall.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Evaluate the objective function.</span>
+
+<span class=sd>        :param x: the solution</span>
+<span class=sd>        :return: the bin size and smallest-bin-area factor</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>bin_count_and_small</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>_bin_size</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__temp</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the bins objective function.</span>
+
+<span class=sd>        :return: `binCountAndSmall`</span>
+<span class=sd>        :retval "binCountAndSmall": always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"binCountAndSmall"</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.objectives.bin_count_and_small</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

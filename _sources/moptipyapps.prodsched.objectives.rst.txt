@@ -1,0 +1,34 @@
+moptipyapps.prodsched.objectives package
+========================================
+
+.. automodule:: moptipyapps.prodsched.objectives
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.prodsched.objectives.max\_stocklevel module
+-------------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.objectives.max_stocklevel
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.objectives.worst\_and\_mean\_fill\_rate module
+--------------------------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.objectives.worst_and_mean_fill_rate
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.objectives.worst\_fill\_rate module
+---------------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.objectives.worst_fill_rate
+   :members:
+   :show-inheritance:
+   :undoc-members:

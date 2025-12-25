@@ -1,0 +1,46 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.instgen.problem — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/instgen/problem.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.problem</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.instgen.problem</h1><div class=highlight><pre>
+<span></span><span class=sd>"""An instance of the instance generation problem."""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.component</span><span class=w> </span><span class=kn>import</span> <span class=n>Component</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.vectorspace</span><span class=w> </span><span class=kn>import</span> <span class=n>VectorSpace</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instgen.inst_decoding</span><span class=w> </span><span class=kn>import</span> <span class=n>InstanceDecoder</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instgen.instance_space</span><span class=w> </span><span class=kn>import</span> <span class=n>InstanceSpace</span>
+
+
+<div class=viewcode-block id=Problem>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.problem.Problem>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Problem</span><span class=p>(</span><span class=n>Component</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An instance of the 2D Bin Packing Instance Generation Problem."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>slack</span><span class=p>:</span> <span class=nb>float</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create an instance of the 2D bin packing instance generation problem.</span>
+
+<span class=sd>        :param name: the name of the instance to select</span>
+<span class=sd>        :param slack: the additional fraction of slack</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=c1>#: the instance to be used as template</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>solution_space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>InstanceSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>InstanceSpace</span><span class=p>(</span>
+            <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span><span class=p>(</span><span class=n>name</span><span class=p>))</span>
+        <span class=c1>#: the internal decoding</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>encoding</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>InstanceDecoder</span><span class=p>]</span> <span class=o>=</span> <span class=n>InstanceDecoder</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>solution_space</span><span class=p>)</span>
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>encoding</span><span class=o>.</span><span class=n>get_x_dim</span><span class=p>(</span><span class=n>slack</span><span class=p>)</span>
+        <span class=c1>#: the search space</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>search_space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>VectorSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>VectorSpace</span><span class=p>(</span><span class=n>n</span><span class=p>,</span> <span class=o>-</span><span class=mf>1.0</span><span class=p>,</span> <span class=mf>1.0</span><span class=p>)</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the string representation of this problem.</span>
+
+<span class=sd>        :return: the string representation of this problem</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>solution_space</span><span class=o>.</span><span class=n>inst_name</span><span class=si>}</span><span class=s2>_"</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>search_space</span><span class=o>.</span><span class=n>dimension</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.problem</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

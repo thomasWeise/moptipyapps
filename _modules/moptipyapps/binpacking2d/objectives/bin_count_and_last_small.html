@@ -1,0 +1,240 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.objectives.bin_count_and_last_small — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/objectives/bin_count_and_last_small.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.objectives.bin_count_and_last_small</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.objectives.bin_count_and_last_small</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An objective function indirectly minimizing the number of bins in packings.</span>
+
+<span class=sd>This objective function computes the number of bins used. Let's call it</span>
+<span class=sd>`n_bins`. We know the area `bin_area` of a bin as well. Now we return</span>
+<span class=sd>`(bin_area * (n_bins - 1)) + area_of_items_in_last_bin`, where</span>
+<span class=sd>`area_of_items_in_last_bin` is, well, the area covered by items in the</span>
+<span class=sd>very last bin.</span>
+
+<span class=sd>The idea behind this is: If one of two packings has the smaller number of</span>
+<span class=sd>bins, then this one will always have the smaller objective value. If two</span>
+<span class=sd>packings have the same number of bins, but one requires less space in the very</span>
+<span class=sd>last bin, then that one is better. With this mechanism, we drive the search</span>
+<span class=sd>towards "emptying" the last bin. If the number of items in the last bin would</span>
+<span class=sd>reach `0`, that last bin would disappear - and we have one bin less.</span>
+
+<span class=sd>This objective is similar to :mod:`~moptipyapps.binpacking2d.objectives.\</span>
+<span class=sd>bin_count_and_small`, with the difference that it focuses on the *last* bin</span>
+<span class=sd>whereas :mod:`~moptipyapps.binpacking2d.objectives.bin_count_and_small` tries</span>
+<span class=sd>to minimize the area in *any* bin.</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.int_math</span><span class=w> </span><span class=kn>import</span> <span class=n>ceil_div</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.objectives.bin_count</span><span class=w> </span><span class=kn>import</span> <span class=n>BinCount</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>IDX_BIN</span><span class=p>,</span>
+    <span class=n>IDX_BOTTOM_Y</span><span class=p>,</span>
+    <span class=n>IDX_LEFT_X</span><span class=p>,</span>
+    <span class=n>IDX_RIGHT_X</span><span class=p>,</span>
+    <span class=n>IDX_TOP_Y</span><span class=p>,</span>
+<span class=p>)</span>
+
+
+<div class=viewcode-block id=bin_count_and_last_small>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_last_small.bin_count_and_last_small>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>bin_count_and_last_small</span><span class=p>(</span><span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>bin_area</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the number of bins and the occupied area in the last bin.</span>
+
+<span class=sd>    We compute the total number of bins minus 1 and multiply it with the</span>
+<span class=sd>    total area of items. We then add the area of items in the last bin.</span>
+
+<span class=sd>    :param y: the packing</span>
+<span class=sd>    :param bin_area: the area of a single bin</span>
+<span class=sd>    :return: the objective value</span>
+
+<span class=sd>    >>> bin_count_and_last_small(np.array([[1, 1, 10, 10, 20, 20],</span>
+<span class=sd>    ...                                    [1, 1, 30, 30, 40, 40],</span>
+<span class=sd>    ...                                    [1, 1, 20, 20, 30, 30]], int),</span>
+<span class=sd>    ...                                    50*50)</span>
+<span class=sd>    300</span>
+<span class=sd>    >>> bin_count_and_last_small(np.array([[1, 1, 10, 10, 20, 20],</span>
+<span class=sd>    ...                                    [1, 2, 30, 30, 40, 40],  # bin 2!</span>
+<span class=sd>    ...                                    [1, 1, 20, 20, 30, 30]], int),</span>
+<span class=sd>    ...                                    50*50)</span>
+<span class=sd>    2600</span>
+<span class=sd>    >>> bin_count_and_last_small(np.array([[1, 2, 10, 10, 20, 20],  # bin 2!</span>
+<span class=sd>    ...                                    [1, 2, 30, 30, 40, 40],  # bin 2!</span>
+<span class=sd>    ...                                    [1, 1, 20, 20, 30, 30]], int),</span>
+<span class=sd>    ...                                    50*50)</span>
+<span class=sd>    2700</span>
+<span class=sd>    >>> bin_count_and_last_small(np.array([[1, 3, 10, 10, 20, 20],  # bin 3!</span>
+<span class=sd>    ...                                    [1, 2, 30, 30, 40, 40],  # bin 2!</span>
+<span class=sd>    ...                                    [1, 1, 20, 20, 30, 30]], int),</span>
+<span class=sd>    ...                                    50*50)</span>
+<span class=sd>    5100</span>
+<span class=sd>    >>> bin_count_and_last_small(np.array([[1, 3, 10, 10, 50, 50],  # bin 3!</span>
+<span class=sd>    ...                                    [1, 2, 30, 30, 60, 60],  # bin 2!</span>
+<span class=sd>    ...                                    [1, 1, 20, 20, 30, 30]], np.int8),</span>
+<span class=sd>    ...                                    50*50)</span>
+<span class=sd>    6600</span>
+<span class=sd>    """</span>
+    <span class=n>current_bin</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>  <span class=c1># the current idea of what the last bin is</span>
+    <span class=n>current_area</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># the area of items already in that bin</span>
+    <span class=n>n_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>  <span class=c1># the number of rows in the matrix</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_items</span><span class=p>):</span>  <span class=c1># iterate over all packed items</span>
+        <span class=n>bin_idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BIN</span><span class=p>])</span>  <span class=c1># get the bin index of the item</span>
+        <span class=k>if</span> <span class=n>bin_idx</span> <span class=o><</span> <span class=n>current_bin</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>area</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]</span> <span class=o>-</span> <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>])</span> \
+            <span class=o>*</span> <span class=nb>int</span><span class=p>(</span><span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]</span> <span class=o>-</span> <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>])</span>
+        <span class=k>if</span> <span class=n>bin_idx</span> <span class=o>></span> <span class=n>current_bin</span><span class=p>:</span>  <span class=c1># it's a new biggest bin = new last bin?</span>
+            <span class=n>current_area</span> <span class=o>=</span> <span class=n>area</span>  <span class=c1># then the current area is this</span>
+            <span class=n>current_bin</span> <span class=o>=</span> <span class=n>bin_idx</span>  <span class=c1># and we remember it</span>
+        <span class=k>elif</span> <span class=n>bin_idx</span> <span class=o>==</span> <span class=n>current_bin</span><span class=p>:</span>  <span class=c1># did item go into the current last bin?</span>
+            <span class=n>current_area</span> <span class=o>+=</span> <span class=n>area</span>  <span class=c1># then increase size</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>bin_area</span> <span class=o>*</span> <span class=p>(</span><span class=n>current_bin</span> <span class=o>-</span> <span class=mi>1</span><span class=p>))</span> <span class=o>+</span> <span class=n>current_area</span>  <span class=c1># return objective</span></div>
+
+
+
+<div class=viewcode-block id=BinCountAndLastSmall>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_last_small.BinCountAndLastSmall>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>BinCountAndLastSmall</span><span class=p>(</span><span class=n>BinCount</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""Compute the number of bins and the area in the last one."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the objective function.</span>
+
+<span class=sd>        :param instance: the instance to load the bounds from</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+        <span class=c1>#: the bin size</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>_bin_size</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>bin_width</span> <span class=o>*</span> <span class=n>instance</span><span class=o>.</span><span class=n>bin_height</span>
+
+<div class=viewcode-block id=BinCountAndLastSmall.evaluate>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_last_small.BinCountAndLastSmall.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Evaluate the objective function.</span>
+
+<span class=sd>        :param x: the solution</span>
+<span class=sd>        :return: the bin size and last-bin-small-area factor</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>bin_count_and_last_small</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>_bin_size</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=BinCountAndLastSmall.to_bin_count>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_last_small.BinCountAndLastSmall.to_bin_count>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>to_bin_count</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>z</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert an objective value to a bin count.</span>
+
+<span class=sd>        :param z: the objective value</span>
+<span class=sd>        :return: the bin count</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>ceil_div</span><span class=p>(</span><span class=n>z</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>_bin_size</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=BinCountAndLastSmall.lower_bound>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_last_small.BinCountAndLastSmall.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of the number of bins and small-size objective.</span>
+
+<span class=sd>        We know from the instance (:attr:`~moptipyapps.binpacking2d\</span>
+<span class=sd>.instance.Instance.lower_bound_bins`) that we require at least as many bins</span>
+<span class=sd>        such that they can accommodate the total area of all items together.</span>
+<span class=sd>        Let's call this number `lb`. Now if `lb` is one, then all objects could</span>
+<span class=sd>        be in the first bin, in which case the objective value would equal to</span>
+<span class=sd>        the total area of all items (:attr:`~moptipyapps.binpacking2d\</span>
+<span class=sd>.instance.Instance.total_item_area`).</span>
+<span class=sd>        If it is `lb=2`, then we know that we will need at least two bins. The</span>
+<span class=sd>        best case would be that almost all items are in the first bin and</span>
+<span class=sd>        only the smallest object is in the last bin. This means that we would</span>
+<span class=sd>        get `1 * bin_area + smallest_area` as objective value. If we have</span>
+<span class=sd>        `lb=3` bins, then we could again have all but the smallest items</span>
+<span class=sd>        distributed over the first two bins and only the smallest one in the</span>
+<span class=sd>        last bin, i.e., would get `(2 * bin_area) + smallest_area`. And so on.</span>
+
+<span class=sd>        :return: `total_item_area` if the lower bound `lb` of the number of</span>
+<span class=sd>            bins is `1`, else `(lb - 1) * bin_area + smallest_area`, where</span>
+<span class=sd>            `bin_area` is the area of a bin, `total_item_area` is the area of</span>
+<span class=sd>            all items added up, and `smallest_area` is the area of the</span>
+<span class=sd>            smallest item</span>
+
+<span class=sd>        >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])</span>
+<span class=sd>        >>> ins.total_item_area</span>
+<span class=sd>        84</span>
+<span class=sd>        >>> ins.lower_bound_bins</span>
+<span class=sd>        1</span>
+<span class=sd>        >>> BinCountAndLastSmall(ins).lower_bound()</span>
+<span class=sd>        84</span>
+
+<span class=sd>        >>> ins = Instance("b", 10, 50, [[10, 5, 10], [3, 3, 1], [5, 5, 1]])</span>
+<span class=sd>        >>> ins.total_item_area</span>
+<span class=sd>        534</span>
+<span class=sd>        >>> ins.lower_bound_bins</span>
+<span class=sd>        2</span>
+<span class=sd>        >>> BinCountAndLastSmall(ins).lower_bound()</span>
+<span class=sd>        509</span>
+
+<span class=sd>        >>> ins = Instance("c", 10, 50, [[10, 5, 10], [30, 3, 1], [5, 5, 1]])</span>
+<span class=sd>        >>> ins.total_item_area</span>
+<span class=sd>        615</span>
+<span class=sd>        >>> ins.lower_bound_bins</span>
+<span class=sd>        2</span>
+<span class=sd>        >>> BinCountAndLastSmall(ins).lower_bound()</span>
+<span class=sd>        525</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=o>.</span><span class=n>lower_bound_bins</span> <span class=o>==</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=o>.</span><span class=n>total_item_area</span>
+        <span class=n>smallest_area</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+        <span class=k>for</span> <span class=n>row</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=p>:</span>
+            <span class=n>area</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span> <span class=o>*</span> <span class=nb>int</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>smallest_area</span> <span class=o><</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>area</span> <span class=o><</span> <span class=n>smallest_area</span><span class=p>):</span>
+                <span class=n>smallest_area</span> <span class=o>=</span> <span class=n>area</span>
+        <span class=k>return</span> <span class=nb>int</span><span class=p>(((</span><span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=o>.</span><span class=n>lower_bound_bins</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+                    <span class=o>*</span> <span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=o>.</span><span class=n>bin_height</span>
+                    <span class=o>*</span> <span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=o>.</span><span class=n>bin_width</span><span class=p>)</span> <span class=o>+</span> <span class=n>smallest_area</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=BinCountAndLastSmall.upper_bound>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.objectives.html#moptipyapps.binpacking2d.objectives.bin_count_and_last_small.BinCountAndLastSmall.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the upper bound of this objective function.</span>
+
+<span class=sd>        :return: a very coarse estimate of the upper bound</span>
+
+<span class=sd>        >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])</span>
+<span class=sd>        >>> ins.n_items</span>
+<span class=sd>        3</span>
+<span class=sd>        >>> BinCountAndLastSmall(ins).upper_bound()</span>
+<span class=sd>        15000</span>
+
+<span class=sd>        >>> ins = Instance("b", 10, 50, [[10, 5, 10], [3, 3, 1], [5, 5, 1]])</span>
+<span class=sd>        >>> ins.n_items</span>
+<span class=sd>        12</span>
+<span class=sd>        >>> BinCountAndLastSmall(ins).upper_bound()</span>
+<span class=sd>        6000</span>
+
+<span class=sd>        >>> ins = Instance("c", 10, 50, [[10, 5, 10], [30, 3, 1], [5, 5, 10]])</span>
+<span class=sd>        >>> ins.n_items</span>
+<span class=sd>        21</span>
+<span class=sd>        >>> BinCountAndLastSmall(ins).upper_bound()</span>
+<span class=sd>        10500</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=o>.</span><span class=n>n_items</span> <span class=o>*</span> <span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=o>.</span><span class=n>bin_height</span> \
+            <span class=o>*</span> <span class=bp>self</span><span class=o>.</span><span class=n>_instance</span><span class=o>.</span><span class=n>bin_width</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the bins objective function.</span>
+
+<span class=sd>        :return: `binCountAndLastSmall`</span>
+<span class=sd>        :retval "binCountAndLastSmall": always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"binCountAndLastSmall"</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.objectives.bin_count_and_last_small</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

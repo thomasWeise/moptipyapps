@@ -1,0 +1,292 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.instgen.hardness — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/instgen/hardness.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.hardness</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.instgen.hardness</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An objective function assessing the hardness of an instance.</span>
+
+<span class=sd>>>> from moptipyapps.binpacking2d.instgen.instance_space import InstanceSpace</span>
+<span class=sd>>>> orig = Instance.from_resource("a04")</span>
+<span class=sd>>>> space = InstanceSpace(orig)</span>
+<span class=sd>>>> print(f"{space.inst_name!r} with {space.n_different_items}/"</span>
+<span class=sd>...       f"{space.n_items} items with area {space.total_item_area} "</span>
+<span class=sd>...       f"in {space.min_bins} bins of "</span>
+<span class=sd>...       f"size {space.bin_width}*{space.bin_height}.")</span>
+<span class=sd>'a04n' with 2/16 items with area 7305688 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> from moptipyapps.binpacking2d.instgen.inst_decoding import InstanceDecoder</span>
+<span class=sd>>>> decoder = InstanceDecoder(space)</span>
+<span class=sd>>>> import numpy as np</span>
+<span class=sd>>>> x = np.array([ 0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, ])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 15/16 items with area 10065000 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\</span>
+<span class=sd>441,122;1649,122;2750,10;2750,1,2;2750,3;1649,1098;2750,878;2750,58;660,122</span>
+
+<span class=sd>>>> hardness = Hardness(max_fes=1000)</span>
+<span class=sd>>>> hardness.lower_bound()</span>
+<span class=sd>0.0</span>
+<span class=sd>>>> hardness.upper_bound()</span>
+<span class=sd>1.0</span>
+<span class=sd>>>> hardness.evaluate(y)</span>
+<span class=sd>0.6688894353015722</span>
+
+<span class=sd>>>> y[0] = orig</span>
+<span class=sd>>>> hardness.evaluate(y)</span>
+<span class=sd>0.9298025539793962</span>
+
+<span class=sd>>>> z = Instance.from_compact_str(</span>
+<span class=sd>...     "cl04_020_01n;19;100;100;1,10;2,38;2,62;1,4,2;3,38;1,7;27,93;1,62;1,"</span>
+<span class=sd>...     "3;13,38;1,38;1,17;1,45;36,62;39,3;1,2;20,10;3,24;12,4")</span>
+<span class=sd>>>> hardness.evaluate(z)</span>
+<span class=sd>0.998823040627722</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>fsum</span><span class=p>,</span> <span class=n>isfinite</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.so.rls</span><span class=w> </span><span class=kn>import</span> <span class=n>RLS</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.execution</span><span class=w> </span><span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.signed_permutations.op0_shuffle_and_flip</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Op0ShuffleAndFlip</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.signed_permutations.op1_swap_2_or_flip</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Op1Swap2OrFlip</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.signed_permutations</span><span class=w> </span><span class=kn>import</span> <span class=n>SignedPermutations</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>rand_seeds_from_str</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.encodings.ibl_encoding_1</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>ImprovedBottomLeftEncoding1</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Instance</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.objectives.bin_count</span><span class=w> </span><span class=kn>import</span> <span class=n>BinCount</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.objectives.bin_count_and_last_skyline</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BinCountAndLastSkyline</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing_space</span><span class=w> </span><span class=kn>import</span> <span class=n>PackingSpace</span>
+
+
+<div class=viewcode-block id=setup_rls_f7>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.hardness.setup_rls_f7>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>setup_rls_f7</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Execution</span><span class=p>,</span> <span class=n>Objective</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Set up the randomized local search for an instance.</span>
+
+<span class=sd>    :param instance: the instance</span>
+<span class=sd>    :return: the execution and upper bound of the objective</span>
+<span class=sd>    """</span>
+    <span class=n>search_space</span> <span class=o>=</span> <span class=n>SignedPermutations</span><span class=p>(</span>
+        <span class=n>instance</span><span class=o>.</span><span class=n>get_standard_item_sequence</span><span class=p>())</span>  <span class=c1># Create the search space.</span>
+    <span class=n>solution_space</span> <span class=o>=</span> <span class=n>PackingSpace</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>  <span class=c1># Create the space of packings.</span>
+    <span class=n>objective</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>BinCountAndLastSkyline</span><span class=p>]</span> <span class=o>=</span> <span class=n>BinCountAndLastSkyline</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+
+    <span class=c1># Build a single execution of a single run of a single algorithm and</span>
+    <span class=c1># return the upper bound of the objective value</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>Execution</span><span class=p>()</span>
+            <span class=o>.</span><span class=n>set_search_space</span><span class=p>(</span><span class=n>search_space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>solution_space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_encoding</span><span class=p>(</span><span class=n>ImprovedBottomLeftEncoding1</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span>
+            <span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span>  <span class=c1># This is the algorithm: Randomized Local Search.</span>
+                <span class=n>RLS</span><span class=p>(</span><span class=n>Op0ShuffleAndFlip</span><span class=p>(</span><span class=n>search_space</span><span class=p>),</span> <span class=n>Op1Swap2OrFlip</span><span class=p>()))</span>
+            <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>objective</span><span class=p>),</span> <span class=n>objective</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=setup_rls_f1>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.hardness.setup_rls_f1>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>setup_rls_f1</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Execution</span><span class=p>,</span> <span class=n>Objective</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Set up the randomized local search for an instance.</span>
+
+<span class=sd>    :param instance: the instance</span>
+<span class=sd>    :return: the execution</span>
+<span class=sd>    """</span>
+    <span class=n>search_space</span> <span class=o>=</span> <span class=n>SignedPermutations</span><span class=p>(</span>
+        <span class=n>instance</span><span class=o>.</span><span class=n>get_standard_item_sequence</span><span class=p>())</span>  <span class=c1># Create the search space.</span>
+    <span class=n>solution_space</span> <span class=o>=</span> <span class=n>PackingSpace</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>  <span class=c1># Create the space of packings.</span>
+    <span class=n>objective</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>BinCount</span><span class=p>]</span> <span class=o>=</span> <span class=n>BinCount</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+
+    <span class=c1># Build a single execution of a single run of a single algorithm and</span>
+    <span class=c1># return the lower bound of the objective value</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>Execution</span><span class=p>()</span>
+            <span class=o>.</span><span class=n>set_search_space</span><span class=p>(</span><span class=n>search_space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>solution_space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_encoding</span><span class=p>(</span><span class=n>ImprovedBottomLeftEncoding1</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span>
+            <span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span>  <span class=c1># This is the algorithm: Randomized Local Search.</span>
+                <span class=n>RLS</span><span class=p>(</span><span class=n>Op0ShuffleAndFlip</span><span class=p>(</span><span class=n>search_space</span><span class=p>),</span> <span class=n>Op1Swap2OrFlip</span><span class=p>()))</span>
+            <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>objective</span><span class=p>),</span> <span class=n>objective</span><span class=p>)</span></div>
+
+
+
+<span class=c1>#: the default executors</span>
+<span class=n>DEFAULT_EXECUTORS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>tuple</span><span class=p>[</span>
+    <span class=n>Execution</span><span class=p>,</span> <span class=n>Objective</span><span class=p>]],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span><span class=n>setup_rls_f1</span><span class=p>,</span> <span class=n>setup_rls_f7</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=Hardness>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.hardness.Hardness>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Hardness</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""Compute the hardness of an instance."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>max_fes</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1_000_000</span><span class=p>,</span> <span class=n>n_runs</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>3</span><span class=p>,</span>
+            <span class=n>executors</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>tuple</span><span class=p>[</span>
+                <span class=n>Execution</span><span class=p>,</span> <span class=n>Objective</span><span class=p>]]]</span> <span class=o>=</span> <span class=n>DEFAULT_EXECUTORS</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the hardness objective function.</span>
+
+<span class=sd>        :param max_fes: the maximum FEs</span>
+<span class=sd>        :param n_runs: the maximum runs</span>
+<span class=sd>        :param executors: the functions creating the executions</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=c1>#: the maximum FEs per setup.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>max_fes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>max_fes</span><span class=p>,</span> <span class=s2>"max_fes"</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the maximum FEs per setup.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>n_runs</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_runs</span><span class=p>,</span> <span class=s2>"n_runs"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+        <span class=c1>#: the executors</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>executors</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=n>Instance</span><span class=p>],</span> <span class=nb>tuple</span><span class=p>[</span>
+            <span class=n>Execution</span><span class=p>,</span> <span class=n>Objective</span><span class=p>]],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>executors</span><span class=p>)</span>
+
+        <span class=c1>#: the last instance name</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__last_inst</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the last seeds name</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__last_seeds</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the internal results list</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__results</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>float</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+
+<div class=viewcode-block id=Hardness.evaluate>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.hardness.Hardness.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>|</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute the hardness of an instance.</span>
+
+<span class=sd>        :param x: the instance</span>
+<span class=sd>        :return: the hardness</span>
+<span class=sd>        """</span>
+        <span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=nb>list</span><span class=p>)</span> <span class=k>else</span> <span class=n>x</span>
+        <span class=n>seeds</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+
+        <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>name</span>
+        <span class=k>if</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__last_seeds</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__last_inst</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>__last_inst</span> <span class=o>!=</span> <span class=n>name</span><span class=p>):</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__last_seeds</span> <span class=o>=</span> <span class=n>seeds</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>rand_seeds_from_str</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"seed for </span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>name</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_runs</span><span class=p>))</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__last_inst</span> <span class=o>=</span> <span class=n>name</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>seeds</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__last_seeds</span>
+
+        <span class=n>max_fes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>max_fes</span>
+        <span class=n>runs</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>results</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>float</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__results</span>
+        <span class=n>results</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=k>for</span> <span class=n>executor</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>executors</span><span class=p>:</span>
+            <span class=n>execs</span><span class=p>,</span> <span class=n>f</span> <span class=o>=</span> <span class=n>executor</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+            <span class=n>lb</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>f</span><span class=o>.</span><span class=n>lower_bound</span><span class=p>()</span>
+            <span class=n>ub</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>f</span><span class=o>.</span><span class=n>upper_bound</span><span class=p>()</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>isfinite</span><span class=p>(</span><span class=n>lb</span><span class=p>)</span> <span class=ow>and</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>ub</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>lb</span> <span class=o><</span> <span class=n>ub</span><span class=p>)):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid lower and upper bound </span><span class=si>{</span><span class=n>lb</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>ub</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>execs</span><span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=n>max_fes</span><span class=p>)</span>
+            <span class=k>for</span> <span class=n>seed</span> <span class=ow>in</span> <span class=n>seeds</span><span class=p>:</span>
+                <span class=n>execs</span><span class=o>.</span><span class=n>set_rand_seed</span><span class=p>(</span><span class=n>seed</span><span class=p>)</span>
+                <span class=k>with</span> <span class=n>execs</span><span class=o>.</span><span class=n>execute</span><span class=p>()</span> <span class=k>as</span> <span class=n>proc</span><span class=p>:</span>
+                    <span class=n>runs</span> <span class=o>+=</span> <span class=mi>1</span>
+                    <span class=n>quality</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>proc</span><span class=o>.</span><span class=n>get_best_f</span><span class=p>()</span>
+                    <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>isfinite</span><span class=p>(</span><span class=n>quality</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>lb</span> <span class=o><=</span> <span class=n>quality</span> <span class=o><=</span> <span class=n>ub</span><span class=p>)):</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                            <span class=sa>f</span><span class=s2>"quality=</span><span class=si>{</span><span class=n>quality</span><span class=si>}</span><span class=s2> invalid, must be in "</span>
+                            <span class=sa>f</span><span class=s2>"[</span><span class=si>{</span><span class=n>lb</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>ub</span><span class=si>}</span><span class=s2>] for objective </span><span class=si>{</span><span class=n>f</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+                    <span class=n>runtime</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>proc</span><span class=o>.</span><span class=n>get_last_improvement_fe</span><span class=p>()</span>
+                    <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mi>0</span> <span class=o><</span> <span class=n>runtime</span> <span class=o><=</span> <span class=n>max_fes</span><span class=p>):</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"invalid FEs </span><span class=si>{</span><span class=n>runtime</span><span class=si>}</span><span class=s2>, must "</span>
+                                         <span class=sa>f</span><span class=s2>"be in 1..</span><span class=si>{</span><span class=n>max_fes</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+                    <span class=n>runtime</span> <span class=o>=</span> <span class=p>(</span><span class=n>max_fes</span> <span class=o>-</span> <span class=n>runtime</span><span class=p>)</span> <span class=o>/</span> <span class=n>max_fes</span>
+                    <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mf>0.0</span> <span class=o><=</span> <span class=n>runtime</span> <span class=o><</span> <span class=mf>1.0</span><span class=p>):</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                            <span class=sa>f</span><span class=s2>"invalid normalized runtime </span><span class=si>{</span><span class=n>runtime</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+                    <span class=n>quality</span> <span class=o>=</span> <span class=p>((</span><span class=n>ub</span> <span class=o>-</span> <span class=n>quality</span><span class=p>)</span> <span class=o>+</span> <span class=n>runtime</span><span class=p>)</span> <span class=o>/</span> <span class=p>(</span><span class=n>ub</span> <span class=o>-</span> <span class=n>lb</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span>
+                    <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=mf>0.0</span> <span class=o><=</span> <span class=n>quality</span> <span class=o><=</span> <span class=mf>1.0</span><span class=p>):</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                            <span class=sa>f</span><span class=s2>"invalid normalized quality </span><span class=si>{</span><span class=n>quality</span><span class=si>}</span><span class=s2> "</span>
+                            <span class=sa>f</span><span class=s2>"for objective </span><span class=si>{</span><span class=n>f</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+                    <span class=n>results</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>quality</span> <span class=o>**</span> <span class=mi>4</span><span class=p>)</span>
+        <span class=n>ret</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=mf>0.0</span><span class=p>,</span> <span class=nb>min</span><span class=p>(</span><span class=mf>1.0</span><span class=p>,</span> <span class=n>fsum</span><span class=p>(</span><span class=n>results</span><span class=p>)</span> <span class=o>/</span> <span class=n>runs</span><span class=p>))</span>
+        <span class=n>results</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=k>return</span> <span class=n>ret</span></div>
+
+
+<div class=viewcode-block id=Hardness.lower_bound>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.hardness.Hardness.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of the instance hardness.</span>
+
+<span class=sd>        :return: the lower bound for the instance hardness</span>
+<span class=sd>        :returns 0.0: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mf>0.0</span></div>
+
+
+<div class=viewcode-block id=Hardness.upper_bound>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.hardness.Hardness.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the upper bound of the instance hardness.</span>
+
+<span class=sd>        :return: the upper bound for the instance hardness</span>
+<span class=sd>        :returns 1.0: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mf>1.0</span></div>
+
+
+<div class=viewcode-block id=Hardness.is_always_integer>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.hardness.Hardness.is_always_integer>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>is_always_integer</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Return `False` because the hardness function returns `float`.</span>
+
+<span class=sd>        :retval False: always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=kc>False</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the hardness objective function.</span>
+
+<span class=sd>        :return: `hardness`</span>
+<span class=sd>        :retval "hardness": always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"hardness"</span>
+
+<div class=viewcode-block id=Hardness.log_parameters_to>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.hardness.Hardness.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of this instance.</span>
+
+<span class=sd>        :param logger: the logger</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"nRuns"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_runs</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"maxFEs"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>max_fes</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"nExecutors"</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>executors</span><span class=p>))</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.hardness</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

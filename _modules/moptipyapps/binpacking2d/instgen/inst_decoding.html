@@ -1,0 +1,570 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.instgen.inst_decoding — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/instgen/inst_decoding.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.inst_decoding</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.instgen.inst_decoding</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A decoder for 2D BPP instances.</span>
+
+<span class=sd>The goal of developing this decoding procedure is that we need a deterministic</span>
+<span class=sd>mapping of some easy-to-process data structure to an instance of the</span>
+<span class=sd>two-dimensional bin packing problem. The instance produced by the mapping</span>
+<span class=sd>should use a pre-defined bin width, bin height, and number of items. It should</span>
+<span class=sd>also have a pre-defined lower bound for the number of bins required and it</span>
+<span class=sd>must be ensured that this lower bound can also be reached, i.e., that at least</span>
+<span class=sd>one solution exists that can indeed pack all items into this number of bins.</span>
+
+<span class=sd>As source data structure to be mapped, we choose the real vectors of a fixed</span>
+<span class=sd>length (discussed later on).</span>
+
+<span class=sd>The idea is that we take the bin width, bin height, and lower bound of the</span>
+<span class=sd>number of bins (let's call it `lb`) from a template instance. We also take</span>
+<span class=sd>the number items (let's call it `n`) from that instance.</span>
+
+<span class=sd>Now we begin with `lb` items, each of which exactly of the size and dimensions</span>
+<span class=sd>of a bin. At the end, we want to have `n` items. To get there, in each step of</span>
+<span class=sd>our decoding, we split one existing item into two items. This means that each</span>
+<span class=sd>step will create one additional item for the instance (while making one</span>
+<span class=sd>existing item smaller). This, in turn, means that we have to do `n - lb`</span>
+<span class=sd>decoding steps, as we start with `lb` items and, after `n - lb` steps, will</span>
+<span class=sd>have `lb + n - lb = n` items.</span>
+
+<span class=sd>So far so good.</span>
+<span class=sd>But how do we split?</span>
+
+<span class=sd>Each split that we want to perform be defined by four features:</span>
+
+<span class=sd>1. the index of the item that we are going to split,</span>
+<span class=sd>2. whether we split it horizontally or vertically,</span>
+<span class=sd>3. where we are going to split it,</span>
+<span class=sd>4. and how to continue if the proposed split is not possible, e.g., because</span>
+<span class=sd>   it would lead to a zero-width or zero-height item.</span>
+
+<span class=sd>Now we can encode this in two real numbers `selector` and `cutter` from the</span>
+<span class=sd>interval `[-1,1]`.</span>
+
+<span class=sd>First, we multiply the absolute value of the `selector` with the current</span>
+<span class=sd>number of items that we have. This is initially `2`, will then be `3` in the</span>
+<span class=sd>next iteration, then `4`, and so on.</span>
+<span class=sd>Converted to an int, the result of this multiplication gives us the index of</span>
+<span class=sd>the item to split.</span>
+
+<span class=sd>Then, if `cutter >= 0`, we will cut the item horizontally. Otherwise, i.e., if</span>
+<span class=sd>`cutter < 0`, we cut vertically.</span>
+<span class=sd>Where to cut is then decided by multiplying the absolute value of `cutter`</span>
+<span class=sd>with the length of the item in the selected cutting dimension.</span>
+
+<span class=sd>If that is not possible, we move to the next item and try again.</span>
+<span class=sd>If `selector < 0`, we move towards smaller indices and wrap after `0`.</span>
+<span class=sd>Otherwise, we move towards higher indices and wrap at the end of the item</span>
+<span class=sd>list.</span>
+<span class=sd>If we arrive back at the first object, this means that the split was not</span>
+<span class=sd>possible for any of the existing items.</span>
+<span class=sd>We now rotate the split by 90°, i.e., if we tried horizontal splits, we now</span>
+<span class=sd>try vertical ones and vice versa.</span>
+
+<span class=sd>It is easy to see that it must always be possible to split at least one item</span>
+<span class=sd>in at least one direction. Since we took the bin dimensions and numbers of</span>
+<span class=sd>items from an existing instance of the benchmark set, it must be possible to</span>
+<span class=sd>divide the bins into `n` items in one way or another. Therefore, the loop</span>
+<span class=sd>will eventually terminate and yield the right amount of items.</span>
+
+<span class=sd>This means that with `2 * (n - lb)` floating point numbers, we can describe an</span>
+<span class=sd>instance whose result is a perfect packing, without any wasted space.</span>
+
+<span class=sd>Now the benchmark instances are not just instances that can only be solved by</span>
+<span class=sd>perfect packings. Instead, they have some wasted space.</span>
+
+<span class=sd>We now want to add some wasted space to our instance. So far, our items occupy</span>
+<span class=sd>exactly `lb * bin_width * bin_height` space units. We can cut at most</span>
+<span class=sd>`bin_width * bin_height - 1` of these units without changing the required bins</span>
+<span class=sd>of the packing: We would end up with `(lb - 1) * bin_width * bin_height + 1`</span>
+<span class=sd>space units required by our items, which is `1` too large to fit into `lb - 1`</span>
+<span class=sd>bins.</span>
+
+<span class=sd>So we just do the same thing again:</span>
+<span class=sd>We again use two real numbers to describe each split.</span>
+<span class=sd>Like before, we loop through these numbers, pick the object to split, and</span>
+<span class=sd>compute where to split it. Just now we throw away the piece that was cut off.</span>
+<span class=sd>(Of course, we compute the split positions such that we never dip under the</span>
+<span class=sd>area requirement discussed above).</span>
+
+<span class=sd>This allows us to use additional real variables to define how the space should</span>
+<span class=sd>be reduced. `2 * (n - lb)` variables, we get instances requiring perfect</span>
+<span class=sd>packing. With every additional pair of variables, we cut some more space.</span>
+<span class=sd>If we would use `2 * (n - lb) + 10` variables, then we would try to select</span>
+<span class=sd>five items from which we can cut off a bit. This number of additional</span>
+<span class=sd>variables can be chosen by the user.</span>
+
+<span class=sd>Finally, we merge all items that have the same dimension into groups, as is</span>
+<span class=sd>the case in some of the original instances. We then shuffle these groups</span>
+<span class=sd>randomly, to give the instances a bit of a more unordered texture.</span>
+<span class=sd>The random shuffling is seeded with the binary representation of the input</span>
+<span class=sd>vectors.</span>
+
+<span class=sd>In the end, we have translated a real vector to a two-dimensional bin packing</span>
+<span class=sd>instance. Hurray.</span>
+
+<span class=sd>>>> space = InstanceSpace(Instance.from_resource("a04"))</span>
+<span class=sd>>>> print(f"{space.inst_name!r} with {space.n_different_items}/"</span>
+<span class=sd>...       f"{space.n_items} items with area {space.total_item_area} "</span>
+<span class=sd>...       f"in {space.min_bins} bins of "</span>
+<span class=sd>...       f"size {space.bin_width}*{space.bin_height}.")</span>
+<span class=sd>'a04n' with 2/16 items with area 7305688 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> decoder = InstanceDecoder(space)</span>
+<span class=sd>>>> import numpy as np</span>
+<span class=sd>>>> x = np.array([ 0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, -0.1,  0.3,  0.5, -0.6, -0.7,  0.9,</span>
+<span class=sd>...                0.0,  0.2, ])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 15/16 items with area 10065000 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;15;2750;1220;1101,1098;2750,244;2750,98;1101,171;1649,171;2750,976;\</span>
+<span class=sd>441,122;1649,122;2750,10;2750,1,2;2750,3;1649,1098;2750,878;2750,58;660,122</span>
+
+
+<span class=sd>>>> x = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, ])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 3/16 items with area 10065000 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;3;2750;1220;2750,1216,2;2750,1,13;2750,1215</span>
+
+<span class=sd>>>> from math import nextafter</span>
+<span class=sd>>>> a1 = nextafter(1.0, -10)</span>
+<span class=sd>>>> x = np.array([ a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, ])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 4/16 items with area 10065000 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;4;2750;1220;2750,1208;2750,1219;2750,1220;2750,1,13</span>
+
+<span class=sd>>>> from math import nextafter</span>
+<span class=sd>>>> a1 = nextafter(-1.0, 10)</span>
+<span class=sd>>>> x = np.array([ a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, ])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 5/16 items with area 10065000 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;5;2750;1220;2750,1220;2730,1220;2748,1220;1,1220,4;2,1220,9</span>
+
+<span class=sd>>>> from math import nextafter</span>
+<span class=sd>>>> a1 = nextafter(-1.0, 10)</span>
+<span class=sd>>>> x = np.array([ a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, 0.3, 0.7 ])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 6/16 items with area 10064146 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;6;2750;1220;2,1220,9;1,1220,3;2748,1220;1,366;2750,1220;2730,1220</span>
+
+<span class=sd>>>> from math import nextafter</span>
+<span class=sd>>>> a1 = nextafter(-1.0, 10)</span>
+<span class=sd>>>> x = np.array([ a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, a1, a1, a1, a1, a1, a1,</span>
+<span class=sd>...                a1, a1, 0.3, 0.7, -0.2, -0.3,</span>
+<span class=sd>...                0.5, -0.3])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 6/16 items with area 10061706 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;6;2750;1220;2,1220,7;2750,1220;2730,1220;1,1220,5;1,366;2748,1220</span>
+
+
+<span class=sd>>>> x = np.array([ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,</span>
+<span class=sd>...                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,</span>
+<span class=sd>...                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,</span>
+<span class=sd>...                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,</span>
+<span class=sd>...                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,</span>
+<span class=sd>...                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,</span>
+<span class=sd>...                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,</span>
+<span class=sd>...                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,</span>
+<span class=sd>...                0.0, 0.0, ])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> decoder.decode(x, y)</span>
+<span class=sd>>>> space.validate(y)</span>
+<span class=sd>>>> res: Instance = y[0]</span>
+<span class=sd>>>> print(f"{res.name!r} with {res.n_different_items}/"</span>
+<span class=sd>...       f"{res.n_items} items with area {res.total_item_area} "</span>
+<span class=sd>...       f"in {res.lower_bound_bins} bins of "</span>
+<span class=sd>...       f"size {res.bin_width}*{res.bin_height}.")</span>
+<span class=sd>'a04n' with 5/16 items with area 9910948 in 3 bins of size 2750*1220.</span>
+
+<span class=sd>>>> print(space.to_str(y))</span>
+<span class=sd>a04n;5;2750;1220;2698,1;2750,1,12;2750,1216;2750,1215;2750,1160</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>isfinite</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.encoding</span><span class=w> </span><span class=kn>import</span> <span class=n>Encoding</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>numpy.random</span><span class=w> </span><span class=kn>import</span> <span class=n>default_rng</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instgen.instance_space</span><span class=w> </span><span class=kn>import</span> <span class=n>InstanceSpace</span>
+
+
+<div class=viewcode-block id=InstanceDecoder>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.inst_decoding.InstanceDecoder>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>InstanceDecoder</span><span class=p>(</span><span class=n>Encoding</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""Decode a string of `n` real values in `[0,1]` to an instance."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>space</span><span class=p>:</span> <span class=n>InstanceSpace</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the instance decoder.</span>
+
+<span class=sd>        :param space: the instance description and space</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>space</span><span class=p>,</span> <span class=n>InstanceSpace</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>space</span><span class=p>,</span> <span class=s2>"space"</span><span class=p>,</span> <span class=n>InstanceSpace</span><span class=p>)</span>
+        <span class=c1>#: the instance description</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>InstanceSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span>
+
+<div class=viewcode-block id=InstanceDecoder.get_x_dim>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.inst_decoding.InstanceDecoder.get_x_dim>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>get_x_dim</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>slack</span><span class=p>:</span> <span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the minimum dimension that a real vector must have.</span>
+
+<span class=sd>        :param slack: a parameter denoting the amount of slack for reducing</span>
+<span class=sd>            the item size</span>
+<span class=sd>        :return: the minimum dimension</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>slack</span><span class=p>,</span> <span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>slack</span><span class=p>,</span> <span class=s2>"slack"</span><span class=p>,</span> <span class=p>(</span><span class=nb>float</span><span class=p>,</span> <span class=nb>int</span><span class=p>))</span>
+        <span class=k>if</span> <span class=p>(</span><span class=ow>not</span> <span class=n>isfinite</span><span class=p>(</span><span class=n>slack</span><span class=p>))</span> <span class=ow>or</span> <span class=p>(</span><span class=n>slack</span> <span class=o><</span> <span class=mi>0</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"slack=</span><span class=si>{</span><span class=n>slack</span><span class=si>}</span><span class=s2> is invalid"</span><span class=p>)</span>
+        <span class=n>base</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>n_items</span> <span class=o>-</span> <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>min_bins</span><span class=p>,</span> <span class=s2>"base"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+        <span class=n>added</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>slack</span> <span class=o>*</span> <span class=n>base</span> <span class=o>+</span> <span class=mf>0.5</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>added</span> <span class=o><</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>added</span> <span class=o>></span> <span class=mi>1_000_000</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"invalid result </span><span class=si>{</span><span class=n>added</span><span class=si>}</span><span class=s2> based "</span>
+                             <span class=sa>f</span><span class=s2>"on slack=</span><span class=si>{</span><span class=n>slack</span><span class=si>}</span><span class=s2> and base=</span><span class=si>{</span><span class=n>base</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=k>return</span> <span class=mi>2</span> <span class=o>*</span> <span class=p>(</span><span class=n>base</span> <span class=o>+</span> <span class=n>added</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceDecoder.decode>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.inst_decoding.InstanceDecoder.decode>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>decode</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>y</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Decode the real-valued array to a 2D BPP instance.</span>
+
+<span class=sd>        :param x: an array with values in [-1, 1]</span>
+<span class=sd>        :param y: the instance receiver</span>
+<span class=sd>        """</span>
+        <span class=c1># We start by using the prescribed number of bins as items.</span>
+        <span class=c1># There will be n_bins items, each of which has exactly the size of a</span>
+        <span class=c1># bin. Therefore, we know that all items fit exactly into n_bins bins.</span>
+        <span class=n>bin_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>bin_width</span>
+        <span class=n>bin_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>bin_height</span>
+        <span class=n>n_bins</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>min_bins</span>
+        <span class=n>items</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span>
+            <span class=p>[</span><span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>]</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_bins</span><span class=p>)]</span>
+
+        <span class=c1># Now we need to make n_items - n_bins cuts. Each cut will divide one</span>
+        <span class=c1># item into two items. Therefore, each cut yields exactly one new</span>
+        <span class=c1># item. Therefore, after n_items - n_bins cuts we get n_items - n_bins</span>
+        <span class=c1># new items. Since we start with n_bins items, this means that we get</span>
+        <span class=c1># n_items - n_bins + n_bins items at the end, which are exactly</span>
+        <span class=c1># n_items.</span>
+        <span class=c1>#</span>
+        <span class=c1># Each cut cuts an item into two items along either the horizontal or</span>
+        <span class=c1># vertical dimension. If we would put the two new, smaller items back</span>
+        <span class=c1># together, they would exactly result in the item that we just cut.</span>
+        <span class=c1># Therefore, they do fit into the same area and their area sum is also</span>
+        <span class=c1># the same. Therefore, the overall area and the overall number of</span>
+        <span class=c1># required bins will also stay the same.</span>
+        <span class=n>x_idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>for</span> <span class=n>cur_n_items</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_bins</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>n_items</span><span class=p>):</span>
+            <span class=c1># In each iteration of this loop, we perform one cut.</span>
+            <span class=c1># This means, that we add exactly one item to the item list.</span>
+            <span class=c1># Our counter variable `cur_n_items`, which starts at `n_bins`</span>
+            <span class=c1># and iterates until just before the target number of items</span>
+            <span class=c1># `self.desc.n_items` represents the current number of items</span>
+            <span class=c1># in our list `items`.</span>
+            <span class=c1># It thus always holds that `cur_n_items == len(items)`.</span>
+
+            <span class=c1># Each cut is described by four properties:</span>
+            <span class=c1># 1. The index of the item that we want to cut.</span>
+            <span class=c1># 2. The direction (horizontal or vertical) into which we cut.</span>
+            <span class=c1># 3. The location where we will cut along this dimension.</span>
+            <span class=c1># 4. The direction into which we will search for the next item</span>
+            <span class=c1>#    if the current item cannot be cut this way.</span>
+            <span class=c1># These four properties are encoded in two real numbers `selector`</span>
+            <span class=c1># and `cutter` from `[-1, 1]`.</span>
+
+            <span class=c1># The first number is `sel`. It encodes (1) and (4).</span>
+            <span class=c1># First, we multiply `selector` with `cur_n_items` and take this</span>
+            <span class=c1># modulo `cur_n_items`. This gives us a value `t` with</span>
+            <span class=c1># `-cur_n_items < t < cur_n_items`. By adding `cur_n_items`</span>
+            <span class=c1># and repeating the modulo division, we get</span>
+            <span class=c1># `0 <= sel_i < cur_n_items`.</span>
+            <span class=c1># `sel_i` is the index of the item that we want to cut.</span>
+            <span class=n>selector</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=n>x_idx</span><span class=p>]</span>
+            <span class=n>x_idx</span> <span class=o>+=</span> <span class=mi>1</span>
+
+            <span class=n>sel_i</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=p>((</span><span class=nb>int</span><span class=p>(</span><span class=n>cur_n_items</span> <span class=o>*</span> <span class=n>selector</span><span class=p>)</span> <span class=o>%</span> <span class=n>cur_n_items</span><span class=p>)</span>
+                          <span class=o>+</span> <span class=n>cur_n_items</span><span class=p>)</span> <span class=o>%</span> <span class=n>cur_n_items</span>
+            <span class=n>orig_sel_i</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>sel_i</span>  <span class=c1># the original selection index.</span>
+
+            <span class=c1># Now, it may not be possible to cut this item.</span>
+            <span class=c1># The idea is that if we cannot cut the item, we simply try to cut</span>
+            <span class=c1># the next item.</span>
+            <span class=c1># The next item could be the one at the next-higher index or the</span>
+            <span class=c1># one at the next lower index.</span>
+            <span class=c1># If `selector < 0.0`, then we will next try the item at the next</span>
+            <span class=c1># lower index. If `selector >= 0.0`, we will move to the next</span>
+            <span class=c1># higher index.</span>
+            <span class=c1># Of course, we will wrap our search when reaching either end of</span>
+            <span class=c1># the list.</span>
+            <span class=c1>#</span>
+            <span class=c1># If we arrive back at `orig_sel_i`, then we have tried to cut</span>
+            <span class=c1># each item in the list in the prescribed cutting direction,</span>
+            <span class=c1># however none could be cut.</span>
+            <span class=c1># In this case, we will change the cutting direction.</span>
+            <span class=c1>#</span>
+            <span class=c1># It must be possible to cut at least one item in at least one</span>
+            <span class=c1># direction, or otherwise the problem would not be solvable.</span>
+            <span class=c1># Therefore, we know that this way, trying all items in all</span>
+            <span class=c1># directions in the worst case, we will definitely succeed.</span>
+            <span class=n>sel_dir</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span> <span class=k>if</span> <span class=n>selector</span> <span class=o><</span> <span class=mf>0.0</span> <span class=k>else</span> <span class=mi>1</span>
+
+            <span class=c1># `cutter` tells us where to cut and in which direction.</span>
+            <span class=c1># If `cutter >= 0`, then we will cut horizontally and</span>
+            <span class=c1># if `cutter < 0`, we cut vertically.</span>
+            <span class=c1># Each item is described by list `[width, height]`, so cutting</span>
+            <span class=c1># horizontally means picking a vertical height coordinate and</span>
+            <span class=c1># cutting horizontally along it. This means that for horizontal</span>
+            <span class=c1># cuts, the `cut_dimension` should be `1` and for vertical cuts,</span>
+            <span class=c1># it must be `0`.</span>
+            <span class=n>cutter</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=n>x_idx</span><span class=p>]</span>
+            <span class=n>x_idx</span> <span class=o>+=</span> <span class=mi>1</span>
+            <span class=n>cut_dimension</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span> <span class=k>if</span> <span class=n>cutter</span> <span class=o>>=</span> <span class=mf>0.0</span> <span class=k>else</span> <span class=mi>0</span>
+
+            <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>
+                <span class=n>cur_item</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>items</span><span class=p>[</span><span class=n>sel_i</span><span class=p>]</span>  <span class=c1># Get the item to cut.</span>
+
+                <span class=n>item_size_in_dim</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>cur_item</span><span class=p>[</span><span class=n>cut_dimension</span><span class=p>]</span>
+
+                <span class=c1># We define the `cut_modulus` as the modulus for the cutting</span>
+                <span class=c1># operation. We will definitely get a value for `cut_position`</span>
+                <span class=c1># such that `0 < cut_position <= cut_modulus`. This means that</span>
+                <span class=c1># we will get `0 < cut_position < item_size_in_dim`.</span>
+                <span class=c1># Therefore, if `cut_modulus > 1`, then we know that there</span>
+                <span class=c1># definitely is a `cut_position` at which we can cut the</span>
+                <span class=c1># current item and obtain two new items that have both</span>
+                <span class=c1># non-zero width and height.</span>
+                <span class=n>cut_modulus</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>item_size_in_dim</span> <span class=o>-</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>cut_modulus</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># Otherwise, we cannot cut the item.</span>
+                    <span class=n>cut_position</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=p>(((</span><span class=nb>int</span><span class=p>(</span>
+                        <span class=n>cut_modulus</span> <span class=o>*</span> <span class=n>cutter</span><span class=p>)</span> <span class=o>%</span> <span class=n>cut_modulus</span><span class=p>)</span> <span class=o>+</span> <span class=n>cut_modulus</span><span class=p>)</span>
+                        <span class=o>%</span> <span class=n>cut_modulus</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span>
+
+                    <span class=k>if</span> <span class=mi>0</span> <span class=o><</span> <span class=n>cut_position</span> <span class=o><</span> <span class=n>item_size_in_dim</span><span class=p>:</span>  <span class=c1># Sanity check...</span>
+                        <span class=c1># Now we perform the actual cut.</span>
+                        <span class=c1># The original item now gets `cut_position` as the</span>
+                        <span class=c1># size in the `cut_dimension`, the other one gets</span>
+                        <span class=c1># `item_size_in_dim - cut_position`. Therefore, the</span>
+                        <span class=c1># overall size remains the same.</span>
+                        <span class=n>cur_item</span><span class=p>[</span><span class=n>cut_dimension</span><span class=p>]</span> <span class=o>=</span> <span class=n>cut_position</span>
+                        <span class=n>cur_item</span> <span class=o>=</span> <span class=n>cur_item</span><span class=o>.</span><span class=n>copy</span><span class=p>()</span>
+                        <span class=n>cur_item</span><span class=p>[</span><span class=n>cut_dimension</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span>
+                            <span class=n>item_size_in_dim</span> <span class=o>-</span> <span class=n>cut_position</span><span class=p>)</span>
+                        <span class=n>items</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>cur_item</span><span class=p>)</span>
+                        <span class=k>break</span>  <span class=c1># we cut one item and can stop</span>
+
+                <span class=n>sel_i</span> <span class=o>=</span> <span class=p>((((</span><span class=n>sel_i</span> <span class=o>+</span> <span class=n>sel_dir</span><span class=p>)</span> <span class=o>%</span> <span class=n>cur_n_items</span><span class=p>)</span> <span class=o>+</span> <span class=n>cur_n_items</span><span class=p>)</span>
+                         <span class=o>%</span> <span class=n>cur_n_items</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>sel_i</span> <span class=o>==</span> <span class=n>orig_sel_i</span><span class=p>:</span>
+                    <span class=n>cut_dimension</span> <span class=o>=</span> <span class=mi>1</span> <span class=o>-</span> <span class=n>cut_dimension</span>
+
+        <span class=c1># At this stage, our instance can only be solved with a perfect</span>
+        <span class=c1># packing. The items need to be placed perfectly together and they</span>
+        <span class=c1># will cover the complete `current_area`.</span>
+        <span class=n>bin_area</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_width</span> <span class=o>*</span> <span class=n>bin_height</span>
+        <span class=n>current_area</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>n_bins</span> <span class=o>*</span> <span class=n>bin_area</span>
+
+        <span class=c1># However, requiring a perfect packing may add hardness to the problem</span>
+        <span class=c1># that does not exist in the original problem.</span>
+        <span class=c1># We now want to touch some of the items and make them a bit smaller.</span>
+        <span class=c1># However, we must never make them smaller as</span>
+        <span class=c1># `current_area - bin_area`, because then we could create a situation</span>
+        <span class=c1># where less than `n_bins` bins are required.</span>
+        <span class=c1># Also, we never want to slide under the `total_item_area` prescribed</span>
+        <span class=c1># by the original problem. If the original problem prescribed a</span>
+        <span class=c1># perfect packing, then we will create a perfect packing.</span>
+        <span class=n>min_area</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>current_area</span> <span class=o>-</span> <span class=n>bin_area</span> <span class=o>+</span> <span class=mi>1</span>
+
+        <span class=c1># If and only if the input array still has information left and if we</span>
+        <span class=c1># still have area that we can cut, then let's continue.</span>
+        <span class=c1># We will keep cutting items, but this time, we throw away the piece</span>
+        <span class=c1># that we cut instead of adding it as item. Of course, we never cut</span>
+        <span class=c1># more than what we are permitted to.</span>
+        <span class=n>max_x_idx</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+        <span class=n>cur_n_items</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>items</span><span class=p>)</span>
+        <span class=k>while</span> <span class=p>(</span><span class=n>x_idx</span> <span class=o><</span> <span class=n>max_x_idx</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>current_area</span> <span class=o>></span> <span class=n>min_area</span><span class=p>):</span>
+            <span class=c1># We perform the same selection and cutting choice.</span>
+            <span class=n>selector</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=n>x_idx</span><span class=p>]</span>
+            <span class=n>x_idx</span> <span class=o>+=</span> <span class=mi>1</span>
+            <span class=n>sel_i</span> <span class=o>=</span> <span class=p>((</span><span class=nb>int</span><span class=p>(</span><span class=n>cur_n_items</span> <span class=o>*</span> <span class=n>selector</span><span class=p>)</span> <span class=o>%</span> <span class=n>cur_n_items</span><span class=p>)</span>
+                     <span class=o>+</span> <span class=n>cur_n_items</span><span class=p>)</span> <span class=o>%</span> <span class=n>cur_n_items</span>
+            <span class=n>orig_sel_i</span> <span class=o>=</span> <span class=n>sel_i</span>  <span class=c1># the original selection index.</span>
+            <span class=n>sel_dir</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span> <span class=k>if</span> <span class=n>selector</span> <span class=o><</span> <span class=mf>0.0</span> <span class=k>else</span> <span class=mi>1</span>
+            <span class=n>cutter</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=n>x_idx</span><span class=p>]</span>
+            <span class=n>x_idx</span> <span class=o>+=</span> <span class=mi>1</span>
+            <span class=n>cut_dimension</span> <span class=o>=</span> <span class=mi>1</span> <span class=k>if</span> <span class=n>cutter</span> <span class=o>>=</span> <span class=mf>0.0</span> <span class=k>else</span> <span class=mi>0</span>
+
+            <span class=c1># We have selected the item and got the cutter value, too.</span>
+            <span class=c1># Now we try to perform the cut. If we cannot cut, we try</span>
+            <span class=c1># the next item. If we could not cut any item along the</span>
+            <span class=c1># cut dimension, we switch the cut dimension.</span>
+            <span class=c1># However, we may fail to cut anything (which means that</span>
+            <span class=c1># we arrive at `step == 2`). In this case, we  just skip</span>
+            <span class=c1># this cut.</span>
+            <span class=n>step</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=k>while</span> <span class=n>step</span> <span class=o><</span> <span class=mi>2</span><span class=p>:</span>  <span class=c1># This time, we may actually fail to cut.</span>
+                <span class=n>cur_item</span> <span class=o>=</span> <span class=n>items</span><span class=p>[</span><span class=n>sel_i</span><span class=p>]</span>  <span class=c1># Get the item to cut.</span>
+
+                <span class=n>item_size_in_dim</span> <span class=o>=</span> <span class=n>cur_item</span><span class=p>[</span><span class=n>cut_dimension</span><span class=p>]</span>
+                <span class=n>item_size_in_other_dim</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>cur_item</span><span class=p>[</span><span class=mi>1</span> <span class=o>-</span> <span class=n>cut_dimension</span><span class=p>]</span>
+                <span class=c1># This time, the `cut_modulus` is also limited by the area</span>
+                <span class=c1># that we can actually cut. This is `current_area - min_area`.</span>
+                <span class=c1># Now each cut along the `cut_dimension` will cost us</span>
+                <span class=c1># `item_size_in_other_dim` area units.</span>
+                <span class=n>cut_modulus</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span>
+                    <span class=p>(</span><span class=n>current_area</span> <span class=o>-</span> <span class=n>min_area</span><span class=p>)</span> <span class=o>//</span> <span class=n>item_size_in_other_dim</span><span class=p>,</span>
+                    <span class=n>item_size_in_dim</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>cut_modulus</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=n>cut_position</span> <span class=o>=</span> <span class=p>(((</span><span class=nb>int</span><span class=p>(</span>
+                        <span class=n>cut_modulus</span> <span class=o>*</span> <span class=n>cutter</span><span class=p>)</span> <span class=o>%</span> <span class=n>cut_modulus</span><span class=p>)</span> <span class=o>+</span> <span class=n>cut_modulus</span><span class=p>)</span>
+                        <span class=o>%</span> <span class=n>cut_modulus</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span>
+
+                    <span class=k>if</span> <span class=mi>0</span> <span class=o><</span> <span class=n>cut_position</span> <span class=o><</span> <span class=n>item_size_in_dim</span><span class=p>:</span>
+                        <span class=c1># We cut away cut_position and do not add the area at</span>
+                        <span class=c1># the end.</span>
+                        <span class=n>cur_item</span><span class=p>[</span><span class=n>cut_dimension</span><span class=p>]</span> <span class=o>=</span> \
+                            <span class=n>item_size_in_dim</span> <span class=o>-</span> <span class=n>cut_position</span>
+                        <span class=k>break</span>  <span class=c1># we cut one item and can stop</span>
+
+                <span class=n>sel_i</span> <span class=o>=</span> <span class=p>((((</span><span class=n>sel_i</span> <span class=o>+</span> <span class=n>sel_dir</span><span class=p>)</span> <span class=o>%</span> <span class=n>cur_n_items</span><span class=p>)</span> <span class=o>+</span> <span class=n>cur_n_items</span><span class=p>)</span>
+                         <span class=o>%</span> <span class=n>cur_n_items</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>sel_i</span> <span class=o>==</span> <span class=n>orig_sel_i</span><span class=p>:</span>
+                    <span class=n>cut_dimension</span> <span class=o>=</span> <span class=mi>1</span> <span class=o>-</span> <span class=n>cut_dimension</span>
+                    <span class=n>step</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># If we tried everything, this enforces a stop.</span>
+
+        <span class=c1># Finally, we sort the items in order to merge items of the</span>
+        <span class=c1># same dimension.</span>
+        <span class=n>items</span><span class=o>.</span><span class=n>sort</span><span class=p>()</span>
+        <span class=n>lo</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>n_items</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>items</span><span class=p>)</span>
+        <span class=k>while</span> <span class=n>lo</span> <span class=o><</span> <span class=n>n_items</span><span class=p>:</span>
+            <span class=c1># For each item in the list, we try to find all items of the same</span>
+            <span class=c1># dimension. Since the list is sorted, these items must all be</span>
+            <span class=c1># located together.</span>
+            <span class=n>hi</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>lo</span>
+            <span class=n>cur_item</span> <span class=o>=</span> <span class=n>items</span><span class=p>[</span><span class=n>lo</span><span class=p>]</span>
+            <span class=k>while</span> <span class=p>(</span><span class=n>hi</span> <span class=o><</span> <span class=n>n_items</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>items</span><span class=p>[</span><span class=n>hi</span><span class=p>]</span> <span class=o>==</span> <span class=n>cur_item</span><span class=p>):</span>
+                <span class=n>hi</span> <span class=o>+=</span> <span class=mi>1</span>
+            <span class=n>cur_item</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>hi</span> <span class=o>-</span> <span class=n>lo</span><span class=p>)</span>  <span class=c1># We now have the item multiplicity.</span>
+            <span class=c1># We delete all items with the same dimension (which must come</span>
+            <span class=c1># directly afterward).</span>
+            <span class=n>hi</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=k>while</span> <span class=n>lo</span> <span class=o><</span> <span class=n>hi</span><span class=p>:</span>
+                <span class=k>del</span> <span class=n>items</span><span class=p>[</span><span class=n>hi</span><span class=p>]</span>
+                <span class=n>hi</span> <span class=o>-=</span> <span class=mi>1</span>
+                <span class=n>n_items</span> <span class=o>-=</span> <span class=mi>1</span>
+            <span class=n>lo</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># Move to the next item</span>
+
+        <span class=c1># Now all items are sorted. This may or may not be a problem:</span>
+        <span class=c1># Some heuristics may either benefit or suffer if the item list</span>
+        <span class=c1># has a pre-defined structure. Therefore, we want to try to at least</span>
+        <span class=c1># somewhat remove the order and make the item list order more random.</span>
+        <span class=n>default_rng</span><span class=p>(</span><span class=nb>int</span><span class=o>.</span><span class=n>from_bytes</span><span class=p>(</span><span class=n>x</span><span class=o>.</span><span class=n>tobytes</span><span class=p>()))</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>items</span><span class=p>)</span>
+
+        <span class=c1># And now we can fill in the result as the output of our encoding.</span>
+        <span class=n>res</span><span class=p>:</span> <span class=n>Instance</span> <span class=o>=</span> <span class=n>Instance</span><span class=p>(</span>  <span class=c1># Generate the instance</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>inst_name</span><span class=p>,</span> <span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>,</span> <span class=n>items</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>y</span><span class=p>)</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># If the destination has length > 0...</span>
+            <span class=n>y</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=n>res</span>  <span class=c1># ...store the instance at index 0,</span>
+        <span class=k>else</span><span class=p>:</span>  <span class=c1># otherwise</span>
+            <span class=n>y</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>res</span><span class=p>)</span>  <span class=c1># add the instance to it.</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.inst_decoding</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

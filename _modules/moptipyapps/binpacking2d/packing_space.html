@@ -1,0 +1,373 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.packing_space — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/packing_space.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.packing_space</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.packing_space</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Here we provide a :class:`~moptipy.api.space.Space` of bin packings.</span>
+
+<span class=sd>The bin packing object is defined in module</span>
+<span class=sd>:mod:`~moptipyapps.binpacking2d.packing`. Basically, it is a</span>
+<span class=sd>two-dimensional numpy array holding, for each item, its ID, its bin ID, as</span>
+<span class=sd>well as its location defined by four coordinates.</span>
+
+<span class=sd>1. Dequan Liu and Hongfei Teng. An Improved BL-Algorithm for Genetic Algorithm</span>
+<span class=sd>   of the Orthogonal Packing of Rectangles. European Journal of Operational</span>
+<span class=sd>   Research. 112(2):413-420. January (1999).</span>
+<span class=sd>   https://doi.org/10.1016/S0377-2217(97)00437-2.</span>
+<span class=sd>   http://www.paper.edu.cn/scholar/showpdf/MUT2AN0IOTD0Mxxh.</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>collections</span><span class=w> </span><span class=kn>import</span> <span class=n>Counter</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>factorial</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.space</span><span class=w> </span><span class=kn>import</span> <span class=n>Space</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>IDX_HEIGHT</span><span class=p>,</span>
+    <span class=n>IDX_REPETITION</span><span class=p>,</span>
+    <span class=n>IDX_WIDTH</span><span class=p>,</span>
+    <span class=n>Instance</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>IDX_BIN</span><span class=p>,</span>
+    <span class=n>IDX_BOTTOM_Y</span><span class=p>,</span>
+    <span class=n>IDX_ID</span><span class=p>,</span>
+    <span class=n>IDX_LEFT_X</span><span class=p>,</span>
+    <span class=n>IDX_RIGHT_X</span><span class=p>,</span>
+    <span class=n>IDX_TOP_Y</span><span class=p>,</span>
+    <span class=n>Packing</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>SCOPE_INSTANCE</span>
+
+
+<div class=viewcode-block id=PackingSpace>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>PackingSpace</span><span class=p>(</span><span class=n>Space</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An implementation of the `Space` API of for 2D bin packings charts."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a 2D packing space.</span>
+
+<span class=sd>        :param instance: the 2d bin packing instance</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("a01")</span>
+<span class=sd>        >>> space = PackingSpace(inst)</span>
+<span class=sd>        >>> space.instance is inst</span>
+<span class=sd>        True</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=c1>#: The instance to which the packings apply.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+
+<div class=viewcode-block id=PackingSpace.copy>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace.copy>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>copy</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>dest</span><span class=p>:</span> <span class=n>Packing</span><span class=p>,</span> <span class=n>source</span><span class=p>:</span> <span class=n>Packing</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Copy one packing to another one.</span>
+
+<span class=sd>        :param dest: the destination packing</span>
+<span class=sd>        :param source: the source packing</span>
+<span class=sd>        """</span>
+        <span class=n>np</span><span class=o>.</span><span class=n>copyto</span><span class=p>(</span><span class=n>dest</span><span class=p>,</span> <span class=n>source</span><span class=p>)</span>
+        <span class=n>dest</span><span class=o>.</span><span class=n>n_bins</span> <span class=o>=</span> <span class=n>source</span><span class=o>.</span><span class=n>n_bins</span></div>
+
+
+<div class=viewcode-block id=PackingSpace.create>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace.create>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>create</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>Packing</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a packing object without assigning items to locations.</span>
+
+<span class=sd>        :return: the (empty, uninitialized) packing object</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("a01")</span>
+<span class=sd>        >>> space = PackingSpace(inst)</span>
+<span class=sd>        >>> x = space.create()</span>
+<span class=sd>        >>> x.shape</span>
+<span class=sd>        (24, 6)</span>
+<span class=sd>        >>> x.instance is inst</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> type(x)</span>
+<span class=sd>        &LTclass 'moptipyapps.binpacking2d.packing.Packing'></span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>Packing</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PackingSpace.to_str>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace.to_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>to_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>Packing</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert a packing to a string.</span>
+
+<span class=sd>        :param x: the packing</span>
+<span class=sd>        :return: a string corresponding to the flattened packing array</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("a01")</span>
+<span class=sd>        >>> space = PackingSpace(inst)</span>
+<span class=sd>        >>> y = space.create()</span>
+<span class=sd>        >>> xx = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,</span>
+<span class=sd>        ...                1, 2, 2, 2, 2, 2, 2])</span>
+<span class=sd>        >>> import moptipyapps.binpacking2d.encodings.ibl_encoding_1 as e</span>
+<span class=sd>        >>> e._decode(xx, y, inst, inst.bin_width, inst.bin_height)</span>
+<span class=sd>        5</span>
+<span class=sd>        >>> space.to_str(y)</span>
+<span class=sd>        '1;1;0;0;463;386;1;1;463;0;926;386;1;1;926;0;1389;386;\</span>
+<span class=sd>1;1;1389;0;1852;386;1;1;1852;0;2315;386;1;1;0;386;463;772;\</span>
+<span class=sd>1;1;463;386;926;772;1;1;926;386;1389;772;1;1;1389;386;1852;772;\</span>
+<span class=sd>1;1;1852;386;2315;772;1;1;0;772;463;1158;1;1;463;772;926;1158;\</span>
+<span class=sd>1;1;926;772;1389;1158;1;1;1389;772;1852;1158;1;1;1852;772;2315;1158;\</span>
+<span class=sd>1;2;0;0;463;386;1;2;463;0;926;386;1;2;926;0;1389;386;2;2;0;386;1680;806;\</span>
+<span class=sd>2;3;0;0;1680;420;2;3;0;420;1680;840;2;4;0;0;1680;420;2;4;0;420;1680;840;\</span>
+<span class=sd>2;5;0;0;1680;420'</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>CSV_SEPARATOR</span><span class=o>.</span><span class=n>join</span><span class=p>([</span><span class=nb>str</span><span class=p>(</span><span class=n>xx</span><span class=p>)</span> <span class=k>for</span> <span class=n>xx</span> <span class=ow>in</span> <span class=n>np</span><span class=o>.</span><span class=n>nditer</span><span class=p>(</span><span class=n>x</span><span class=p>)])</span></div>
+
+
+<div class=viewcode-block id=PackingSpace.is_equal>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace.is_equal>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>is_equal</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x1</span><span class=p>:</span> <span class=n>Packing</span><span class=p>,</span> <span class=n>x2</span><span class=p>:</span> <span class=n>Packing</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Check if two bin packings have the same contents.</span>
+
+<span class=sd>        :param x1: the first packing</span>
+<span class=sd>        :param x2: the second packing</span>
+<span class=sd>        :return: `True` if both packings are for the same instance and have the</span>
+<span class=sd>            same structure</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("a01")</span>
+<span class=sd>        >>> space = PackingSpace(inst)</span>
+<span class=sd>        >>> y1 = space.create()</span>
+<span class=sd>        >>> y1.fill(0)</span>
+<span class=sd>        >>> y2 = space.create()</span>
+<span class=sd>        >>> y2.fill(0)</span>
+<span class=sd>        >>> space.is_equal(y1, y2)</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> y1 is y2</span>
+<span class=sd>        False</span>
+<span class=sd>        >>> y1[0, 0] = 1</span>
+<span class=sd>        >>> space.is_equal(y1, y2)</span>
+<span class=sd>        False</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=n>x1</span><span class=o>.</span><span class=n>instance</span> <span class=ow>is</span> <span class=n>x2</span><span class=o>.</span><span class=n>instance</span><span class=p>)</span> <span class=ow>and</span> <span class=n>np</span><span class=o>.</span><span class=n>array_equal</span><span class=p>(</span><span class=n>x1</span><span class=p>,</span> <span class=n>x2</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PackingSpace.from_str>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace.from_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>text</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=n>Packing</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert a string to a packing.</span>
+
+<span class=sd>        :param text: the string</span>
+<span class=sd>        :return: the packing</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("a01")</span>
+<span class=sd>        >>> space = PackingSpace(inst)</span>
+<span class=sd>        >>> y1 = space.create()</span>
+<span class=sd>        >>> xx = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,</span>
+<span class=sd>        ...                1, 2, 2, 2, 2, 2, 2])</span>
+<span class=sd>        >>> import moptipyapps.binpacking2d.encodings.ibl_encoding_1 as e</span>
+<span class=sd>        >>> y1.n_bins = e._decode(</span>
+<span class=sd>        ...     xx, y1, inst, inst.bin_width, inst.bin_height)</span>
+<span class=sd>        >>> y2 = space.from_str(space.to_str(y1))</span>
+<span class=sd>        >>> space.is_equal(y1, y2)</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> y1 is y2</span>
+<span class=sd>        False</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=s2>"packing text"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=n>x</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Packing</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>
+        <span class=n>np</span><span class=o>.</span><span class=n>copyto</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>fromstring</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=n>dtype</span><span class=o>=</span><span class=n>x</span><span class=o>.</span><span class=n>dtype</span><span class=p>,</span> <span class=n>sep</span><span class=o>=</span><span class=n>CSV_SEPARATOR</span><span class=p>)</span>
+                  <span class=o>.</span><span class=n>reshape</span><span class=p>(</span><span class=n>x</span><span class=o>.</span><span class=n>shape</span><span class=p>))</span>
+        <span class=n>x</span><span class=o>.</span><span class=n>n_bins</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[:,</span> <span class=n>IDX_BIN</span><span class=p>]</span><span class=o>.</span><span class=n>max</span><span class=p>())</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>validate</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>x</span></div>
+
+
+<div class=viewcode-block id=PackingSpace.validate>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace.validate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>validate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>Packing</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Check if a packing is valid and feasible.</span>
+
+<span class=sd>        This method performs a comprehensive feasibility and sanity check of</span>
+<span class=sd>        a packing. It ensures that the packing could be implemented in the</span>
+<span class=sd>        real world exactly as it is given here and that all data are valid and</span>
+<span class=sd>        that it matches to the bin packing instance. This includes:</span>
+
+<span class=sd>        - checking that all data types, numpy `dtypes`, and matrix shapes are</span>
+<span class=sd>          correct</span>
+<span class=sd>        - checking that the packing belongs to the same instance as this space</span>
+<span class=sd>        - checking that no objects in the same bin overlap</span>
+<span class=sd>        - checking that all objects occur exactly as often as prescribed by</span>
+<span class=sd>          the instance</span>
+<span class=sd>        - checking that no object extends outside of its bin</span>
+<span class=sd>        - checking that all objects have the same width/height as prescribed</span>
+<span class=sd>          in the instance (with possible rotations)</span>
+<span class=sd>        - check that bin ids are assigned starting at `1` and incrementing in</span>
+<span class=sd>          steps of `1`</span>
+
+<span class=sd>        :param x: the packing</span>
+<span class=sd>        :raises TypeError: if any component of the packing is of the wrong</span>
+<span class=sd>            type</span>
+<span class=sd>        :raises ValueError: if the packing is not feasible</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>Packing</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=s2>"x"</span><span class=p>,</span> <span class=n>Packing</span><span class=p>)</span>
+        <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span>
+        <span class=k>if</span> <span class=n>inst</span> <span class=ow>is</span> <span class=ow>not</span> <span class=n>x</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"x.instance must be </span><span class=si>{</span><span class=n>inst</span><span class=si>}</span><span class=s2> but is </span><span class=si>{</span><span class=n>x</span><span class=o>.</span><span class=n>instance</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>dtype</span> <span class=ow>is</span> <span class=ow>not</span> <span class=n>x</span><span class=o>.</span><span class=n>dtype</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"inst.dtype = </span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>dtype</span><span class=si>}</span><span class=s2> but x.dtype=</span><span class=si>{</span><span class=n>x</span><span class=o>.</span><span class=n>dtype</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>needed_shape</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>n_items</span><span class=p>,</span> <span class=mi>6</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>x</span><span class=o>.</span><span class=n>shape</span> <span class=o>!=</span> <span class=n>needed_shape</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"x.shape=</span><span class=si>{</span><span class=n>x</span><span class=o>.</span><span class=n>shape</span><span class=si>}</span><span class=s2>, but must be </span><span class=si>{</span><span class=n>needed_shape</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>bin_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>inst</span><span class=o>.</span><span class=n>bin_width</span><span class=p>,</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=n>bin_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>inst</span><span class=o>.</span><span class=n>bin_height</span><span class=p>,</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+
+        <span class=n>bins</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+        <span class=n>items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Counter</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=n>Counter</span><span class=p>()</span>
+
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>n_items</span><span class=p>):</span>
+            <span class=n>item_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_ID</span><span class=p>])</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>item_id</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>item_id</span> <span class=o>></span> <span class=n>inst</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Encountered invalid id=</span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2> for object at index "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>, must be in 1..</span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>n_different_items</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+            <span class=n>bin_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BIN</span><span class=p>])</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>bin_id</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>bin_id</span> <span class=o>></span> <span class=n>inst</span><span class=o>.</span><span class=n>n_items</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Encountered invalid bin-id=</span><span class=si>{</span><span class=n>bin_id</span><span class=si>}</span><span class=s2> for object at index"</span>
+                    <span class=sa>f</span><span class=s2>" </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>, must be in 1..</span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>n_items</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>bins</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>bin_id</span><span class=p>)</span>
+
+            <span class=n>items</span><span class=p>[</span><span class=n>item_id</span><span class=p>]</span> <span class=o>+=</span> <span class=mi>1</span>
+            <span class=n>x_left</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>])</span>
+            <span class=n>y_bottom</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>])</span>
+            <span class=n>x_right</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>])</span>
+            <span class=n>y_top</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>])</span>
+
+            <span class=k>if</span> <span class=p>(</span><span class=n>x_left</span> <span class=o>>=</span> <span class=n>x_right</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>y_bottom</span> <span class=o>>=</span> <span class=n>y_top</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Invalid item coordinates (</span><span class=si>{</span><span class=n>x_left</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>y_bottom</span><span class=si>}</span><span class=s2>, "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>x_right</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>y_top</span><span class=si>}</span><span class=s2>) for item of id </span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2> at index"</span>
+                    <span class=sa>f</span><span class=s2>" </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>x_left</span> <span class=o><</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>y_bottom</span> <span class=o><</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>x_right</span> <span class=o>></span> <span class=n>bin_width</span><span class=p>)</span> \
+                    <span class=ow>or</span> <span class=p>(</span><span class=n>y_top</span> <span class=o>></span> <span class=n>bin_height</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Item coordinates (</span><span class=si>{</span><span class=n>x_left</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>y_bottom</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>x_right</span><span class=si>}</span><span class=s2>, "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>y_top</span><span class=si>}</span><span class=s2>) for item of id </span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2> at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> extend "</span>
+                    <span class=sa>f</span><span class=s2>"outside of the bin (</span><span class=si>{</span><span class=n>bin_width</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>bin_height</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+
+            <span class=n>real_width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>x_right</span> <span class=o>-</span> <span class=n>x_left</span>
+            <span class=n>real_height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>y_top</span> <span class=o>-</span> <span class=n>y_bottom</span>
+            <span class=n>width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>inst</span><span class=p>[</span><span class=n>item_id</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span> <span class=n>IDX_WIDTH</span><span class=p>])</span>
+            <span class=n>height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>inst</span><span class=p>[</span><span class=n>item_id</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span> <span class=n>IDX_HEIGHT</span><span class=p>])</span>
+
+            <span class=k>if</span> <span class=p>((</span><span class=n>real_width</span> <span class=o>!=</span> <span class=n>width</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>real_height</span> <span class=o>!=</span> <span class=n>height</span><span class=p>))</span> \
+                    <span class=ow>and</span> <span class=p>((</span><span class=n>real_width</span> <span class=o>!=</span> <span class=n>height</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>real_height</span> <span class=o>!=</span> <span class=n>width</span><span class=p>)):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Item coordinates (</span><span class=si>{</span><span class=n>x_left</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>y_bottom</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>x_right</span><span class=si>}</span><span class=s2>, "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>y_top</span><span class=si>}</span><span class=s2>) mean width=</span><span class=si>{</span><span class=n>real_width</span><span class=si>}</span><span class=s2> and height="</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>real_height</span><span class=si>}</span><span class=s2> for item of id </span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2> at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>, "</span>
+                    <span class=sa>f</span><span class=s2>"which should have width=</span><span class=si>{</span><span class=n>width</span><span class=si>}</span><span class=s2> and height=</span><span class=si>{</span><span class=n>height</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+            <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>n_items</span><span class=p>):</span>
+                <span class=k>if</span> <span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>IDX_BIN</span><span class=p>])</span> <span class=o>!=</span> <span class=n>bin_id</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>i</span> <span class=o>==</span> <span class=n>j</span><span class=p>):</span>
+                    <span class=k>continue</span>
+                <span class=n>x_left_2</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>])</span>
+                <span class=n>y_bottom_2</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>])</span>
+                <span class=n>x_right_2</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>])</span>
+                <span class=n>y_top_2</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>])</span>
+                <span class=k>if</span> <span class=p>(</span><span class=n>x_left_2</span> <span class=o><</span> <span class=n>x_right</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>x_right_2</span> <span class=o>></span> <span class=n>x_left</span><span class=p>)</span> \
+                        <span class=ow>and</span> <span class=p>(</span><span class=n>y_bottom_2</span> <span class=o><</span> <span class=n>y_top</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>y_top_2</span> <span class=o>></span> <span class=n>y_bottom</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"Item </span><span class=si>{</span><span class=n>x</span><span class=p>[</span><span class=n>j</span><span class=p>,</span><span class=w> </span><span class=n>IDX_ID</span><span class=p>]</span><span class=si>}</span><span class=s2> in bin </span><span class=si>{</span><span class=n>bin_id</span><span class=si>}</span><span class=s2> and at index "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2> is (</span><span class=si>{</span><span class=n>x_left_2</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>y_bottom_2</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>x_right_2</span><span class=si>}</span><span class=s2>, "</span>
+                        <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>y_top_2</span><span class=si>}</span><span class=s2>) and thus intersects with item </span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2> "</span>
+                        <span class=sa>f</span><span class=s2>"at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> which is in the same bin at (</span><span class=si>{</span><span class=n>x_left</span><span class=si>}</span><span class=s2>,"</span>
+                        <span class=sa>f</span><span class=s2>" </span><span class=si>{</span><span class=n>y_bottom</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>x_right</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>y_top</span><span class=si>}</span><span class=s2>)."</span><span class=p>)</span>
+
+        <span class=k>for</span> <span class=n>item_id</span><span class=p>,</span> <span class=n>count</span> <span class=ow>in</span> <span class=n>items</span><span class=o>.</span><span class=n>items</span><span class=p>():</span>
+            <span class=n>should</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>inst</span><span class=p>[</span><span class=n>item_id</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span> <span class=n>IDX_REPETITION</span><span class=p>])</span>
+            <span class=k>if</span> <span class=n>should</span> <span class=o>!=</span> <span class=n>count</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Item </span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2> should occur </span><span class=si>{</span><span class=n>should</span><span class=si>}</span><span class=s2> times, but occurs"</span>
+                    <span class=sa>f</span><span class=s2>" </span><span class=si>{</span><span class=n>count</span><span class=si>}</span><span class=s2> times instead."</span><span class=p>)</span>
+
+        <span class=n>max_bin</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>bins</span><span class=p>)</span>
+        <span class=n>min_bin</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>bins</span><span class=p>)</span>
+        <span class=n>bin_count</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>bins</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=p>(</span><span class=n>min_bin</span> <span class=o>!=</span> <span class=mi>1</span><span class=p>)</span> <span class=ow>or</span> <span class=p>((</span><span class=n>max_bin</span> <span class=o>-</span> <span class=n>min_bin</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>!=</span> <span class=n>bin_count</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Inconsistent use of bins. Found bins </span><span class=si>{</span><span class=nb>sorted</span><span class=p>(</span><span class=n>bins</span><span class=p>)</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=o>.</span><span class=n>n_bins</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>x</span><span class=o>.</span><span class=n>n_bins</span><span class=p>,</span> <span class=s2>"x.n_bins"</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>x</span><span class=o>.</span><span class=n>n_bins</span> <span class=o>!=</span> <span class=n>bin_count</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"x.n_bins=</span><span class=si>{</span><span class=n>x</span><span class=o>.</span><span class=n>n_bins</span><span class=si>}</span><span class=s2>, but must be </span><span class=si>{</span><span class=n>bin_count</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PackingSpace.n_points>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace.n_points>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>n_points</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the number of possible packings.</span>
+
+<span class=sd>        If we indeed consider that any object could be at any place, then</span>
+<span class=sd>        there would be an incomprehensibly large number of possible packings.</span>
+<span class=sd>        Here, we consider the bottom-left condition and the idea of encoding</span>
+<span class=sd>        packings as signed permutations, as in the Liu and Teng paper "An</span>
+<span class=sd>        Improved BL-Algorithm for Genetic Algorithm of the Orthogonal Packing</span>
+<span class=sd>        of Rectangles." In this case, if `n` items are to be packed, the</span>
+<span class=sd>        number of possible packings won't exceed `2^n * n!`.</span>
+
+<span class=sd>        :return: the approximate number of packings</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("a01")</span>
+<span class=sd>        >>> inst.n_items</span>
+<span class=sd>        24</span>
+<span class=sd>        >>> space = PackingSpace(inst)</span>
+<span class=sd>        >>> space.n_points()</span>
+<span class=sd>        10409396852733332453861621760000</span>
+<span class=sd>        >>> from math import factorial</span>
+<span class=sd>        >>> (2 ** 24) * factorial(24)</span>
+<span class=sd>        10409396852733332453861621760000</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=mi>2</span> <span class=o>**</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n_items</span><span class=p>)</span> <span class=o>*</span> <span class=n>factorial</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n_items</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the packing space.</span>
+
+<span class=sd>        :return: the name</span>
+
+<span class=sd>        >>> print(PackingSpace(Instance.from_resource("a10")))</span>
+<span class=sd>        pack_a10</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=sa>f</span><span class=s2>"pack_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=si>}</span><span class=s2>"</span>
+
+<div class=viewcode-block id=PackingSpace.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.packing_space.PackingSpace.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of the space to the given logger.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=n>SCOPE_INSTANCE</span><span class=p>)</span> <span class=k>as</span> <span class=n>kv</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>kv</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.packing_space</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

@@ -1,0 +1,176 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.tsp.tour_length — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/tsp/tour_length.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.tsp.tour_length</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.tsp.tour_length</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>The tour length objective function for tours in path representation.</span>
+
+<span class=sd>A Traveling Salesperson Problem (TSP) instance  is defined as a</span>
+<span class=sd>fully-connected graph with</span>
+<span class=sd>:attr:`~moptipyapps.tsp.instance.Instance.n_cities` nodes. Each edge in the</span>
+<span class=sd>graph has a weight, which identifies the distance between the nodes. The goal</span>
+<span class=sd>is to find the *shortest* tour that visits every single node in the graph</span>
+<span class=sd>exactly once and then returns back to its starting node. Then nodes are</span>
+<span class=sd>usually called cities. In this file, we present methods for loading instances</span>
+<span class=sd>of the TSP as distance matrices `A`. In other words, the value at `A[i, j]`</span>
+<span class=sd>identifies the travel distance from `i` to `j`.</span>
+
+<span class=sd>A tour can be represented in path representation, which means that it is</span>
+<span class=sd>stored as a permutation of the numbers `0` to `n_cities-1`. The number at</span>
+<span class=sd>index `k` identifies that `k`-th city to visit. So the first number in the</span>
+<span class=sd>permutation identifies the first city, the second number the second city,</span>
+<span class=sd>and so on.</span>
+
+<span class=sd>The length of the tour can be computed by summing up the distances from the</span>
+<span class=sd>`k`-th city to the `k+1`-st city, for `k` in `0..n_cities-2` and then adding</span>
+<span class=sd>the distance from the last city to the first city. This is what the function</span>
+<span class=sd>:func:`tour_length` is doing. This function is then wrapped as objective</span>
+<span class=sd>function object in :class:`TourLength`.</span>
+
+<span class=sd>Important initial work on this code has been contributed by Mr. Tianyu LIANG</span>
+<span class=sd>(梁天宇), &LTliangty@stu.hfuu.edu.cn> a Master's student at the Institute of</span>
+<span class=sd>Applied Optimization (应用优化研究所) of the School</span>
+<span class=sd>of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei</span>
+<span class=sd>University (合肥大学) in Hefei, Anhui, China (中国安徽省合肥市) under the</span>
+<span class=sd>supervision of Prof. Dr. Thomas Weise (汤卫思教授).</span>
+
+<span class=sd>1. Gerhard Reinelt. TSPLIB - A Traveling Salesman Problem Library.</span>
+<span class=sd>   *ORSA Journal on Computing* 3(4):376-384. November 1991.</span>
+<span class=sd>   https://doi.org/10.1287/ijoc.3.4.376.</span>
+<span class=sd>   http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/</span>
+<span class=sd>2. Gerhard Reinelt. *TSPLIB95.* Heidelberg, Germany: Universität</span>
+<span class=sd>   Heidelberg, Institut für Angewandte Mathematik. 1995.</span>
+<span class=sd>   http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf</span>
+<span class=sd>3. David Lee Applegate, Robert E. Bixby, Vašek Chvátal, and William John Cook.</span>
+<span class=sd>   *The Traveling Salesman Problem: A Computational Study.* Second Edition,</span>
+<span class=sd>   2007. Princeton, NJ, USA: Princeton University Press. Volume 17 of</span>
+<span class=sd>   Princeton Series in Applied Mathematics. ISBN: 0-691-12993-2.</span>
+<span class=sd>4. Gregory Z. Gutin and Abraham P. Punnen. *The Traveling Salesman Problem and</span>
+<span class=sd>   its Variations.* 2002. Kluwer Academic Publishers. Volume 12 of</span>
+<span class=sd>   Combinatorial Optimization. https://doi.org/10.1007/b101971.</span>
+<span class=sd>5. Pedro Larrañaga, Cindy M. H. Kuijpers, Roberto H. Murga, Iñaki Inza, and</span>
+<span class=sd>   Sejla Dizdarevic. Genetic Algorithms for the Travelling Salesman Problem: A</span>
+<span class=sd>   Review of Representations and Operators. *Artificial Intelligence Review*</span>
+<span class=sd>   13(2):129-170. April 1999. https://doi.org/10.1023/A:1006529012972.</span>
+<span class=sd>6. Eugene Leighton Lawler, Jan Karel Lenstra, Alexander Hendrik George Rinnooy</span>
+<span class=sd>   Kan, and David B. Shmoys. *The Traveling Salesman Problem: A Guided Tour of</span>
+<span class=sd>   Combinatorial Optimization.* September 1985. Chichester, West Sussex, UK:</span>
+<span class=sd>   Wiley Interscience. In Estimation, Simulation, and</span>
+<span class=sd>   Control - Wiley-Interscience Series in Discrete Mathematics and</span>
+<span class=sd>   Optimization. ISBN: 0-471-90413-9</span>
+<span class=sd>7. Tianyu Liang, Zhize Wu, Jörg Lässig, Daan van den Berg, and Thomas Weise.</span>
+<span class=sd>   Solving the Traveling Salesperson Problem using Frequency Fitness</span>
+<span class=sd>   Assignment. In *Proceedings of the IEEE Symposium on Foundations of</span>
+<span class=sd>   Computational Intelligence (IEEE FOCI'22),* part of the *IEEE Symposium</span>
+<span class=sd>   Series on Computational Intelligence (SSCI'22),* December 4-7, 2022,</span>
+<span class=sd>   Singapore. Pages 360-367. IEEE.</span>
+<span class=sd>   https://doi.org/10.1109/SSCI51031.2022.10022296.</span>
+<span class=sd>8. Thomas Weise, Raymond Chiong, Ke Tang, Jörg Lässig, Shigeyoshi Tsutsui,</span>
+<span class=sd>   Wenxiang Chen, Zbigniew Michalewicz, and Xin Yao. Benchmarking Optimization</span>
+<span class=sd>   Algorithms: An Open Source Framework for the Traveling Salesman Problem.</span>
+<span class=sd>   *IEEE Computational Intelligence Magazine.* 9(3):40-52. August 2014.</span>
+<span class=sd>   https://doi.org/10.1109/MCI.2014.2326101.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.tsp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>SCOPE_INSTANCE</span>
+
+
+<div class=viewcode-block id=tour_length>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.tour_length.tour_length>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>tour_length</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the length of a tour.</span>
+
+<span class=sd>    :param instance: the distance matrix</span>
+<span class=sd>    :param x: the tour</span>
+<span class=sd>    :return: the length of the tour `x`</span>
+<span class=sd>    """</span>
+    <span class=n>result</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=n>last</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span>
+    <span class=k>for</span> <span class=n>cur</span> <span class=ow>in</span> <span class=n>x</span><span class=p>:</span>
+        <span class=n>result</span> <span class=o>+=</span> <span class=n>instance</span><span class=p>[</span><span class=n>last</span><span class=p>,</span> <span class=n>cur</span><span class=p>]</span>
+        <span class=n>last</span> <span class=o>=</span> <span class=n>cur</span>
+    <span class=k>return</span> <span class=n>result</span></div>
+
+
+
+<div class=viewcode-block id=TourLength>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.tour_length.TourLength>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>TourLength</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""The tour length objective function."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the tour length objective function.</span>
+
+<span class=sd>        :param instance: the tsp instance</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=c1>#: the TSP instance we are trying to solve</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+
+<div class=viewcode-block id=TourLength.evaluate>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.tour_length.TourLength.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute the length of a tour in path representation.</span>
+
+<span class=sd>        :param x: the tour in path representation</span>
+<span class=sd>        :return: the tour length</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>tour_length</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>,</span> <span class=n>x</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=TourLength.lower_bound>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.tour_length.TourLength.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of the tour length.</span>
+
+<span class=sd>        :return: the lower bound of the tour length</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>tour_length_lower_bound</span></div>
+
+
+<div class=viewcode-block id=TourLength.upper_bound>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.tour_length.TourLength.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the upper bound of the tour length.</span>
+
+<span class=sd>        :return: the upper bound of the tour length</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>tour_length_upper_bound</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this objective function: always "tourLength".</span>
+
+<span class=sd>        :return: "tourLength"</span>
+<span class=sd>        :retval "tourLength": always</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"tourLength"</span>
+
+<div class=viewcode-block id=TourLength.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.tsp.html#moptipyapps.tsp.tour_length.TourLength.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of the space to the given logger.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=n>SCOPE_INSTANCE</span><span class=p>)</span> <span class=k>as</span> <span class=n>kv</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>kv</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.tsp.tour_length</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

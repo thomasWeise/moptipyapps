@@ -1,0 +1,612 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.mfc_generator — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/mfc_generator.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.mfc_generator</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.mfc_generator</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Methods for generating MFC instances.</span>
+
+<span class=sd>In the module :mod:`~moptipyapps.prodsched.instance`, we provide the class</span>
+<span class=sd>:class:`~moptipyapps.prodsched.instance.Instance`. Objects of this class</span>
+<span class=sd>represent a fully deterministic production scheduling scenario. They prescribe</span>
+<span class=sd>demands (:class:`~moptipyapps.prodsched.instance.Demand`) arriving at fixed</span>
+<span class=sd>points in time in the system and work stations that need fixed amounts of</span>
+<span class=sd>work times per product during certain time periods.</span>
+<span class=sd>This allows us to create fully reproducible simulations</span>
+<span class=sd>(:mod:`~moptipyapps.prodsched.simulation`) that show what a factory would do</span>
+<span class=sd>to satisfy the demands.</span>
+
+<span class=sd>But where does such instance data come from?</span>
+
+<span class=sd>In the existing research on material flow control, no such fixed instances</span>
+<span class=sd>exist. We invented them. Instead, the existing research [1] uses fixed numbers</span>
+<span class=sd>of products and machines, fixed routes of products through machines, and</span>
+<span class=sd>random distributions to generate demands and work times.</span>
+
+<span class=sd>So we create the function :func:`~default_stations` that creates the standard</span>
+<span class=sd>work time distributions for the standard work stations. We also create the</span>
+<span class=sd>function :func:`~default_products` that creates the default distributions</span>
+<span class=sd>for the default products.</span>
+
+<span class=sd>The function :func:`sample_mfc_instance` then creates a material flow instance</span>
+<span class=sd>following these distributions based on a given random seed.</span>
+<span class=sd>This allows us to create scenarios that follow the same structure and random</span>
+<span class=sd>distributions as prescribed in the paper [1] by Thürer et al.</span>
+<span class=sd>However, our instances are fully deterministic.</span>
+
+<span class=sd>Once could not create a certain number of such instances and average</span>
+<span class=sd>performance metrics over simulations on them. This would likely yield metrics</span>
+<span class=sd>of reasonable accuracy, while allowing us to reproduce, analyze, and trace</span>
+<span class=sd>every single production decision if need be.</span>
+
+<span class=sd>>>> from moptipyapps.utils.sampling import Gamma</span>
+<span class=sd>>>> inst = sample_mfc_instance([</span>
+<span class=sd>...  Product(0, (0, 1), Gamma.from_alpha_beta(3, 0.26))], [</span>
+<span class=sd>...  Station(0, Gamma.from_k_and_mean(3, 10)),</span>
+<span class=sd>...  Station(1, Gamma.from_k_and_mean(2, 10))],</span>
+<span class=sd>...  time_end_measure=100, seed=123)</span>
+
+<span class=sd>>>> inst.name</span>
+<span class=sd>'mfc_1_2_100_0x7b'</span>
+
+<span class=sd>>>> inst.n_demands</span>
+<span class=sd>7</span>
+
+<span class=sd>>>> inst.demands</span>
+<span class=sd>(Demand(arrival=5.213885878801001, deadline=5.213885878801001, demand_id=0,\</span>
+<span class=sd> customer_id=0, product_id=0, amount=1, measure=False),\</span>
+<span class=sd> Demand(arrival=25.872387132411287, deadline=25.872387132411287, demand_id=1,\</span>
+<span class=sd> customer_id=1, product_id=0, amount=1, measure=False),\</span>
+<span class=sd> Demand(arrival=43.062182155666896, deadline=43.062182155666896, demand_id=2,\</span>
+<span class=sd> customer_id=2, product_id=0, amount=1, measure=True),\</span>
+<span class=sd> Demand(arrival=49.817978344678004, deadline=49.817978344678004, demand_id=3,\</span>
+<span class=sd> customer_id=3, product_id=0, amount=1, measure=True),\</span>
+<span class=sd> Demand(arrival=58.21166922638016, deadline=58.21166922638016, demand_id=4,\</span>
+<span class=sd> customer_id=4, product_id=0, amount=1, measure=True),\</span>
+<span class=sd> Demand(arrival=69.09054693162531, deadline=69.09054693162531, demand_id=5,\</span>
+<span class=sd> customer_id=5, product_id=0, amount=1, measure=True),\</span>
+<span class=sd> Demand(arrival=88.804579148131, deadline=88.804579148131, demand_id=6,\</span>
+<span class=sd> customer_id=6, product_id=0, amount=1, measure=True))</span>
+
+<span class=sd>>>> len(inst.station_product_unit_times[0][0])</span>
+<span class=sd>1600</span>
+
+<span class=sd>>>> len(inst.station_product_unit_times[1][0])</span>
+<span class=sd>1600</span>
+
+<span class=sd>>>> inst.time_end_measure</span>
+<span class=sd>100.0</span>
+
+<span class=sd>>>> inst.time_end_warmup</span>
+<span class=sd>30.0</span>
+
+<span class=sd>>>> d = dict(inst.infos)</span>
+<span class=sd>>>> del d["info_generated_on"]</span>
+<span class=sd>>>> del d["info_generator_version"]</span>
+<span class=sd>>>> d</span>
+<span class=sd>{'info_generator': 'moptipyapps.prodsched.mfc_generator',\</span>
+<span class=sd> 'info_rand_seed_src': 'USER_PROVIDED',\</span>
+<span class=sd> 'info_rand_seed': '0x7b',\</span>
+<span class=sd> 'info_time_end_measure_src': 'USER_PROVIDED',\</span>
+<span class=sd> 'info_time_end_measure': '100',\</span>
+<span class=sd> 'info_time_end_warmup_src': 'SAMPLED',\</span>
+<span class=sd> 'info_time_end_warmup': '30',\</span>
+<span class=sd> 'info_name_src': 'SAMPLED',\</span>
+<span class=sd> 'info_product_interarrival_times[0]':\</span>
+<span class=sd> 'Erlang(k=3, theta=3.846153846153846)',\</span>
+<span class=sd> 'info_product_route[0]': 'USER_PROVIDED',\</span>
+<span class=sd> 'info_station_processing_time[0]':\</span>
+<span class=sd> 'Erlang(k=3, theta=3.3333333333333335)',\</span>
+<span class=sd> 'info_station_processing_time_window_length[0]': 'Const(v=0.125)',\</span>
+<span class=sd> 'info_station_processing_time[1]': 'Erlang(k=2, theta=5)',\</span>
+<span class=sd> 'info_station_processing_time_window_length[1]': 'Const(v=0.125)'}</span>
+
+<span class=sd>>>> inst = sample_mfc_instance(seed=23445)</span>
+<span class=sd>>>> inst.name</span>
+<span class=sd>'mfc_10_13_10000_0x5b95'</span>
+
+<span class=sd>>>> inst.n_demands</span>
+<span class=sd>9922</span>
+
+<span class=sd>>>> len([dem for dem in inst.demands if dem.product_id == 0])</span>
+<span class=sd>959</span>
+
+<span class=sd>>>> len([dem for dem in inst.demands if dem.product_id == 1])</span>
+<span class=sd>1055</span>
+
+<span class=sd>>>> [len(k[0]) for k in inst.station_product_unit_times]</span>
+<span class=sd>[160000, 160000, 0, 160000, 0, 0, 0, 0, 160000, 160000, 160000, 0, 0]</span>
+
+<span class=sd>1. Matthias Thürer, Nuno O. Fernandes, Hermann Lödding, and Mark Stevenson.</span>
+<span class=sd>   Material Flow Control in Make-to-Stock Production Systems: An Assessment of</span>
+<span class=sd>   Order Generation, Order Release and Production Authorization by Simulation</span>
+<span class=sd>   Flexible Services and Manufacturing Journal. 37(1):1-37. March 2025.</span>
+<span class=sd>   doi:&LThttps://doi.org/10.1007/s10696-024-09532-2></span>
+<span class=sd>"""</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>datetime</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>dataclasses</span><span class=w> </span><span class=kn>import</span> <span class=n>dataclass</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>rand_generator</span><span class=p>,</span>
+    <span class=n>rand_seed_generate</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.strings</span><span class=w> </span><span class=kn>import</span> <span class=n>sanitize_name</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>numpy.random</span><span class=w> </span><span class=kn>import</span> <span class=n>Generator</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.int_math</span><span class=w> </span><span class=kn>import</span> <span class=n>try_int</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.strings.string_conv</span><span class=w> </span><span class=kn>import</span> <span class=n>num_to_str</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>KEY_IDX_END</span><span class=p>,</span>
+    <span class=n>KEY_IDX_START</span><span class=p>,</span>
+    <span class=n>MAX_VALUE</span><span class=p>,</span>
+    <span class=n>Demand</span><span class=p>,</span>
+    <span class=n>Instance</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.sampling</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>AtLeast</span><span class=p>,</span>
+    <span class=n>Const</span><span class=p>,</span>
+    <span class=n>Distribution</span><span class=p>,</span>
+    <span class=n>Erlang</span><span class=p>,</span>
+    <span class=n>Gamma</span><span class=p>,</span>
+    <span class=n>Uniform</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.version</span><span class=w> </span><span class=kn>import</span> <span class=n>__version__</span>
+
+<span class=c1>#: the "now" function</span>
+<span class=n>__DTN</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>datetime</span><span class=o>.</span><span class=n>datetime</span><span class=p>]]</span> <span class=o>=</span> <span class=n>datetime</span><span class=o>.</span><span class=n>datetime</span><span class=o>.</span><span class=n>now</span>
+
+
+<span class=c1>#: The information key for interarrival times</span>
+<span class=n>INFO_PRODUCT_INTERARRIVAL_TIME_DIST</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> \
+    <span class=s2>"info_product_interarrival_times"</span>
+
+<span class=c1>#: The generator key</span>
+<span class=n>INFO_GENERATOR</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_generator"</span>
+<span class=c1>#: The generator version</span>
+<span class=n>INFO_GENERATOR_VERSION</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_generator_version"</span>
+<span class=c1>#: When was the instance generated?</span>
+<span class=n>INFO_GENERATED_ON</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_generated_on"</span>
+<span class=c1>#: The information key for interarrival times</span>
+<span class=n>INFO_PRODUCT_ROUTE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_product_route"</span>
+<span class=c1>#: a fixed structure</span>
+<span class=n>INFO_USER_PROVIDED</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"USER_PROVIDED"</span>
+<span class=c1>#: a sampled structure</span>
+<span class=n>INFO_SAMPLED</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"SAMPLED"</span>
+<span class=c1>#: The information key for the processing time distribution</span>
+<span class=n>INFO_STATION_PROCESSING_TIME</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_station_processing_time"</span>
+<span class=c1>#: The information key for the processing time window length distribution</span>
+<span class=n>INFO_STATION_PROCESSING_WINDOW_LENGTH</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> \
+    <span class=s2>"info_station_processing_time_window_length"</span>
+<span class=c1>#: the random seed</span>
+<span class=n>INFO_RAND_SEED</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_rand_seed"</span>
+<span class=c1>#: the random seed source</span>
+<span class=n>INFO_RAND_SEED_SRC</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_RAND_SEED</span><span class=si>}</span><span class=s2>_src"</span>
+<span class=c1>#: the name source</span>
+<span class=n>INFO_NAME_SRC</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_name_src"</span>
+<span class=c1>#: the warmup time end</span>
+<span class=n>INFO_TIME_END_WARMUP</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_time_end_warmup"</span>
+<span class=c1>#: the source of the warmup time end</span>
+<span class=n>INFO_TIME_END_WARMUP_SRC</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_TIME_END_WARMUP</span><span class=si>}</span><span class=s2>_src"</span>
+<span class=c1>#: the measurement time end</span>
+<span class=n>INFO_TIME_END_MEASURE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"info_time_end_measure"</span>
+<span class=c1>#: the source of the measurement time end</span>
+<span class=n>INFO_TIME_END_MEASURE_SRC</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_TIME_END_MEASURE</span><span class=si>}</span><span class=s2>_src"</span>
+
+
+<div class=viewcode-block id=Product>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.mfc_generator.Product>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Product</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""The product sampling definition."""</span>
+
+    <span class=c1>#: the product ID</span>
+    <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the routing of the product</span>
+    <span class=n>routing</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+    <span class=c1>#: the interarrival distribution</span>
+    <span class=n>interarrival_times</span><span class=p>:</span> <span class=n>Distribution</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>routing</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>],</span>
+                 <span class=n>interarrival_times</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=n>Distribution</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the product sampling instruction.</span>
+
+<span class=sd>        :param product_id: the product id</span>
+<span class=sd>        :param routing: the routing information</span>
+<span class=sd>        :param interarrival_times: the interarrival time distribution</span>
+<span class=sd>        """</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"product_id"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>product_id</span><span class=p>,</span> <span class=s2>"product_id"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>))</span>
+        <span class=n>route</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>routing</span><span class=p>)</span>
+        <span class=n>n_route</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>route</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>n_route</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Route cannot be empty!"</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>k</span> <span class=ow>in</span> <span class=n>route</span><span class=p>:</span>
+            <span class=n>check_int_range</span><span class=p>(</span><span class=n>k</span><span class=p>,</span> <span class=s2>"station"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"routing"</span><span class=p>,</span> <span class=n>route</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=s2>"interarrival_times"</span><span class=p>,</span> <span class=n>AtLeast</span><span class=o>.</span><span class=n>greater_than_zero</span><span class=p>(</span>
+                <span class=n>interarrival_times</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>())</span>
+
+<div class=viewcode-block id=Product.log_info>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.mfc_generator.Product.log_info>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_info</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>infos</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the sampling information of this product to the infos `dict`.</span>
+
+<span class=sd>        :param infos: the information dictionary</span>
+<span class=sd>        """</span>
+        <span class=n>key</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_IDX_START</span><span class=si>}{</span><span class=bp>self</span><span class=o>.</span><span class=n>product_id</span><span class=si>}{</span><span class=n>KEY_IDX_END</span><span class=si>}</span><span class=s2>"</span>
+        <span class=n>infos</span><span class=p>[</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_PRODUCT_INTERARRIVAL_TIME_DIST</span><span class=si>}{</span><span class=n>key</span><span class=si>}</span><span class=s2>"</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>interarrival_times</span><span class=p>)</span>
+        <span class=n>infos</span><span class=p>[</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_PRODUCT_ROUTE</span><span class=si>}{</span><span class=n>key</span><span class=si>}</span><span class=s2>"</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_USER_PROVIDED</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=Station>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.mfc_generator.Station>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Station</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""The station sampling definition."""</span>
+
+    <span class=c1>#: the product ID</span>
+    <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the processing time distribution</span>
+    <span class=n>processing_time</span><span class=p>:</span> <span class=n>Distribution</span>
+    <span class=c1>#: the processing window distribution</span>
+    <span class=n>processing_windows</span><span class=p>:</span> <span class=n>Distribution</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+            <span class=n>processing_time</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=n>Distribution</span><span class=p>,</span>
+            <span class=n>processing_windows</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=n>Distribution</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> \
+            <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the station sampling instruction.</span>
+
+<span class=sd>        :param station_id: the station id</span>
+<span class=sd>        :param processing_time: the processing time distribution</span>
+<span class=sd>        :param processing_windows: the processing time window length</span>
+<span class=sd>            distribution</span>
+<span class=sd>        """</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=s2>"station_id"</span><span class=p>,</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>station_id</span><span class=p>,</span> <span class=s2>"station_id"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>))</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=s2>"processing_time"</span><span class=p>,</span>
+            <span class=n>AtLeast</span><span class=o>.</span><span class=n>greater_than_zero</span><span class=p>(</span><span class=n>processing_time</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>())</span>
+
+        <span class=k>if</span> <span class=n>processing_windows</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>processing_windows</span> <span class=o>=</span> <span class=n>Const</span><span class=p>(</span><span class=mi>1</span> <span class=o>/</span> <span class=mi>8</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=s2>"processing_windows"</span><span class=p>,</span>
+            <span class=n>AtLeast</span><span class=o>.</span><span class=n>greater_than_zero</span><span class=p>(</span><span class=n>processing_windows</span><span class=p>)</span><span class=o>.</span><span class=n>simplify</span><span class=p>())</span>
+
+<div class=viewcode-block id=Station.log_info>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.mfc_generator.Station.log_info>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_info</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>infos</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the sampling information of this product to the infos `dict`.</span>
+
+<span class=sd>        :param infos: the information dictionary</span>
+<span class=sd>        """</span>
+        <span class=n>key</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>KEY_IDX_START</span><span class=si>}{</span><span class=bp>self</span><span class=o>.</span><span class=n>station_id</span><span class=si>}{</span><span class=n>KEY_IDX_END</span><span class=si>}</span><span class=s2>"</span>
+        <span class=n>infos</span><span class=p>[</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_STATION_PROCESSING_TIME</span><span class=si>}{</span><span class=n>key</span><span class=si>}</span><span class=s2>"</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>processing_time</span><span class=p>)</span>
+        <span class=n>infos</span><span class=p>[</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>INFO_STATION_PROCESSING_WINDOW_LENGTH</span><span class=si>}{</span><span class=n>key</span><span class=si>}</span><span class=s2>"</span><span class=p>]</span> <span class=o>=</span> <span class=nb>repr</span><span class=p>(</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>processing_windows</span><span class=p>)</span></div>
+</div>
+
+
+
+<span class=c1># pylint: disable=R0914,R0912,R0915</span>
+<div class=viewcode-block id=sample_mfc_instance>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.mfc_generator.sample_mfc_instance>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>sample_mfc_instance</span><span class=p>(</span><span class=n>products</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Product</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+                        <span class=n>stations</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Station</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+                        <span class=n>time_end_warmup</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+                        <span class=n>time_end_measure</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+                        <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+                        <span class=n>seed</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=n>Instance</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Sample an MFC instance.</span>
+
+<span class=sd>    :param products: the products</span>
+<span class=sd>    :param stations: the work stations</span>
+<span class=sd>    :param time_end_warmup: the end of the warmup period</span>
+<span class=sd>    :param time_end_measure: the end of the measurement period</span>
+<span class=sd>    :param name: the instance name</span>
+<span class=sd>    :param seed: the random seed, if any</span>
+<span class=sd>    :return: the instance</span>
+<span class=sd>    """</span>
+    <span class=n>generator</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=p>(</span><span class=vm>__file__</span><span class=p>)</span>
+    <span class=n>idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>rfind</span><span class=p>(</span><span class=n>generator</span><span class=p>,</span> <span class=s2>"moptipyapps"</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>idx</span> <span class=o>>=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=n>generator</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>removesuffix</span><span class=p>(</span><span class=n>generator</span><span class=p>[</span><span class=n>idx</span><span class=p>:]</span><span class=o>.</span><span class=n>replace</span><span class=p>(</span><span class=s2>"/"</span><span class=p>,</span> <span class=s2>"."</span><span class=p>),</span> <span class=s2>".py"</span><span class=p>)</span>
+    <span class=k>else</span><span class=p>:</span>
+        <span class=n>generator</span> <span class=o>=</span> <span class=s2>"mfc_generator"</span>
+    <span class=n>infos</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{</span>
+        <span class=n>INFO_GENERATOR</span><span class=p>:</span> <span class=n>generator</span><span class=p>,</span>
+        <span class=n>INFO_GENERATOR_VERSION</span><span class=p>:</span> <span class=n>__version__</span><span class=p>,</span>
+        <span class=n>INFO_GENERATED_ON</span><span class=p>:</span> <span class=nb>str</span><span class=p>(</span><span class=n>__DTN</span><span class=p>()),</span>
+    <span class=p>}</span>
+
+    <span class=k>if</span> <span class=n>products</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>products</span> <span class=o>=</span> <span class=n>default_products</span><span class=p>()</span>
+    <span class=n>products</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>products</span><span class=p>)</span>
+    <span class=n>n_products</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>products</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_products</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Cannot have </span><span class=si>{</span><span class=n>n_products</span><span class=si>}</span><span class=s2> products."</span><span class=p>)</span>
+
+    <span class=n>ids</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+    <span class=n>used_stations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>set</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+    <span class=k>for</span> <span class=n>product</span> <span class=ow>in</span> <span class=n>products</span><span class=p>:</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>product</span><span class=p>,</span> <span class=n>Product</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>product</span><span class=p>,</span> <span class=s2>"product"</span><span class=p>,</span> <span class=n>Product</span><span class=p>)</span>
+        <span class=n>ids</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>product</span><span class=o>.</span><span class=n>product_id</span><span class=p>)</span>
+        <span class=n>used_stations</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>product</span><span class=o>.</span><span class=n>routing</span><span class=p>)</span>
+    <span class=k>if</span> <span class=p>(</span><span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>ids</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span>
+            <span class=nb>max</span><span class=p>(</span><span class=n>ids</span><span class=p>)</span> <span class=o>-</span> <span class=nb>min</span><span class=p>(</span><span class=n>ids</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span> <span class=o>!=</span> <span class=n>n_products</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Inconsistent product ids."</span><span class=p>)</span>
+
+    <span class=n>n_stations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>used_stations</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=mi>0</span> <span class=o><</span> <span class=n>n_stations</span> <span class=o><</span> <span class=mi>1_000_000</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid number </span><span class=si>{</span><span class=n>n_stations</span><span class=si>}</span><span class=s2> of stations."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>stations</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>if</span> <span class=n>n_stations</span> <span class=o>==</span> <span class=mi>13</span><span class=p>:</span>
+            <span class=n>stations</span> <span class=o>=</span> <span class=n>default_stations</span><span class=p>()</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=s2>"Can only use default settings with 13 stations, "</span>
+                <span class=sa>f</span><span class=s2>"but got </span><span class=si>{</span><span class=n>n_stations</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=n>stations</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>stations</span><span class=p>)</span>
+    <span class=n>n_stations_real</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>stations</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_stations_real</span> <span class=o>!=</span> <span class=n>n_stations</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+            <span class=sa>f</span><span class=s2>"Products use </span><span class=si>{</span><span class=n>n_stations</span><span class=si>}</span><span class=s2> stations,"</span>
+            <span class=sa>f</span><span class=s2>" but </span><span class=si>{</span><span class=n>n_stations_real</span><span class=si>}</span><span class=s2> are provided."</span><span class=p>)</span>
+
+    <span class=n>ids</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+    <span class=k>for</span> <span class=n>station</span> <span class=ow>in</span> <span class=n>stations</span><span class=p>:</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>station</span><span class=p>,</span> <span class=n>Station</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>station</span><span class=p>,</span> <span class=s2>"station"</span><span class=p>,</span> <span class=n>Station</span><span class=p>)</span>
+        <span class=n>ids</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>station</span><span class=o>.</span><span class=n>station_id</span><span class=p>)</span>
+    <span class=n>min_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>ids</span><span class=p>)</span>
+    <span class=n>max_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>ids</span><span class=p>)</span>
+    <span class=k>if</span> <span class=p>(</span><span class=nb>set</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>ids</span><span class=p>)</span> <span class=o>!=</span> <span class=n>n_stations</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span>
+            <span class=n>max_id</span> <span class=o>-</span> <span class=n>min_id</span> <span class=o>+</span> <span class=mi>1</span> <span class=o>!=</span> <span class=n>n_stations</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Inconsistent station ids."</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>ids</span> <span class=o>!=</span> <span class=n>used_stations</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+            <span class=sa>f</span><span class=s2>"Station ids are </span><span class=si>{</span><span class=n>min_id</span><span class=si>}</span><span class=s2>...</span><span class=si>{</span><span class=n>max_id</span><span class=si>}</span><span class=s2>, but products use "</span>
+            <span class=sa>f</span><span class=s2>"stations </span><span class=si>{</span><span class=nb>sorted</span><span class=p>(</span><span class=n>used_stations</span><span class=p>)</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=n>seed</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>infos</span><span class=p>[</span><span class=n>INFO_RAND_SEED_SRC</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_SAMPLED</span>
+        <span class=n>seed</span> <span class=o>=</span> <span class=n>rand_seed_generate</span><span class=p>()</span>
+    <span class=k>else</span><span class=p>:</span>
+        <span class=n>infos</span><span class=p>[</span><span class=n>INFO_RAND_SEED_SRC</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_USER_PROVIDED</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>seed</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>seed</span><span class=p>,</span> <span class=s2>"seed"</span><span class=p>,</span> <span class=nb>int</span><span class=p>)</span>
+    <span class=n>infos</span><span class=p>[</span><span class=n>INFO_RAND_SEED</span><span class=p>]</span> <span class=o>=</span> <span class=nb>hex</span><span class=p>(</span><span class=n>seed</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=n>time_end_measure</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>time_end_measure</span> <span class=o>=</span> <span class=mi>10_000</span> <span class=k>if</span> <span class=p>(</span><span class=n>time_end_warmup</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span>
+            <span class=n>time_end_warmup</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=k>else</span> <span class=nb>max</span><span class=p>(</span>
+            <span class=n>time_end_warmup</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=p>(</span><span class=mi>10</span> <span class=o>*</span> <span class=n>time_end_warmup</span><span class=p>)</span> <span class=o>/</span> <span class=mi>3</span><span class=p>)</span>
+        <span class=n>infos</span><span class=p>[</span><span class=n>INFO_TIME_END_MEASURE_SRC</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_SAMPLED</span>
+    <span class=k>else</span><span class=p>:</span>
+        <span class=n>infos</span><span class=p>[</span><span class=n>INFO_TIME_END_MEASURE_SRC</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_USER_PROVIDED</span>
+    <span class=n>time_end_measure</span> <span class=o>=</span> <span class=n>try_int</span><span class=p>(</span><span class=n>time_end_measure</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=mi>0</span> <span class=o><</span> <span class=n>time_end_measure</span> <span class=o><</span> <span class=n>MAX_VALUE</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+            <span class=sa>f</span><span class=s2>"Invalid time_end_measure=</span><span class=si>{</span><span class=n>time_end_measure</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=n>infos</span><span class=p>[</span><span class=n>INFO_TIME_END_MEASURE</span><span class=p>]</span> <span class=o>=</span> <span class=n>num_to_str</span><span class=p>(</span><span class=n>time_end_measure</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=n>time_end_warmup</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>time_end_warmup</span> <span class=o>=</span> <span class=p>(</span><span class=mi>3</span> <span class=o>*</span> <span class=n>time_end_measure</span><span class=p>)</span> <span class=o>/</span> <span class=mi>10</span>
+        <span class=n>infos</span><span class=p>[</span><span class=n>INFO_TIME_END_WARMUP_SRC</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_SAMPLED</span>
+    <span class=k>else</span><span class=p>:</span>
+        <span class=n>infos</span><span class=p>[</span><span class=n>INFO_TIME_END_WARMUP_SRC</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_USER_PROVIDED</span>
+    <span class=n>time_end_warmup</span> <span class=o>=</span> <span class=n>try_int</span><span class=p>(</span><span class=n>time_end_warmup</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=mi>0</span> <span class=o><=</span> <span class=n>time_end_warmup</span> <span class=o><</span> <span class=n>time_end_measure</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid time_end_warmup=</span><span class=si>{</span><span class=n>time_end_warmup</span><span class=si>}</span><span class=s2> "</span>
+                         <span class=sa>f</span><span class=s2>"for time_end_measure=</span><span class=si>{</span><span class=n>time_end_measure</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=n>infos</span><span class=p>[</span><span class=n>INFO_TIME_END_WARMUP</span><span class=p>]</span> <span class=o>=</span> <span class=n>num_to_str</span><span class=p>(</span><span class=n>time_end_warmup</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=n>name</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>infos</span><span class=p>[</span><span class=n>INFO_NAME_SRC</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_SAMPLED</span>
+        <span class=n>s</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>num_to_str</span><span class=p>(</span><span class=n>time_end_measure</span><span class=p>)</span><span class=o>.</span><span class=n>replace</span><span class=p>(</span><span class=s2>"."</span><span class=p>,</span> <span class=s2>"d"</span><span class=p>)</span>
+        <span class=n>name</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"mfc_</span><span class=si>{</span><span class=n>n_products</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>n_stations</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>s</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>seed</span><span class=si>:</span><span class=s2>#x</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>else</span><span class=p>:</span>
+        <span class=n>infos</span><span class=p>[</span><span class=n>INFO_NAME_SRC</span><span class=p>]</span> <span class=o>=</span> <span class=n>INFO_USER_PROVIDED</span>
+    <span class=n>uname</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>sanitize_name</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>uname</span> <span class=o>!=</span> <span class=n>name</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid name </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=n>random</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Generator</span><span class=p>]</span> <span class=o>=</span> <span class=n>rand_generator</span><span class=p>(</span><span class=n>seed</span><span class=p>)</span>
+
+    <span class=c1># sample the demands</span>
+    <span class=n>demands</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Demand</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>current_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>for</span> <span class=n>product</span> <span class=ow>in</span> <span class=n>products</span><span class=p>:</span>
+        <span class=n>time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+        <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>
+            <span class=n>until</span> <span class=o>=</span> <span class=n>product</span><span class=o>.</span><span class=n>interarrival_times</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>random</span><span class=p>)</span>
+            <span class=n>time</span> <span class=o>+=</span> <span class=n>until</span>
+            <span class=k>if</span> <span class=n>time</span> <span class=o>>=</span> <span class=n>time_end_measure</span><span class=p>:</span>
+                <span class=k>break</span>
+            <span class=n>demands</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>Demand</span><span class=p>(</span>
+                <span class=n>arrival</span><span class=o>=</span><span class=n>time</span><span class=p>,</span> <span class=n>deadline</span><span class=o>=</span><span class=n>time</span><span class=p>,</span> <span class=n>demand_id</span><span class=o>=</span><span class=n>current_id</span><span class=p>,</span>
+                <span class=n>customer_id</span><span class=o>=</span><span class=n>current_id</span><span class=p>,</span> <span class=n>product_id</span><span class=o>=</span><span class=n>product</span><span class=o>.</span><span class=n>product_id</span><span class=p>,</span>
+                <span class=n>amount</span><span class=o>=</span><span class=mi>1</span><span class=p>,</span> <span class=n>measure</span><span class=o>=</span><span class=n>time_end_warmup</span> <span class=o><=</span> <span class=n>time</span><span class=p>))</span>
+            <span class=n>current_id</span> <span class=o>+=</span> <span class=mi>1</span>
+
+    <span class=c1>#: sample the working times</span>
+    <span class=n>production_times</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>float</span><span class=p>]]]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=k>for</span> <span class=n>station</span> <span class=ow>in</span> <span class=n>stations</span><span class=p>:</span>
+        <span class=n>times</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>time</span> <span class=o>=</span> <span class=mf>0.0</span>
+        <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>
+            <span class=n>processing</span> <span class=o>=</span> <span class=n>station</span><span class=o>.</span><span class=n>processing_time</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>random</span><span class=p>)</span>
+            <span class=n>window</span> <span class=o>=</span> <span class=n>station</span><span class=o>.</span><span class=n>processing_windows</span><span class=o>.</span><span class=n>sample</span><span class=p>(</span><span class=n>random</span><span class=p>)</span>
+            <span class=n>time</span> <span class=o>+=</span> <span class=n>window</span>
+            <span class=n>times</span><span class=o>.</span><span class=n>extend</span><span class=p>((</span><span class=n>processing</span><span class=p>,</span> <span class=n>time</span><span class=p>))</span>
+            <span class=k>if</span> <span class=n>time</span> <span class=o>>=</span> <span class=n>time_end_measure</span><span class=p>:</span>
+                <span class=k>break</span>
+        <span class=n>production_times</span><span class=o>.</span><span class=n>append</span><span class=p>([</span>
+            <span class=n>times</span> <span class=k>if</span> <span class=n>station</span><span class=o>.</span><span class=n>station_id</span> <span class=ow>in</span> <span class=n>product</span><span class=o>.</span><span class=n>routing</span> <span class=k>else</span> <span class=p>[]</span>
+            <span class=k>for</span> <span class=n>product</span> <span class=ow>in</span> <span class=n>products</span><span class=p>])</span>
+
+    <span class=c1># log the information</span>
+    <span class=k>for</span> <span class=n>product</span> <span class=ow>in</span> <span class=n>products</span><span class=p>:</span>
+        <span class=n>product</span><span class=o>.</span><span class=n>log_info</span><span class=p>(</span><span class=n>infos</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>station</span> <span class=ow>in</span> <span class=n>stations</span><span class=p>:</span>
+        <span class=n>station</span><span class=o>.</span><span class=n>log_info</span><span class=p>(</span><span class=n>infos</span><span class=p>)</span>
+
+    <span class=k>return</span> <span class=n>Instance</span><span class=p>(</span>
+        <span class=n>name</span><span class=o>=</span><span class=n>name</span><span class=p>,</span> <span class=n>n_products</span><span class=o>=</span><span class=n>n_products</span><span class=p>,</span>
+        <span class=n>n_customers</span><span class=o>=</span><span class=n>current_id</span><span class=p>,</span> <span class=n>n_stations</span><span class=o>=</span><span class=n>n_stations</span><span class=p>,</span>
+        <span class=n>n_demands</span><span class=o>=</span><span class=n>current_id</span><span class=p>,</span>
+        <span class=n>time_end_warmup</span><span class=o>=</span><span class=n>time_end_warmup</span><span class=p>,</span> <span class=n>time_end_measure</span><span class=o>=</span><span class=n>time_end_measure</span><span class=p>,</span>
+        <span class=n>routes</span><span class=o>=</span><span class=p>(</span><span class=n>product</span><span class=o>.</span><span class=n>routing</span> <span class=k>for</span> <span class=n>product</span> <span class=ow>in</span> <span class=n>products</span><span class=p>),</span>
+        <span class=n>demands</span><span class=o>=</span><span class=n>demands</span><span class=p>,</span> <span class=n>warehous_at_t0</span><span class=o>=</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span><span class=p>,</span>
+        <span class=n>station_product_unit_times</span><span class=o>=</span><span class=n>production_times</span><span class=p>,</span>
+        <span class=n>infos</span><span class=o>=</span><span class=n>infos</span><span class=p>)</span></div>
+
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__s1t0</span><span class=p>(</span><span class=n>s</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>])</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert stations from 1 to 0-based index.</span>
+
+<span class=sd>    :param s: the stations</span>
+<span class=sd>    :return: the index</span>
+
+<span class=sd>    >>> __s1t0((1, 2, 3))</span>
+<span class=sd>    (0, 1, 2)</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>x</span> <span class=o>-</span> <span class=mi>1</span> <span class=k>for</span> <span class=n>x</span> <span class=ow>in</span> <span class=n>s</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=default_products>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.mfc_generator.default_products>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>default_products</span><span class=p>()</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Product</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the default product sequence as used in [1].</span>
+
+<span class=sd>    :return: the default product sequence</span>
+
+<span class=sd>    >>> default_products()</span>
+<span class=sd>    (Product(product_id=0, routing=(0, 1, 3, 1, 8, 9, 10), \</span>
+<span class=sd>interarrival_times=Erlang(k=3, theta=3.3333333333333335)), \</span>
+<span class=sd>Product(product_id=1, routing=(0, 1, 4, 1, 7, 8, 9, 10), \</span>
+<span class=sd>interarrival_times=Erlang(k=2, theta=5)), \</span>
+<span class=sd>Product(product_id=2, routing=(0, 1, 5, 3, 1, 8, 11, 10), \</span>
+<span class=sd>interarrival_times=Uniform(low=5, high=15)), \</span>
+<span class=sd>Product(product_id=3, routing=(0, 1, 6, 3, 1, 8, 9, 10), \</span>
+<span class=sd>interarrival_times=Erlang(k=3, theta=3.3333333333333335)), \</span>
+<span class=sd>Product(product_id=4, routing=(0, 1, 3, 11, 1, 8, 1, 12), \</span>
+<span class=sd>interarrival_times=Erlang(k=4, theta=2.5)), \</span>
+<span class=sd>Product(product_id=5, routing=(0, 1, 4, 11, 1, 8, 6, 12), \</span>
+<span class=sd>interarrival_times=Erlang(k=2, theta=5)), \</span>
+<span class=sd>Product(product_id=6, routing=(0, 1, 5, 11, 1, 7, 1, 12), \</span>
+<span class=sd>interarrival_times=Erlang(k=4, theta=2.5)), \</span>
+<span class=sd>Product(product_id=7, routing=(0, 1, 2, 6, 3, 11, 1, 7, 5, 8, 1, 12), \</span>
+<span class=sd>interarrival_times=Uniform(low=5, high=15)), \</span>
+<span class=sd>Product(product_id=8, routing=(0, 1, 2, 4, 3, 5, 11, 1, 7, 1, 9, 5, 12), \</span>
+<span class=sd>interarrival_times=Erlang(k=4, theta=2.5)), \</span>
+<span class=sd>Product(product_id=9, routing=(0, 1, 2, 5, 1, 3, 11, 6, 1, 8, 10, 4, 12), \</span>
+<span class=sd>interarrival_times=Erlang(k=2, theta=5)))</span>
+
+<span class=sd>    1. Matthias Thürer, Nuno O. Fernandes, Hermann Lödding, and Mark</span>
+<span class=sd>       Stevenson. Material Flow Control in Make-to-Stock Production Systems:</span>
+<span class=sd>       An Assessment of Order Generation, Order Release and Production</span>
+<span class=sd>       Authorization by Simulation Flexible Services and Manufacturing</span>
+<span class=sd>       Journal. 37(1):1-37. March 2025.</span>
+<span class=sd>       doi: https://doi.org/10.1007/s10696-024-09532-2</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=p>(</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>11</span><span class=p>)),</span>
+                <span class=n>Erlang</span><span class=o>.</span><span class=n>from_k_and_mean</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mi>10</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>8</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>11</span><span class=p>)),</span>
+                <span class=n>Erlang</span><span class=o>.</span><span class=n>from_k_and_mean</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span> <span class=mi>10</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>12</span><span class=p>,</span> <span class=mi>11</span><span class=p>)),</span>
+                <span class=n>Uniform</span><span class=p>(</span><span class=mi>5</span><span class=p>,</span> <span class=mi>15</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>7</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>11</span><span class=p>)),</span>
+                <span class=n>Erlang</span><span class=o>.</span><span class=n>from_k_and_mean</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mi>10</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>12</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>13</span><span class=p>)),</span>
+                <span class=n>Erlang</span><span class=o>.</span><span class=n>from_k_and_mean</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=mi>10</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>5</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>12</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>7</span><span class=p>,</span> <span class=mi>13</span><span class=p>)),</span>
+                <span class=n>Erlang</span><span class=o>.</span><span class=n>from_k_and_mean</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span> <span class=mi>10</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>6</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>12</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>8</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>13</span><span class=p>)),</span>
+                <span class=n>Erlang</span><span class=o>.</span><span class=n>from_k_and_mean</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=mi>10</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>7</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>7</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>12</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>8</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>13</span><span class=p>)),</span>
+                <span class=n>Uniform</span><span class=p>(</span><span class=mi>5</span><span class=p>,</span> <span class=mi>15</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>8</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>12</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>8</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>13</span><span class=p>)),</span>
+                <span class=n>Erlang</span><span class=o>.</span><span class=n>from_k_and_mean</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=mi>10</span><span class=p>)),</span>
+        <span class=n>Product</span><span class=p>(</span><span class=mi>9</span><span class=p>,</span> <span class=n>__s1t0</span><span class=p>((</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>12</span><span class=p>,</span> <span class=mi>7</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>9</span><span class=p>,</span> <span class=mi>11</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>13</span><span class=p>)),</span>
+                <span class=n>Erlang</span><span class=o>.</span><span class=n>from_k_and_mean</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span> <span class=mi>10</span><span class=p>)))</span></div>
+
+
+
+<div class=viewcode-block id=default_stations>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.mfc_generator.default_stations>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>default_stations</span><span class=p>()</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Station</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the default station sequence as used in [1].</span>
+
+<span class=sd>    :return: the default product station</span>
+
+<span class=sd>    >>> default_stations()</span>
+<span class=sd>    (Station(station_id=0, processing_time=Erlang(k=3, theta=0.26),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=1, processing_time=Erlang(k=3, theta=0.12),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=2, processing_time=Erlang(k=2, theta=1.33),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=3,\</span>
+<span class=sd> processing_time=AtLeast(lb=5e-324, d=Exponential(eta=1)),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=4, processing_time=Erlang(k=3, theta=0.67),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=5, processing_time=Erlang(k=4, theta=0.35),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=6, processing_time=Erlang(k=3, theta=0.59),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=7, processing_time=Erlang(k=3, theta=0.63),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=8, processing_time=Erlang(k=2, theta=0.59),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=9, processing_time=Erlang(k=3, theta=0.6),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=10,\</span>
+<span class=sd> processing_time=AtLeast(lb=5e-324, d=Exponential(eta=1)),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=11, processing_time=Erlang(k=4, theta=0.29),\</span>
+<span class=sd> processing_windows=Const(v=0.125)),\</span>
+<span class=sd> Station(station_id=12, processing_time=Erlang(k=3, theta=0.48),\</span>
+<span class=sd> processing_windows=Const(v=0.125)))</span>
+
+<span class=sd>    1. Matthias Thürer, Nuno O. Fernandes, Hermann Lödding, and Mark</span>
+<span class=sd>       Stevenson. Material Flow Control in Make-to-Stock Production Systems:</span>
+<span class=sd>       An Assessment of Order Generation, Order Release and Production</span>
+<span class=sd>       Authorization by Simulation Flexible Services and Manufacturing</span>
+<span class=sd>       Journal. 37(1):1-37. March 2025.</span>
+<span class=sd>       doi: https://doi.org/10.1007/s10696-024-09532-2</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=p>(</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mf>0.26</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mf>0.12</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span> <span class=mf>1.33</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mf>1.06</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mf>0.67</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>5</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=mf>0.35</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>6</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mf>0.59</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>7</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mf>0.63</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>8</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span> <span class=mf>0.59</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>9</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mf>0.6</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>10</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mf>1.44</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>11</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=mf>0.29</span><span class=p>)),</span>
+        <span class=n>Station</span><span class=p>(</span><span class=mi>12</span><span class=p>,</span> <span class=n>Gamma</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mf>0.48</span><span class=p>)))</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.mfc_generator</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

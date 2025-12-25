@@ -1,0 +1,224 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.statistics — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/statistics.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.statistics</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.statistics</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A statistics record for the simulation.</span>
+
+<span class=sd>This module provides a record with statistics derived from one single</span>
+<span class=sd>MFC simulation. It can store values such as the mean fill rate or the</span>
+<span class=sd>mean stock level.</span>
+<span class=sd>Such statistics records are filled in by instances of the</span>
+<span class=sd>:class:`~moptipyapps.prodsched.statistics_collector.StatisticsCollector`</span>
+<span class=sd>plugged into the</span>
+<span class=sd>:class:`~moptipyapps.prodsched.simulation.Simulation`.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>itertools</span><span class=w> </span><span class=kn>import</span> <span class=n>chain</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Generator</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KEY_VALUE_SEPARATOR</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.csv</span><span class=w> </span><span class=kn>import</span> <span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>SCOPE_SEPARATOR</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.stream_statistics</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>KEY_MAXIMUM</span><span class=p>,</span>
+    <span class=n>KEY_MEAN_ARITH</span><span class=p>,</span>
+    <span class=n>KEY_MINIMUM</span><span class=p>,</span>
+    <span class=n>KEY_STDDEV</span><span class=p>,</span>
+    <span class=n>StreamStatistics</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.strings.string_conv</span><span class=w> </span><span class=kn>import</span> <span class=n>num_or_none_to_str</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=c1>#: the name of the statistics key</span>
+<span class=n>COL_STAT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"stat"</span>
+<span class=c1>#: the total column name</span>
+<span class=n>COL_TOTAL</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"total"</span>
+<span class=c1>#: the statistics rate</span>
+<span class=n>KEY_RATE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"rate"</span>
+<span class=c1>#: the product column prefix</span>
+<span class=n>COL_PRODUCT_PREFIX</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"product_"</span>
+<span class=c1>#: the mean TRP row</span>
+<span class=n>ROW_TRP</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"trp"</span>
+<span class=c1>#: the fill rate row</span>
+<span class=n>ROW_FILL_RATE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"fill</span><span class=si>{</span><span class=n>SCOPE_SEPARATOR</span><span class=si>}{</span><span class=n>KEY_RATE</span><span class=si>}</span><span class=s2>"</span>
+<span class=c1>#: the CWT row</span>
+<span class=n>ROW_CWT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"cwt"</span>
+<span class=c1>#: the mean stock level row</span>
+<span class=n>ROW_STOCK_LEVEL_MEAN</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> \
+    <span class=sa>f</span><span class=s2>"stocklevel</span><span class=si>{</span><span class=n>SCOPE_SEPARATOR</span><span class=si>}{</span><span class=n>KEY_MEAN_ARITH</span><span class=si>}</span><span class=s2>"</span>
+<span class=c1>#: the fulfilled rate</span>
+<span class=n>ROW_FULFILLED_RATE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"fulfilled</span><span class=si>{</span><span class=n>SCOPE_SEPARATOR</span><span class=si>}{</span><span class=n>KEY_RATE</span><span class=si>}</span><span class=s2>"</span>
+<span class=c1>#: the simulation time getter</span>
+<span class=n>ROW_SIMULATION_TIME</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> \
+    <span class=sa>f</span><span class=s2>"time</span><span class=si>{</span><span class=n>SCOPE_SEPARATOR</span><span class=si>}</span><span class=s2>s</span><span class=si>{</span><span class=n>KEY_VALUE_SEPARATOR</span><span class=si>}</span><span class=s2>"</span>
+
+<span class=c1>#: the statistics that we will print</span>
+<span class=n>__STATS</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=n>Callable</span><span class=p>[[</span>
+    <span class=n>StreamStatistics</span><span class=p>],</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]],</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span>
+    <span class=p>(</span><span class=n>KEY_MINIMUM</span><span class=p>,</span> <span class=n>StreamStatistics</span><span class=o>.</span><span class=n>getter_or_none</span><span class=p>(</span><span class=n>KEY_MINIMUM</span><span class=p>)),</span>
+    <span class=p>(</span><span class=n>KEY_MEAN_ARITH</span><span class=p>,</span> <span class=n>StreamStatistics</span><span class=o>.</span><span class=n>getter_or_none</span><span class=p>(</span><span class=n>KEY_MEAN_ARITH</span><span class=p>)),</span>
+    <span class=p>(</span><span class=n>KEY_MAXIMUM</span><span class=p>,</span> <span class=n>StreamStatistics</span><span class=o>.</span><span class=n>getter_or_none</span><span class=p>(</span><span class=n>KEY_MAXIMUM</span><span class=p>)),</span>
+    <span class=p>(</span><span class=n>KEY_STDDEV</span><span class=p>,</span> <span class=n>StreamStatistics</span><span class=o>.</span><span class=n>getter_or_none</span><span class=p>(</span><span class=n>KEY_STDDEV</span><span class=p>)))</span>
+
+
+<div class=viewcode-block id=Statistics>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.statistics.Statistics>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Statistics</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    A statistics record based on production scheduling.</span>
+
+<span class=sd>    It provides the following statistics:</span>
+
+<span class=sd>    - :attr:`~immediate_rates`: The per-product-fillrate, i.e., the fraction</span>
+<span class=sd>      of demands of a given product that were immediately fulfilled when</span>
+<span class=sd>      arriving in the system (i.e., that were fulfilled by using product that</span>
+<span class=sd>      was available in the warehouse/in stock).</span>
+<span class=sd>      Higher values are good.</span>
+<span class=sd>    - :attr:`~immediate_rate`: The overall fillrate, i.e., the total fraction</span>
+<span class=sd>      of demands that were immediately fulfilled upon arrival in the system</span>
+<span class=sd>      over all demands. That is, this is the fraction of demands that were</span>
+<span class=sd>      fulfilled by using product that was available in the warehouse/in stock.</span>
+<span class=sd>      Higher values are good.</span>
+<span class=sd>    - :attr:`~waiting_times`: The per-product waiting times ("CWT") for the</span>
+<span class=sd>      demands that came in but could *not* immediately be fulfilled. These are</span>
+<span class=sd>      the demands for a given product that were, so to say, not covered by the</span>
+<span class=sd>      fillrate/:attr:`~immediate_rate`.  If all demands of a product could</span>
+<span class=sd>      immediately be satisfied, then this is `None`.</span>
+<span class=sd>      Otherwise, smaller values are good.</span>
+<span class=sd>    - :attr:`~waiting_time`: The overall waiting times ("CWT") for the demands</span>
+<span class=sd>      that came in but could *not* immediately be fulfilled. These are all the</span>
+<span class=sd>      demands for a given product that were, so to say, not covered by the</span>
+<span class=sd>      fillrate/:attr:`~immediate_rate`. If all demands could immediately be</span>
+<span class=sd>      satisfied, then this is `None`.</span>
+<span class=sd>      Otherwise, smaller values are good.</span>
+<span class=sd>    - :attr:`~production_times`: The per-product times that producing one unit</span>
+<span class=sd>      of the product takes from the moment that a production job is created</span>
+<span class=sd>      until it is completed. Smaller values of this "TRP" are better.</span>
+<span class=sd>    - :attr:`~production_time`: The overall statistics on the times that</span>
+<span class=sd>      producing one unit of any product takes from the moment that a</span>
+<span class=sd>      production job is created until it is completed. Smaller values this</span>
+<span class=sd>      "TRP" are better.</span>
+<span class=sd>    - :attr:`~fulfilled_rates`: The per-product fraction of demands that were</span>
+<span class=sd>      satisfied. Demands for a product may remain unsatisfied if they have not</span>
+<span class=sd>      been satisfied by the end of the simulation period. Larger values are</span>
+<span class=sd>      better.</span>
+<span class=sd>    - :attr:`~fulfilled_rate`: The fraction of demands that were satisfied.</span>
+<span class=sd>      Demands may remain unsatisfied if they have not been satisfied by the</span>
+<span class=sd>      end of the simulation period. Larger values are better.</span>
+<span class=sd>    - :attr:`~stock_levels`: The average amount of a given product in the</span>
+<span class=sd>      warehouse averaged over the simulation time. Smaller values are better.</span>
+<span class=sd>    - :attr:`~stock_level`: The total average amount units of any product in</span>
+<span class=sd>      the warehouse averaged over the simulation time. Smaller values are</span>
+<span class=sd>      better.</span>
+<span class=sd>    - :attr:`~simulation_time_nanos`: The total time that the simulation took,</span>
+<span class=sd>      measured in nanoseconds.</span>
+
+<span class=sd>    Instances of this class are filled by</span>
+<span class=sd>    :class:`~moptipyapps.prodsched.statistics_collector.StatisticsCollector`</span>
+<span class=sd>    objects plugged into the</span>
+<span class=sd>    :class:`~moptipyapps.prodsched.simulation.Simulation`.</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>n_products</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the statistics record for a given number of products.</span>
+
+<span class=sd>        :param n_products: the number of products</span>
+<span class=sd>        """</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=n>n_products</span><span class=p>,</span> <span class=s2>"n_products"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the production time (TRP) statistics per-product</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>production_times</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=n>StreamStatistics</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the overall production time (TRP) statistics</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>production_time</span><span class=p>:</span> <span class=n>StreamStatistics</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the fraction of demands that were immediately satisfied,</span>
+        <span class=c1>#: on a per-product basis, i.e., the fillrate</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>immediate_rates</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+            <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span><span class=p>)</span>
+        <span class=c1>#: the overall fraction of immediately satisfied demands, i.e.,</span>
+        <span class=c1>#: the fillrate</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>immediate_rate</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the average waiting time for all demands that were not immediately</span>
+        <span class=c1>#: satisfied -- only counting demands that were actually satisfied,</span>
+        <span class=c1>#: i.e., the CWT</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>waiting_times</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=n>StreamStatistics</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the overall waiting time for all demands that were not immediately</span>
+        <span class=c1>#: satisfied -- only counting demands that were actually satisfied,</span>
+        <span class=c1>#: i.e., the CWT</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>waiting_time</span><span class=p>:</span> <span class=n>StreamStatistics</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the fraction of demands that were fulfilled, on a per-product basis</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fulfilled_rates</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the fraction of demands that were fulfilled overall</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fulfilled_rate</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the average stock level, on a per-product basis</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>stock_levels</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span>
+            <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=o>*</span> <span class=n>n_products</span>
+        <span class=c1>#: the overall average stock level</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>stock_level</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+        <span class=c1>#: the nanoseconds used by the simulation</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>simulation_time_nanos</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Convert this object to a string."""</span>
+        <span class=k>return</span> <span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>to_stream</span><span class=p>(</span><span class=bp>self</span><span class=p>))</span>
+
+<div class=viewcode-block id=Statistics.copy_from>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.statistics.Statistics.copy_from>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>copy_from</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>stat</span><span class=p>:</span> <span class=s2>"Statistics"</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Copy the contents of another statistics record.</span>
+
+<span class=sd>        :param stat: the other statistics record</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>stat</span><span class=p>,</span> <span class=n>Statistics</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>stat</span><span class=p>,</span> <span class=s2>"stat"</span><span class=p>,</span> <span class=n>Statistics</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>production_times</span><span class=p>[:]</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>production_times</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>production_time</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>production_time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>immediate_rates</span><span class=p>[:]</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>immediate_rates</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>immediate_rate</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>immediate_rate</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>waiting_times</span><span class=p>[:]</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>waiting_times</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>waiting_time</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>waiting_time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fulfilled_rates</span><span class=p>[:]</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>fulfilled_rates</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>fulfilled_rate</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>fulfilled_rate</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>stock_levels</span><span class=p>[:]</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>stock_levels</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>stock_level</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>stock_level</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>simulation_time_nanos</span> <span class=o>=</span> <span class=n>stat</span><span class=o>.</span><span class=n>simulation_time_nanos</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=to_stream>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.statistics.to_stream>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>to_stream</span><span class=p>(</span><span class=n>stats</span><span class=p>:</span> <span class=n>Statistics</span><span class=p>)</span> <span class=o>-></span> <span class=n>Generator</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span> <span class=kc>None</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Write a statistics record to a stream.</span>
+
+<span class=sd>    :param stats: the statistics record</span>
+<span class=sd>    :return: the stream of data</span>
+<span class=sd>    """</span>
+    <span class=n>n_products</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>production_times</span><span class=p>)</span>
+    <span class=n>nts</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>|</span> <span class=kc>None</span><span class=p>],</span> <span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=n>num_or_none_to_str</span>
+
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>COL_STAT</span><span class=p>,</span> <span class=n>COL_TOTAL</span><span class=p>),</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>COL_PRODUCT_PREFIX</span><span class=si>}{</span><span class=n>i</span><span class=si>}</span><span class=s2>"</span> <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span>
+            <span class=n>n_products</span><span class=p>))))</span>
+
+    <span class=k>for</span> <span class=n>key</span><span class=p>,</span> <span class=n>alle</span><span class=p>,</span> <span class=n>single</span> <span class=ow>in</span> <span class=p>(</span>
+            <span class=p>(</span><span class=n>ROW_TRP</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>production_times</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>production_time</span><span class=p>),</span>
+            <span class=p>(</span><span class=n>ROW_CWT</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>waiting_times</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>waiting_time</span><span class=p>)):</span>
+        <span class=k>for</span> <span class=n>stat</span><span class=p>,</span> <span class=n>call</span> <span class=ow>in</span> <span class=n>__STATS</span><span class=p>:</span>
+            <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>key</span><span class=si>}{</span><span class=n>SCOPE_SEPARATOR</span><span class=si>}{</span><span class=n>stat</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>call</span><span class=p>(</span><span class=n>single</span><span class=p>))),</span> <span class=p>(</span>
+                <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=nb>map</span><span class=p>(</span><span class=n>call</span><span class=p>,</span> <span class=n>alle</span><span class=p>)))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_FILL_RATE</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>immediate_rate</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>immediate_rates</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_STOCK_LEVEL_MEAN</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>stock_level</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>stock_levels</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=nb>str</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>chain</span><span class=p>((</span>
+        <span class=n>ROW_FULFILLED_RATE</span><span class=p>,</span> <span class=n>nts</span><span class=p>(</span><span class=n>stats</span><span class=o>.</span><span class=n>fulfilled_rate</span><span class=p>)),</span> <span class=p>(</span>
+        <span class=nb>map</span><span class=p>(</span><span class=n>nts</span><span class=p>,</span> <span class=n>stats</span><span class=o>.</span><span class=n>fulfilled_rates</span><span class=p>))))</span>
+    <span class=k>yield</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>ROW_SIMULATION_TIME</span><span class=si>}{</span><span class=n>nts</span><span class=p>(</span>
+<span class=w>        </span><span class=n>stats</span><span class=o>.</span><span class=n>simulation_time_nanos</span><span class=w> </span><span class=o>/</span><span class=w> </span><span class=mi>1_000_000_000</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.statistics</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

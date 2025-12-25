@@ -1,0 +1,188 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.instgen.instance_space — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/instgen/instance_space.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.instance_space</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.instgen.instance_space</h1><div class=highlight><pre>
+<span></span><span class=sd>"""An encoding that is inspired by a given instance."""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.space</span><span class=w> </span><span class=kn>import</span> <span class=n>Space</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>IDX_HEIGHT</span><span class=p>,</span> <span class=n>IDX_WIDTH</span><span class=p>,</span> <span class=n>Instance</span>
+
+
+<div class=viewcode-block id=InstanceSpace>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>InstanceSpace</span><span class=p>(</span><span class=n>Space</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An space structure for the instance generation problem and space."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>source</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the space structure for the instance generation problem.</span>
+
+<span class=sd>        :param source: the source instances whose date we take as an example</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=c1>#: the instance name</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>inst_name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>source</span><span class=o>.</span><span class=n>name</span><span class=p>)</span> <span class=o>+</span> <span class=s2>"n"</span>
+        <span class=c1>#: the target number of unique items</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>source</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>,</span> <span class=s2>"n_different_items"</span><span class=p>,</span>
+            <span class=mi>1</span><span class=p>,</span> <span class=mi>100_000</span><span class=p>)</span>
+        <span class=c1>#: the target number of items (including repetitions)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>n_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>source</span><span class=o>.</span><span class=n>n_items</span><span class=p>,</span> <span class=s2>"n_items"</span><span class=p>,</span> <span class=n>source</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>,</span>
+            <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the bin width</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>source</span><span class=o>.</span><span class=n>bin_width</span><span class=p>,</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the bin height</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>source</span><span class=o>.</span><span class=n>bin_height</span><span class=p>,</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the minimum number of bins that this instance requires</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>min_bins</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=nb>min</span><span class=p>(</span><span class=n>source</span><span class=o>.</span><span class=n>lower_bound_bins</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_items</span><span class=p>),</span> <span class=s2>"min_bins"</span><span class=p>,</span>
+            <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the minimum item width</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>item_width_min</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=nb>min</span><span class=p>(</span>
+            <span class=n>source</span><span class=p>[:,</span> <span class=n>IDX_WIDTH</span><span class=p>])),</span> <span class=s2>"item_width_min"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=p>)</span>
+        <span class=c1>#: the maximum item width</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>item_width_max</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=nb>max</span><span class=p>(</span>
+            <span class=n>source</span><span class=p>[:,</span> <span class=n>IDX_WIDTH</span><span class=p>])),</span> <span class=s2>"item_width_max"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>item_width_min</span><span class=p>,</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=p>)</span>
+        <span class=c1>#: the minimum item height</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>item_height_min</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=nb>min</span><span class=p>(</span>
+            <span class=n>source</span><span class=p>[:,</span> <span class=n>IDX_HEIGHT</span><span class=p>])),</span> <span class=s2>"item_height_min"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span><span class=p>)</span>
+        <span class=c1>#: the maximum item height</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>item_height_max</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=nb>max</span><span class=p>(</span>
+            <span class=n>source</span><span class=p>[:,</span> <span class=n>IDX_HEIGHT</span><span class=p>])),</span> <span class=s2>"item_height_max"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>item_height_min</span><span class=p>,</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span><span class=p>)</span>
+        <span class=c1>#: the total item area</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>total_item_area</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>source</span><span class=o>.</span><span class=n>total_item_area</span><span class=p>,</span> <span class=s2>"total_item_area"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+
+<div class=viewcode-block id=InstanceSpace.log_parameters_to>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of this instance.</span>
+
+<span class=sd>        :param logger: the logger</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"instName"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>inst_name</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"nItems"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_items</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"nDifferentItems"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"binWidth"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"binHeight"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"minBins"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>min_bins</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"itemWidthMin"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>item_width_min</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"itemWidthMax"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>item_width_max</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"itemHeightMin"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>item_height_min</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"itemHeightMax"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>item_height_max</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"totalItemArea"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>total_item_area</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceSpace.create>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace.create>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>create</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Generate a list for receiving an instance.</span>
+
+<span class=sd>        :return: the new instance list</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>[]</span></div>
+
+
+<div class=viewcode-block id=InstanceSpace.copy>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace.copy>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>copy</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>dest</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>source</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Copy the instance list.</span>
+
+<span class=sd>        :param dest: the destination instance list</span>
+<span class=sd>        :param source: the source instance list</span>
+<span class=sd>        """</span>
+        <span class=n>dest</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=n>dest</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>source</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceSpace.to_str>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace.to_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>to_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>])</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>  <span class=c1># +book</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert an instance list to a string.</span>
+
+<span class=sd>        :param x: the instance list</span>
+<span class=sd>        :return: the string representation of x</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>x</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=o>.</span><span class=n>to_compact_str</span><span class=p>()</span></div>
+
+
+<div class=viewcode-block id=InstanceSpace.from_str>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace.from_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>text</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert an instance string to a list with an instance.</span>
+
+<span class=sd>        :param text: the input string</span>
+<span class=sd>        :return: the element in the space corresponding to `text`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>[</span><span class=n>Instance</span><span class=o>.</span><span class=n>from_compact_str</span><span class=p>(</span><span class=n>text</span><span class=p>)]</span></div>
+
+
+<div class=viewcode-block id=InstanceSpace.is_equal>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace.is_equal>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>is_equal</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x1</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>],</span> <span class=n>x2</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>])</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Check if the contents of two instances of the data structure are equal.</span>
+
+<span class=sd>        :param x1: the first instance</span>
+<span class=sd>        :param x2: the second instance</span>
+<span class=sd>        :return: `True` if the contents are equal, `False` otherwise</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>x1</span> <span class=o>==</span> <span class=n>x2</span></div>
+
+
+<div class=viewcode-block id=InstanceSpace.validate>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace.validate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>validate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Check whether a given point in the space is valid.</span>
+
+<span class=sd>        :param x: the point</span>
+<span class=sd>        :raises TypeError: if the point `x` (or one of its elements, if</span>
+<span class=sd>            applicable) has the wrong data type</span>
+<span class=sd>        :raises ValueError: if the point `x` is invalid and/or simply is not</span>
+<span class=sd>            an element of this space</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>x</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"There must be exactly one instance in x."</span><span class=p>)</span>
+        <span class=n>inst</span><span class=p>:</span> <span class=n>Instance</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=s2>"x[0]"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>name</span> <span class=o>!=</span> <span class=bp>self</span><span class=o>.</span><span class=n>inst_name</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"instance name </span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>name</span><span class=si>!r}</span><span class=s2> != </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>inst_name</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>bin_width</span> <span class=o>!=</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"instance bin width=</span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>bin_width</span><span class=si>}</span><span class=s2> != </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>bin_height</span> <span class=o>!=</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=s2>"instance bin height="</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>bin_height</span><span class=si>}</span><span class=s2> != </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_items</span> <span class=o>!=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_items</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"instance n_items=</span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>n_items</span><span class=si>}</span><span class=s2> != </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>n_items</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=InstanceSpace.n_points>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.instgen.html#moptipyapps.binpacking2d.instgen.instance_space.InstanceSpace.n_points>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>n_points</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the approximate number of different elements in the space.</span>
+
+<span class=sd>        :return: the approximate scale of the space</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span> <span class=o>*</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=p>)</span> <span class=o>**</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_items</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instgen.instance_space</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

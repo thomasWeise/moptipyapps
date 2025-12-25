@@ -1,0 +1,967 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.instance — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/instance.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instance</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.instance</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A Two-Dimensional Bin Packing instance.</span>
+
+<span class=sd>This module provides an instance of the two-dimensional bin packing problem</span>
+<span class=sd>as defined in 2DPackLib [1, 2] as well as the four non-trivial 'Almost Squares</span>
+<span class=sd>in Almost Squares' instances [6, 7].</span>
+
+<span class=sd>All instances of :class:`~moptipyapps.binpacking2d.instance.Instance`</span>
+<span class=sd>are two-dimensional numpy `ndarrays` with additional attributes.</span>
+<span class=sd>Each instance has a :attr:`~Instance.name`. Instances also specify a</span>
+<span class=sd>:attr:`~Instance.bin_width` and :attr:`~Instance.bin_height`.</span>
+<span class=sd>They define the number :attr:`~Instance.n_different_items` of items with</span>
+<span class=sd>*different* IDs. Notice that in the 2DPackLib dataset, a benchmark instance</span>
+<span class=sd>may contain the same item multiple times. Obviously, all items of the same</span>
+<span class=sd>ID have the exact same width and height, meaning that we only need to store</span>
+<span class=sd>them once and remember how often they occur. (Notice that the opposite is not</span>
+<span class=sd>true, i.e., not all items with the same width and height do have the same ID.)</span>
+<span class=sd>Anyway, the total number :attr:`~Instance.n_items` of items, i.e., the sum of</span>
+<span class=sd>all the repetitions of all items, is also stored.</span>
+
+<span class=sd>The matrix data of the instance class is laid out as follows: There is one row</span>
+<span class=sd>for each item. The row contains the width of the item, the height of the item,</span>
+<span class=sd>and the number of times the item will occur. The row at index `i` stands for</span>
+<span class=sd>the item with ID `i+1`.</span>
+
+<span class=sd>Instances can be loaded directly from a 2DPackLib file via</span>
+<span class=sd>:meth:`Instance.from_2dpacklib`. They can also be loaded from a compact string</span>
+<span class=sd>representation (via :meth:`Instance.from_compact_str`) and can also be</span>
+<span class=sd>converted to such a compact representation</span>
+<span class=sd>(via :meth:`Instance.to_compact_str`). This library ships with a set of</span>
+<span class=sd>pre-defined instances as resource which can be obtained via</span>
+<span class=sd>:meth:`Instance.from_resource` and listed via</span>
+<span class=sd>:meth:`Instance.list_resources`.</span>
+
+<span class=sd>We provide the instances of the sets `A` [3], `BENG` [4], and `CLASS` [5]</span>
+<span class=sd>from 2DPackLib. Additionally, we include the four non-trivial 'Almost Squares</span>
+<span class=sd>in Almost Squares' instances [6,7].</span>
+
+<span class=sd>Initial work on this code has been contributed by Mr. Rui ZHAO (赵睿),</span>
+<span class=sd>&LTzr1329142665@163.com> a Master's student at the Institute of Applied</span>
+<span class=sd>Optimization (应用优化研究所) of the School of</span>
+<span class=sd>Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University</span>
+<span class=sd>(合肥大学) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of</span>
+<span class=sd>Prof. Dr. Thomas Weise (汤卫思教授).</span>
+
+<span class=sd>1. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele Monaci.</span>
+<span class=sd>   *2DPackLib*.</span>
+<span class=sd>   https://site.unibo.it/operations-research/en/research/2dpacklib</span>
+<span class=sd>2. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele</span>
+<span class=sd>   Monaci. 2DPackLib: A Two-Dimensional Cutting and Packing Library.</span>
+<span class=sd>   *Optimization Letters* 16(2):471-480. March 2022.</span>
+<span class=sd>   https://doi.org/10.1007/s11590-021-01808-y</span>
+<span class=sd>3. Rita Macedo, Cláudio Alves, and José M. Valério de Carvalho. Arc-Flow</span>
+<span class=sd>   Model for the Two-Dimensional Guillotine Cutting Stock Problem.</span>
+<span class=sd>   *Computers & Operations Research* 37(6):991-1001. June 2010.</span>
+<span class=sd>   https://doi.org/10.1016/j.cor.2009.08.005.</span>
+<span class=sd>4. Bengt-Erik Bengtsson. Packing Rectangular Pieces - A Heuristic Approach.</span>
+<span class=sd>   *The Computer Journal* 25(3):353-357, August 1982.</span>
+<span class=sd>   https://doi.org/10.1093/comjnl/25.3.353</span>
+<span class=sd>5. J.O. Berkey and P.Y. Wang. Two Dimensional Finite Bin Packing Algorithms.</span>
+<span class=sd>   *Journal of the Operational Research Society* 38(5):423-429. May 1987.</span>
+<span class=sd>   https://doi.org/10.1057/jors.1987.70</span>
+<span class=sd>6. Daan van den Berg, Florian Braam, Mark Moes, Emiel Suilen, and</span>
+<span class=sd>   Sandjai Bhulai. Almost Squares in Almost Squares: Solving the Final</span>
+<span class=sd>   Instance. In *The Fifth International Conference on Data Analytics</span>
+<span class=sd>   (DATA ANALYTICS'16)* October 9-13, 2016, Venice, Italy, pages 69-74.</span>
+<span class=sd>   IARIA. ISBN: 9781612085104. https://hdl.handle.net/11245/1.545914.</span>
+<span class=sd>   https://math.vu.nl/~sbhulai/publications/data_analytics2016b.pdf.</span>
+<span class=sd>7. H. Simonis and B. O'Sullivan. Almost Square Packing in *8th International</span>
+<span class=sd>   Conference on Integration of AI and OR Techniques in Constraint Programming</span>
+<span class=sd>   for Combinatorial Optimization Problems* (CPAIOR'11), May 23-27, 2011,</span>
+<span class=sd>   Berlin, Germany, pages 196-209. Berlin, Germany: Springer-Verlag.</span>
+<span class=sd>   doi:10.1007/978-3-642-21311-3_19.</span>
+
+<span class=sd>>>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])</span>
+<span class=sd>>>> ins.name</span>
+<span class=sd>'a'</span>
+<span class=sd>>>> ins.bin_width</span>
+<span class=sd>100</span>
+<span class=sd>>>> ins.bin_height</span>
+<span class=sd>50</span>
+<span class=sd>>>> ins.dtype</span>
+<span class=sd>dtype('int8')</span>
+<span class=sd>>>> ins.n_different_items</span>
+<span class=sd>3</span>
+<span class=sd>>>> ins.to_compact_str()</span>
+<span class=sd>'a;3;100;50;10,5;3,3;5,5'</span>
+<span class=sd>>>> ins = Instance("b", 100, 50, np.array([[10, 5, 1], [3, 3, 1], [3, 3, 1]]))</span>
+<span class=sd>>>> ins.name</span>
+<span class=sd>'b'</span>
+<span class=sd>>>> ins.bin_width</span>
+<span class=sd>100</span>
+<span class=sd>>>> ins.bin_height</span>
+<span class=sd>50</span>
+<span class=sd>>>> ins.dtype</span>
+<span class=sd>dtype('int8')</span>
+<span class=sd>>>> ins.to_compact_str()</span>
+<span class=sd>'b;3;100;50;10,5;3,3;3,3'</span>
+<span class=sd>>>> ins = Instance.from_resource("cl02_020_06")</span>
+<span class=sd>>>> ins.dtype</span>
+<span class=sd>dtype('int8')</span>
+<span class=sd>>>> ins.n_different_items</span>
+<span class=sd>20</span>
+<span class=sd>>>> ins.n_items</span>
+<span class=sd>20</span>
+<span class=sd>>>> ins = Instance.from_resource("a25")</span>
+<span class=sd>>>> ins.dtype</span>
+<span class=sd>dtype('int16')</span>
+<span class=sd>>>> ins.n_different_items</span>
+<span class=sd>75</span>
+<span class=sd>>>> ins.n_items</span>
+<span class=sd>156</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>importlib</span><span class=w> </span><span class=kn>import</span> <span class=n>resources</span>  <span class=c1># nosem</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>os.path</span><span class=w> </span><span class=kn>import</span> <span class=n>basename</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>statistics</span><span class=w> </span><span class=kn>import</span> <span class=n>quantiles</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>npu</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.component</span><span class=w> </span><span class=kn>import</span> <span class=n>Component</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>int_range_to_dtype</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.strings</span><span class=w> </span><span class=kn>import</span> <span class=n>sanitize_name</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>UTF8</span><span class=p>,</span> <span class=n>Path</span><span class=p>,</span> <span class=n>file_path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>check_to_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=c1>#: the instances resource name</span>
+<span class=n>INSTANCES_RESOURCE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"instances.txt"</span>
+
+<span class=c1>#: the total number of items</span>
+<span class=n>N_ITEMS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"nItems"</span>
+<span class=c1>#: the number of different items.</span>
+<span class=n>N_DIFFERENT_ITEMS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"nDifferentItems"</span>
+<span class=c1>#: the bin width</span>
+<span class=n>BIN_WIDTH</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"binWidth"</span>
+<span class=c1>#: the bin height</span>
+<span class=n>BIN_HEIGHT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"binHeight"</span>
+<span class=c1>#: The internal item separator</span>
+<span class=n>INTERNAL_SEP</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>","</span> <span class=k>if</span> <span class=n>CSV_SEPARATOR</span> <span class=o>==</span> <span class=s2>";"</span> <span class=k>else</span> <span class=s2>";"</span>
+
+<span class=c1>#: the index of the width element in an item of an instance</span>
+<span class=n>IDX_WIDTH</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>
+<span class=c1>#: the index of the height element in an item of an instance</span>
+<span class=n>IDX_HEIGHT</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1</span>
+<span class=c1>#: the index of the repetitions element in an item of an instance</span>
+<span class=n>IDX_REPETITION</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>2</span>
+
+<span class=c1>#: the list of instance names of the 2DPackLib bin packing set downloaded</span>
+<span class=c1>#: from https://site.unibo.it/operations-research/en/research/2dpacklib</span>
+<span class=c1>#: ('a*','beng*', 'cl*') as well as the four non-trivial 'Almost Squares in</span>
+<span class=c1>#: Almost Squares' instances ('asqas*').</span>
+<span class=n>_INSTANCES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+    <span class=s2>"a01"</span><span class=p>,</span> <span class=s2>"a02"</span><span class=p>,</span> <span class=s2>"a03"</span><span class=p>,</span> <span class=s2>"a04"</span><span class=p>,</span> <span class=s2>"a05"</span><span class=p>,</span> <span class=s2>"a06"</span><span class=p>,</span> <span class=s2>"a07"</span><span class=p>,</span> <span class=s2>"a08"</span><span class=p>,</span> <span class=s2>"a09"</span><span class=p>,</span> <span class=s2>"a10"</span><span class=p>,</span>
+    <span class=s2>"a11"</span><span class=p>,</span> <span class=s2>"a12"</span><span class=p>,</span> <span class=s2>"a13"</span><span class=p>,</span> <span class=s2>"a14"</span><span class=p>,</span> <span class=s2>"a15"</span><span class=p>,</span> <span class=s2>"a16"</span><span class=p>,</span> <span class=s2>"a17"</span><span class=p>,</span> <span class=s2>"a18"</span><span class=p>,</span> <span class=s2>"a19"</span><span class=p>,</span> <span class=s2>"a20"</span><span class=p>,</span>
+    <span class=s2>"a21"</span><span class=p>,</span> <span class=s2>"a22"</span><span class=p>,</span> <span class=s2>"a23"</span><span class=p>,</span> <span class=s2>"a24"</span><span class=p>,</span> <span class=s2>"a25"</span><span class=p>,</span> <span class=s2>"a26"</span><span class=p>,</span> <span class=s2>"a27"</span><span class=p>,</span> <span class=s2>"a28"</span><span class=p>,</span> <span class=s2>"a29"</span><span class=p>,</span> <span class=s2>"a30"</span><span class=p>,</span>
+    <span class=s2>"a31"</span><span class=p>,</span> <span class=s2>"a32"</span><span class=p>,</span> <span class=s2>"a33"</span><span class=p>,</span> <span class=s2>"a34"</span><span class=p>,</span> <span class=s2>"a35"</span><span class=p>,</span> <span class=s2>"a36"</span><span class=p>,</span> <span class=s2>"a37"</span><span class=p>,</span> <span class=s2>"a38"</span><span class=p>,</span> <span class=s2>"a39"</span><span class=p>,</span> <span class=s2>"a40"</span><span class=p>,</span>
+    <span class=s2>"a41"</span><span class=p>,</span> <span class=s2>"a42"</span><span class=p>,</span> <span class=s2>"a43"</span><span class=p>,</span> <span class=s2>"asqas03"</span><span class=p>,</span> <span class=s2>"asqas08"</span><span class=p>,</span> <span class=s2>"asqas20"</span><span class=p>,</span> <span class=s2>"asqas34"</span><span class=p>,</span> <span class=s2>"beng01"</span><span class=p>,</span>
+    <span class=s2>"beng02"</span><span class=p>,</span> <span class=s2>"beng03"</span><span class=p>,</span> <span class=s2>"beng04"</span><span class=p>,</span> <span class=s2>"beng05"</span><span class=p>,</span> <span class=s2>"beng06"</span><span class=p>,</span> <span class=s2>"beng07"</span><span class=p>,</span> <span class=s2>"beng08"</span><span class=p>,</span>
+    <span class=s2>"beng09"</span><span class=p>,</span> <span class=s2>"beng10"</span><span class=p>,</span> <span class=s2>"cl01_020_01"</span><span class=p>,</span> <span class=s2>"cl01_020_02"</span><span class=p>,</span> <span class=s2>"cl01_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl01_020_04"</span><span class=p>,</span> <span class=s2>"cl01_020_05"</span><span class=p>,</span> <span class=s2>"cl01_020_06"</span><span class=p>,</span> <span class=s2>"cl01_020_07"</span><span class=p>,</span> <span class=s2>"cl01_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl01_020_09"</span><span class=p>,</span> <span class=s2>"cl01_020_10"</span><span class=p>,</span> <span class=s2>"cl01_040_01"</span><span class=p>,</span> <span class=s2>"cl01_040_02"</span><span class=p>,</span> <span class=s2>"cl01_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl01_040_04"</span><span class=p>,</span> <span class=s2>"cl01_040_05"</span><span class=p>,</span> <span class=s2>"cl01_040_06"</span><span class=p>,</span> <span class=s2>"cl01_040_07"</span><span class=p>,</span> <span class=s2>"cl01_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl01_040_09"</span><span class=p>,</span> <span class=s2>"cl01_040_10"</span><span class=p>,</span> <span class=s2>"cl01_060_01"</span><span class=p>,</span> <span class=s2>"cl01_060_02"</span><span class=p>,</span> <span class=s2>"cl01_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl01_060_04"</span><span class=p>,</span> <span class=s2>"cl01_060_05"</span><span class=p>,</span> <span class=s2>"cl01_060_06"</span><span class=p>,</span> <span class=s2>"cl01_060_07"</span><span class=p>,</span> <span class=s2>"cl01_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl01_060_09"</span><span class=p>,</span> <span class=s2>"cl01_060_10"</span><span class=p>,</span> <span class=s2>"cl01_080_01"</span><span class=p>,</span> <span class=s2>"cl01_080_02"</span><span class=p>,</span> <span class=s2>"cl01_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl01_080_04"</span><span class=p>,</span> <span class=s2>"cl01_080_05"</span><span class=p>,</span> <span class=s2>"cl01_080_06"</span><span class=p>,</span> <span class=s2>"cl01_080_07"</span><span class=p>,</span> <span class=s2>"cl01_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl01_080_09"</span><span class=p>,</span> <span class=s2>"cl01_080_10"</span><span class=p>,</span> <span class=s2>"cl01_100_01"</span><span class=p>,</span> <span class=s2>"cl01_100_02"</span><span class=p>,</span> <span class=s2>"cl01_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl01_100_04"</span><span class=p>,</span> <span class=s2>"cl01_100_05"</span><span class=p>,</span> <span class=s2>"cl01_100_06"</span><span class=p>,</span> <span class=s2>"cl01_100_07"</span><span class=p>,</span> <span class=s2>"cl01_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl01_100_09"</span><span class=p>,</span> <span class=s2>"cl01_100_10"</span><span class=p>,</span> <span class=s2>"cl02_020_01"</span><span class=p>,</span> <span class=s2>"cl02_020_02"</span><span class=p>,</span> <span class=s2>"cl02_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl02_020_04"</span><span class=p>,</span> <span class=s2>"cl02_020_05"</span><span class=p>,</span> <span class=s2>"cl02_020_06"</span><span class=p>,</span> <span class=s2>"cl02_020_07"</span><span class=p>,</span> <span class=s2>"cl02_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl02_020_09"</span><span class=p>,</span> <span class=s2>"cl02_020_10"</span><span class=p>,</span> <span class=s2>"cl02_040_01"</span><span class=p>,</span> <span class=s2>"cl02_040_02"</span><span class=p>,</span> <span class=s2>"cl02_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl02_040_04"</span><span class=p>,</span> <span class=s2>"cl02_040_05"</span><span class=p>,</span> <span class=s2>"cl02_040_06"</span><span class=p>,</span> <span class=s2>"cl02_040_07"</span><span class=p>,</span> <span class=s2>"cl02_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl02_040_09"</span><span class=p>,</span> <span class=s2>"cl02_040_10"</span><span class=p>,</span> <span class=s2>"cl02_060_01"</span><span class=p>,</span> <span class=s2>"cl02_060_02"</span><span class=p>,</span> <span class=s2>"cl02_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl02_060_04"</span><span class=p>,</span> <span class=s2>"cl02_060_05"</span><span class=p>,</span> <span class=s2>"cl02_060_06"</span><span class=p>,</span> <span class=s2>"cl02_060_07"</span><span class=p>,</span> <span class=s2>"cl02_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl02_060_09"</span><span class=p>,</span> <span class=s2>"cl02_060_10"</span><span class=p>,</span> <span class=s2>"cl02_080_01"</span><span class=p>,</span> <span class=s2>"cl02_080_02"</span><span class=p>,</span> <span class=s2>"cl02_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl02_080_04"</span><span class=p>,</span> <span class=s2>"cl02_080_05"</span><span class=p>,</span> <span class=s2>"cl02_080_06"</span><span class=p>,</span> <span class=s2>"cl02_080_07"</span><span class=p>,</span> <span class=s2>"cl02_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl02_080_09"</span><span class=p>,</span> <span class=s2>"cl02_080_10"</span><span class=p>,</span> <span class=s2>"cl02_100_01"</span><span class=p>,</span> <span class=s2>"cl02_100_02"</span><span class=p>,</span> <span class=s2>"cl02_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl02_100_04"</span><span class=p>,</span> <span class=s2>"cl02_100_05"</span><span class=p>,</span> <span class=s2>"cl02_100_06"</span><span class=p>,</span> <span class=s2>"cl02_100_07"</span><span class=p>,</span> <span class=s2>"cl02_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl02_100_09"</span><span class=p>,</span> <span class=s2>"cl02_100_10"</span><span class=p>,</span> <span class=s2>"cl03_020_01"</span><span class=p>,</span> <span class=s2>"cl03_020_02"</span><span class=p>,</span> <span class=s2>"cl03_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl03_020_04"</span><span class=p>,</span> <span class=s2>"cl03_020_05"</span><span class=p>,</span> <span class=s2>"cl03_020_06"</span><span class=p>,</span> <span class=s2>"cl03_020_07"</span><span class=p>,</span> <span class=s2>"cl03_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl03_020_09"</span><span class=p>,</span> <span class=s2>"cl03_020_10"</span><span class=p>,</span> <span class=s2>"cl03_040_01"</span><span class=p>,</span> <span class=s2>"cl03_040_02"</span><span class=p>,</span> <span class=s2>"cl03_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl03_040_04"</span><span class=p>,</span> <span class=s2>"cl03_040_05"</span><span class=p>,</span> <span class=s2>"cl03_040_06"</span><span class=p>,</span> <span class=s2>"cl03_040_07"</span><span class=p>,</span> <span class=s2>"cl03_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl03_040_09"</span><span class=p>,</span> <span class=s2>"cl03_040_10"</span><span class=p>,</span> <span class=s2>"cl03_060_01"</span><span class=p>,</span> <span class=s2>"cl03_060_02"</span><span class=p>,</span> <span class=s2>"cl03_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl03_060_04"</span><span class=p>,</span> <span class=s2>"cl03_060_05"</span><span class=p>,</span> <span class=s2>"cl03_060_06"</span><span class=p>,</span> <span class=s2>"cl03_060_07"</span><span class=p>,</span> <span class=s2>"cl03_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl03_060_09"</span><span class=p>,</span> <span class=s2>"cl03_060_10"</span><span class=p>,</span> <span class=s2>"cl03_080_01"</span><span class=p>,</span> <span class=s2>"cl03_080_02"</span><span class=p>,</span> <span class=s2>"cl03_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl03_080_04"</span><span class=p>,</span> <span class=s2>"cl03_080_05"</span><span class=p>,</span> <span class=s2>"cl03_080_06"</span><span class=p>,</span> <span class=s2>"cl03_080_07"</span><span class=p>,</span> <span class=s2>"cl03_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl03_080_09"</span><span class=p>,</span> <span class=s2>"cl03_080_10"</span><span class=p>,</span> <span class=s2>"cl03_100_01"</span><span class=p>,</span> <span class=s2>"cl03_100_02"</span><span class=p>,</span> <span class=s2>"cl03_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl03_100_04"</span><span class=p>,</span> <span class=s2>"cl03_100_05"</span><span class=p>,</span> <span class=s2>"cl03_100_06"</span><span class=p>,</span> <span class=s2>"cl03_100_07"</span><span class=p>,</span> <span class=s2>"cl03_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl03_100_09"</span><span class=p>,</span> <span class=s2>"cl03_100_10"</span><span class=p>,</span> <span class=s2>"cl04_020_01"</span><span class=p>,</span> <span class=s2>"cl04_020_02"</span><span class=p>,</span> <span class=s2>"cl04_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl04_020_04"</span><span class=p>,</span> <span class=s2>"cl04_020_05"</span><span class=p>,</span> <span class=s2>"cl04_020_06"</span><span class=p>,</span> <span class=s2>"cl04_020_07"</span><span class=p>,</span> <span class=s2>"cl04_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl04_020_09"</span><span class=p>,</span> <span class=s2>"cl04_020_10"</span><span class=p>,</span> <span class=s2>"cl04_040_01"</span><span class=p>,</span> <span class=s2>"cl04_040_02"</span><span class=p>,</span> <span class=s2>"cl04_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl04_040_04"</span><span class=p>,</span> <span class=s2>"cl04_040_05"</span><span class=p>,</span> <span class=s2>"cl04_040_06"</span><span class=p>,</span> <span class=s2>"cl04_040_07"</span><span class=p>,</span> <span class=s2>"cl04_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl04_040_09"</span><span class=p>,</span> <span class=s2>"cl04_040_10"</span><span class=p>,</span> <span class=s2>"cl04_060_01"</span><span class=p>,</span> <span class=s2>"cl04_060_02"</span><span class=p>,</span> <span class=s2>"cl04_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl04_060_04"</span><span class=p>,</span> <span class=s2>"cl04_060_05"</span><span class=p>,</span> <span class=s2>"cl04_060_06"</span><span class=p>,</span> <span class=s2>"cl04_060_07"</span><span class=p>,</span> <span class=s2>"cl04_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl04_060_09"</span><span class=p>,</span> <span class=s2>"cl04_060_10"</span><span class=p>,</span> <span class=s2>"cl04_080_01"</span><span class=p>,</span> <span class=s2>"cl04_080_02"</span><span class=p>,</span> <span class=s2>"cl04_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl04_080_04"</span><span class=p>,</span> <span class=s2>"cl04_080_05"</span><span class=p>,</span> <span class=s2>"cl04_080_06"</span><span class=p>,</span> <span class=s2>"cl04_080_07"</span><span class=p>,</span> <span class=s2>"cl04_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl04_080_09"</span><span class=p>,</span> <span class=s2>"cl04_080_10"</span><span class=p>,</span> <span class=s2>"cl04_100_01"</span><span class=p>,</span> <span class=s2>"cl04_100_02"</span><span class=p>,</span> <span class=s2>"cl04_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl04_100_04"</span><span class=p>,</span> <span class=s2>"cl04_100_05"</span><span class=p>,</span> <span class=s2>"cl04_100_06"</span><span class=p>,</span> <span class=s2>"cl04_100_07"</span><span class=p>,</span> <span class=s2>"cl04_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl04_100_09"</span><span class=p>,</span> <span class=s2>"cl04_100_10"</span><span class=p>,</span> <span class=s2>"cl05_020_01"</span><span class=p>,</span> <span class=s2>"cl05_020_02"</span><span class=p>,</span> <span class=s2>"cl05_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl05_020_04"</span><span class=p>,</span> <span class=s2>"cl05_020_05"</span><span class=p>,</span> <span class=s2>"cl05_020_06"</span><span class=p>,</span> <span class=s2>"cl05_020_07"</span><span class=p>,</span> <span class=s2>"cl05_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl05_020_09"</span><span class=p>,</span> <span class=s2>"cl05_020_10"</span><span class=p>,</span> <span class=s2>"cl05_040_01"</span><span class=p>,</span> <span class=s2>"cl05_040_02"</span><span class=p>,</span> <span class=s2>"cl05_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl05_040_04"</span><span class=p>,</span> <span class=s2>"cl05_040_05"</span><span class=p>,</span> <span class=s2>"cl05_040_06"</span><span class=p>,</span> <span class=s2>"cl05_040_07"</span><span class=p>,</span> <span class=s2>"cl05_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl05_040_09"</span><span class=p>,</span> <span class=s2>"cl05_040_10"</span><span class=p>,</span> <span class=s2>"cl05_060_01"</span><span class=p>,</span> <span class=s2>"cl05_060_02"</span><span class=p>,</span> <span class=s2>"cl05_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl05_060_04"</span><span class=p>,</span> <span class=s2>"cl05_060_05"</span><span class=p>,</span> <span class=s2>"cl05_060_06"</span><span class=p>,</span> <span class=s2>"cl05_060_07"</span><span class=p>,</span> <span class=s2>"cl05_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl05_060_09"</span><span class=p>,</span> <span class=s2>"cl05_060_10"</span><span class=p>,</span> <span class=s2>"cl05_080_01"</span><span class=p>,</span> <span class=s2>"cl05_080_02"</span><span class=p>,</span> <span class=s2>"cl05_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl05_080_04"</span><span class=p>,</span> <span class=s2>"cl05_080_05"</span><span class=p>,</span> <span class=s2>"cl05_080_06"</span><span class=p>,</span> <span class=s2>"cl05_080_07"</span><span class=p>,</span> <span class=s2>"cl05_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl05_080_09"</span><span class=p>,</span> <span class=s2>"cl05_080_10"</span><span class=p>,</span> <span class=s2>"cl05_100_01"</span><span class=p>,</span> <span class=s2>"cl05_100_02"</span><span class=p>,</span> <span class=s2>"cl05_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl05_100_04"</span><span class=p>,</span> <span class=s2>"cl05_100_05"</span><span class=p>,</span> <span class=s2>"cl05_100_06"</span><span class=p>,</span> <span class=s2>"cl05_100_07"</span><span class=p>,</span> <span class=s2>"cl05_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl05_100_09"</span><span class=p>,</span> <span class=s2>"cl05_100_10"</span><span class=p>,</span> <span class=s2>"cl06_020_01"</span><span class=p>,</span> <span class=s2>"cl06_020_02"</span><span class=p>,</span> <span class=s2>"cl06_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl06_020_04"</span><span class=p>,</span> <span class=s2>"cl06_020_05"</span><span class=p>,</span> <span class=s2>"cl06_020_06"</span><span class=p>,</span> <span class=s2>"cl06_020_07"</span><span class=p>,</span> <span class=s2>"cl06_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl06_020_09"</span><span class=p>,</span> <span class=s2>"cl06_020_10"</span><span class=p>,</span> <span class=s2>"cl06_040_01"</span><span class=p>,</span> <span class=s2>"cl06_040_02"</span><span class=p>,</span> <span class=s2>"cl06_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl06_040_04"</span><span class=p>,</span> <span class=s2>"cl06_040_05"</span><span class=p>,</span> <span class=s2>"cl06_040_06"</span><span class=p>,</span> <span class=s2>"cl06_040_07"</span><span class=p>,</span> <span class=s2>"cl06_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl06_040_09"</span><span class=p>,</span> <span class=s2>"cl06_040_10"</span><span class=p>,</span> <span class=s2>"cl06_060_01"</span><span class=p>,</span> <span class=s2>"cl06_060_02"</span><span class=p>,</span> <span class=s2>"cl06_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl06_060_04"</span><span class=p>,</span> <span class=s2>"cl06_060_05"</span><span class=p>,</span> <span class=s2>"cl06_060_06"</span><span class=p>,</span> <span class=s2>"cl06_060_07"</span><span class=p>,</span> <span class=s2>"cl06_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl06_060_09"</span><span class=p>,</span> <span class=s2>"cl06_060_10"</span><span class=p>,</span> <span class=s2>"cl06_080_01"</span><span class=p>,</span> <span class=s2>"cl06_080_02"</span><span class=p>,</span> <span class=s2>"cl06_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl06_080_04"</span><span class=p>,</span> <span class=s2>"cl06_080_05"</span><span class=p>,</span> <span class=s2>"cl06_080_06"</span><span class=p>,</span> <span class=s2>"cl06_080_07"</span><span class=p>,</span> <span class=s2>"cl06_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl06_080_09"</span><span class=p>,</span> <span class=s2>"cl06_080_10"</span><span class=p>,</span> <span class=s2>"cl06_100_01"</span><span class=p>,</span> <span class=s2>"cl06_100_02"</span><span class=p>,</span> <span class=s2>"cl06_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl06_100_04"</span><span class=p>,</span> <span class=s2>"cl06_100_05"</span><span class=p>,</span> <span class=s2>"cl06_100_06"</span><span class=p>,</span> <span class=s2>"cl06_100_07"</span><span class=p>,</span> <span class=s2>"cl06_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl06_100_09"</span><span class=p>,</span> <span class=s2>"cl06_100_10"</span><span class=p>,</span> <span class=s2>"cl07_020_01"</span><span class=p>,</span> <span class=s2>"cl07_020_02"</span><span class=p>,</span> <span class=s2>"cl07_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl07_020_04"</span><span class=p>,</span> <span class=s2>"cl07_020_05"</span><span class=p>,</span> <span class=s2>"cl07_020_06"</span><span class=p>,</span> <span class=s2>"cl07_020_07"</span><span class=p>,</span> <span class=s2>"cl07_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl07_020_09"</span><span class=p>,</span> <span class=s2>"cl07_020_10"</span><span class=p>,</span> <span class=s2>"cl07_040_01"</span><span class=p>,</span> <span class=s2>"cl07_040_02"</span><span class=p>,</span> <span class=s2>"cl07_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl07_040_04"</span><span class=p>,</span> <span class=s2>"cl07_040_05"</span><span class=p>,</span> <span class=s2>"cl07_040_06"</span><span class=p>,</span> <span class=s2>"cl07_040_07"</span><span class=p>,</span> <span class=s2>"cl07_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl07_040_09"</span><span class=p>,</span> <span class=s2>"cl07_040_10"</span><span class=p>,</span> <span class=s2>"cl07_060_01"</span><span class=p>,</span> <span class=s2>"cl07_060_02"</span><span class=p>,</span> <span class=s2>"cl07_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl07_060_04"</span><span class=p>,</span> <span class=s2>"cl07_060_05"</span><span class=p>,</span> <span class=s2>"cl07_060_06"</span><span class=p>,</span> <span class=s2>"cl07_060_07"</span><span class=p>,</span> <span class=s2>"cl07_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl07_060_09"</span><span class=p>,</span> <span class=s2>"cl07_060_10"</span><span class=p>,</span> <span class=s2>"cl07_080_01"</span><span class=p>,</span> <span class=s2>"cl07_080_02"</span><span class=p>,</span> <span class=s2>"cl07_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl07_080_04"</span><span class=p>,</span> <span class=s2>"cl07_080_05"</span><span class=p>,</span> <span class=s2>"cl07_080_06"</span><span class=p>,</span> <span class=s2>"cl07_080_07"</span><span class=p>,</span> <span class=s2>"cl07_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl07_080_09"</span><span class=p>,</span> <span class=s2>"cl07_080_10"</span><span class=p>,</span> <span class=s2>"cl07_100_01"</span><span class=p>,</span> <span class=s2>"cl07_100_02"</span><span class=p>,</span> <span class=s2>"cl07_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl07_100_04"</span><span class=p>,</span> <span class=s2>"cl07_100_05"</span><span class=p>,</span> <span class=s2>"cl07_100_06"</span><span class=p>,</span> <span class=s2>"cl07_100_07"</span><span class=p>,</span> <span class=s2>"cl07_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl07_100_09"</span><span class=p>,</span> <span class=s2>"cl07_100_10"</span><span class=p>,</span> <span class=s2>"cl08_020_01"</span><span class=p>,</span> <span class=s2>"cl08_020_02"</span><span class=p>,</span> <span class=s2>"cl08_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl08_020_04"</span><span class=p>,</span> <span class=s2>"cl08_020_05"</span><span class=p>,</span> <span class=s2>"cl08_020_06"</span><span class=p>,</span> <span class=s2>"cl08_020_07"</span><span class=p>,</span> <span class=s2>"cl08_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl08_020_09"</span><span class=p>,</span> <span class=s2>"cl08_020_10"</span><span class=p>,</span> <span class=s2>"cl08_040_01"</span><span class=p>,</span> <span class=s2>"cl08_040_02"</span><span class=p>,</span> <span class=s2>"cl08_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl08_040_04"</span><span class=p>,</span> <span class=s2>"cl08_040_05"</span><span class=p>,</span> <span class=s2>"cl08_040_06"</span><span class=p>,</span> <span class=s2>"cl08_040_07"</span><span class=p>,</span> <span class=s2>"cl08_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl08_040_09"</span><span class=p>,</span> <span class=s2>"cl08_040_10"</span><span class=p>,</span> <span class=s2>"cl08_060_01"</span><span class=p>,</span> <span class=s2>"cl08_060_02"</span><span class=p>,</span> <span class=s2>"cl08_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl08_060_04"</span><span class=p>,</span> <span class=s2>"cl08_060_05"</span><span class=p>,</span> <span class=s2>"cl08_060_06"</span><span class=p>,</span> <span class=s2>"cl08_060_07"</span><span class=p>,</span> <span class=s2>"cl08_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl08_060_09"</span><span class=p>,</span> <span class=s2>"cl08_060_10"</span><span class=p>,</span> <span class=s2>"cl08_080_01"</span><span class=p>,</span> <span class=s2>"cl08_080_02"</span><span class=p>,</span> <span class=s2>"cl08_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl08_080_04"</span><span class=p>,</span> <span class=s2>"cl08_080_05"</span><span class=p>,</span> <span class=s2>"cl08_080_06"</span><span class=p>,</span> <span class=s2>"cl08_080_07"</span><span class=p>,</span> <span class=s2>"cl08_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl08_080_09"</span><span class=p>,</span> <span class=s2>"cl08_080_10"</span><span class=p>,</span> <span class=s2>"cl08_100_01"</span><span class=p>,</span> <span class=s2>"cl08_100_02"</span><span class=p>,</span> <span class=s2>"cl08_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl08_100_04"</span><span class=p>,</span> <span class=s2>"cl08_100_05"</span><span class=p>,</span> <span class=s2>"cl08_100_06"</span><span class=p>,</span> <span class=s2>"cl08_100_07"</span><span class=p>,</span> <span class=s2>"cl08_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl08_100_09"</span><span class=p>,</span> <span class=s2>"cl08_100_10"</span><span class=p>,</span> <span class=s2>"cl09_020_01"</span><span class=p>,</span> <span class=s2>"cl09_020_02"</span><span class=p>,</span> <span class=s2>"cl09_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl09_020_04"</span><span class=p>,</span> <span class=s2>"cl09_020_05"</span><span class=p>,</span> <span class=s2>"cl09_020_06"</span><span class=p>,</span> <span class=s2>"cl09_020_07"</span><span class=p>,</span> <span class=s2>"cl09_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl09_020_09"</span><span class=p>,</span> <span class=s2>"cl09_020_10"</span><span class=p>,</span> <span class=s2>"cl09_040_01"</span><span class=p>,</span> <span class=s2>"cl09_040_02"</span><span class=p>,</span> <span class=s2>"cl09_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl09_040_04"</span><span class=p>,</span> <span class=s2>"cl09_040_05"</span><span class=p>,</span> <span class=s2>"cl09_040_06"</span><span class=p>,</span> <span class=s2>"cl09_040_07"</span><span class=p>,</span> <span class=s2>"cl09_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl09_040_09"</span><span class=p>,</span> <span class=s2>"cl09_040_10"</span><span class=p>,</span> <span class=s2>"cl09_060_01"</span><span class=p>,</span> <span class=s2>"cl09_060_02"</span><span class=p>,</span> <span class=s2>"cl09_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl09_060_04"</span><span class=p>,</span> <span class=s2>"cl09_060_05"</span><span class=p>,</span> <span class=s2>"cl09_060_06"</span><span class=p>,</span> <span class=s2>"cl09_060_07"</span><span class=p>,</span> <span class=s2>"cl09_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl09_060_09"</span><span class=p>,</span> <span class=s2>"cl09_060_10"</span><span class=p>,</span> <span class=s2>"cl09_080_01"</span><span class=p>,</span> <span class=s2>"cl09_080_02"</span><span class=p>,</span> <span class=s2>"cl09_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl09_080_04"</span><span class=p>,</span> <span class=s2>"cl09_080_05"</span><span class=p>,</span> <span class=s2>"cl09_080_06"</span><span class=p>,</span> <span class=s2>"cl09_080_07"</span><span class=p>,</span> <span class=s2>"cl09_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl09_080_09"</span><span class=p>,</span> <span class=s2>"cl09_080_10"</span><span class=p>,</span> <span class=s2>"cl09_100_01"</span><span class=p>,</span> <span class=s2>"cl09_100_02"</span><span class=p>,</span> <span class=s2>"cl09_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl09_100_04"</span><span class=p>,</span> <span class=s2>"cl09_100_05"</span><span class=p>,</span> <span class=s2>"cl09_100_06"</span><span class=p>,</span> <span class=s2>"cl09_100_07"</span><span class=p>,</span> <span class=s2>"cl09_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl09_100_09"</span><span class=p>,</span> <span class=s2>"cl09_100_10"</span><span class=p>,</span> <span class=s2>"cl10_020_01"</span><span class=p>,</span> <span class=s2>"cl10_020_02"</span><span class=p>,</span> <span class=s2>"cl10_020_03"</span><span class=p>,</span>
+    <span class=s2>"cl10_020_04"</span><span class=p>,</span> <span class=s2>"cl10_020_05"</span><span class=p>,</span> <span class=s2>"cl10_020_06"</span><span class=p>,</span> <span class=s2>"cl10_020_07"</span><span class=p>,</span> <span class=s2>"cl10_020_08"</span><span class=p>,</span>
+    <span class=s2>"cl10_020_09"</span><span class=p>,</span> <span class=s2>"cl10_020_10"</span><span class=p>,</span> <span class=s2>"cl10_040_01"</span><span class=p>,</span> <span class=s2>"cl10_040_02"</span><span class=p>,</span> <span class=s2>"cl10_040_03"</span><span class=p>,</span>
+    <span class=s2>"cl10_040_04"</span><span class=p>,</span> <span class=s2>"cl10_040_05"</span><span class=p>,</span> <span class=s2>"cl10_040_06"</span><span class=p>,</span> <span class=s2>"cl10_040_07"</span><span class=p>,</span> <span class=s2>"cl10_040_08"</span><span class=p>,</span>
+    <span class=s2>"cl10_040_09"</span><span class=p>,</span> <span class=s2>"cl10_040_10"</span><span class=p>,</span> <span class=s2>"cl10_060_01"</span><span class=p>,</span> <span class=s2>"cl10_060_02"</span><span class=p>,</span> <span class=s2>"cl10_060_03"</span><span class=p>,</span>
+    <span class=s2>"cl10_060_04"</span><span class=p>,</span> <span class=s2>"cl10_060_05"</span><span class=p>,</span> <span class=s2>"cl10_060_06"</span><span class=p>,</span> <span class=s2>"cl10_060_07"</span><span class=p>,</span> <span class=s2>"cl10_060_08"</span><span class=p>,</span>
+    <span class=s2>"cl10_060_09"</span><span class=p>,</span> <span class=s2>"cl10_060_10"</span><span class=p>,</span> <span class=s2>"cl10_080_01"</span><span class=p>,</span> <span class=s2>"cl10_080_02"</span><span class=p>,</span> <span class=s2>"cl10_080_03"</span><span class=p>,</span>
+    <span class=s2>"cl10_080_04"</span><span class=p>,</span> <span class=s2>"cl10_080_05"</span><span class=p>,</span> <span class=s2>"cl10_080_06"</span><span class=p>,</span> <span class=s2>"cl10_080_07"</span><span class=p>,</span> <span class=s2>"cl10_080_08"</span><span class=p>,</span>
+    <span class=s2>"cl10_080_09"</span><span class=p>,</span> <span class=s2>"cl10_080_10"</span><span class=p>,</span> <span class=s2>"cl10_100_01"</span><span class=p>,</span> <span class=s2>"cl10_100_02"</span><span class=p>,</span> <span class=s2>"cl10_100_03"</span><span class=p>,</span>
+    <span class=s2>"cl10_100_04"</span><span class=p>,</span> <span class=s2>"cl10_100_05"</span><span class=p>,</span> <span class=s2>"cl10_100_06"</span><span class=p>,</span> <span class=s2>"cl10_100_07"</span><span class=p>,</span> <span class=s2>"cl10_100_08"</span><span class=p>,</span>
+    <span class=s2>"cl10_100_09"</span><span class=p>,</span> <span class=s2>"cl10_100_10"</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__divide_based_on_size</span><span class=p>(</span><span class=n>instances</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>],</span>
+                           <span class=n>divisions</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Divide the instances based on their size.</span>
+
+<span class=sd>    :param instances: the instances</span>
+<span class=sd>    :param divisions: the number of divisions</span>
+<span class=sd>    :return: the divided instances</span>
+<span class=sd>    """</span>
+    <span class=n>insts</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>list</span><span class=p>(</span><span class=n>instances</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>insts</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=k>return</span> <span class=p>[</span><span class=n>insts</span><span class=p>]</span>
+
+    <span class=k>try</span><span class=p>:</span>
+        <span class=n>loaded</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span><span class=p>(</span><span class=n>n</span><span class=p>)</span> <span class=k>for</span> <span class=n>n</span> <span class=ow>in</span> <span class=n>insts</span><span class=p>]</span>
+    <span class=k>except</span> <span class=p>(</span><span class=ne>OSError</span><span class=p>,</span> <span class=ne>ValueError</span><span class=p>):</span>
+        <span class=k>return</span> <span class=p>[</span><span class=n>insts</span><span class=p>]</span>
+
+    <span class=c1># get the quantiles = group divisions</span>
+    <span class=n>qants</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>quantiles</span><span class=p>((</span>
+        <span class=n>inst</span><span class=o>.</span><span class=n>n_items</span> <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>loaded</span><span class=p>),</span> <span class=n>n</span><span class=o>=</span><span class=n>divisions</span><span class=p>,</span> <span class=n>method</span><span class=o>=</span><span class=s2>"inclusive"</span><span class=p>)</span>
+
+    <span class=c1># now put the instances into the groups</span>
+    <span class=n>groups</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>loaded</span><span class=p>:</span>
+        <span class=n>inst_size</span> <span class=o>=</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_items</span>
+        <span class=n>idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>for</span> <span class=n>q</span> <span class=ow>in</span> <span class=n>qants</span><span class=p>:</span>
+            <span class=k>if</span> <span class=n>q</span> <span class=o>></span> <span class=n>inst_size</span><span class=p>:</span>
+                <span class=k>break</span>
+            <span class=n>idx</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=k>while</span> <span class=n>idx</span> <span class=o>>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>groups</span><span class=p>):</span>
+            <span class=n>groups</span><span class=o>.</span><span class=n>append</span><span class=p>([])</span>
+        <span class=n>groups</span><span class=p>[</span><span class=n>idx</span><span class=p>]</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=nb>str</span><span class=p>(</span><span class=n>inst</span><span class=p>))</span>
+
+    <span class=c1># remove useless groups</span>
+    <span class=k>for</span> <span class=n>idx</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>groups</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span> <span class=o>-</span><span class=mi>1</span><span class=p>,</span> <span class=o>-</span><span class=mi>1</span><span class=p>):</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>groups</span><span class=p>[</span><span class=n>idx</span><span class=p>])</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>del</span> <span class=n>groups</span><span class=p>[</span><span class=n>idx</span><span class=p>]</span>
+    <span class=k>return</span> <span class=n>groups</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_make_instance_groups</span><span class=p>(</span><span class=n>instances</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>])</span> \
+        <span class=o>-></span> <span class=s2>"tuple[tuple[str, str | None, tuple[str, ...]], ...]"</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Make the standard instance groups from an instance name list.</span>
+
+<span class=sd>    :return: the instance groups</span>
+<span class=sd>    """</span>
+    <span class=n>groups</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>[]</span>
+
+    <span class=n>a_divided</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=n>__divide_based_on_size</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span>
+        <span class=n>b</span> <span class=k>for</span> <span class=n>b</span> <span class=ow>in</span> <span class=n>instances</span> <span class=k>if</span> <span class=n>b</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=s2>"a"</span><span class=p>)</span>
+        <span class=ow>and</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>b</span><span class=p>)</span> <span class=o>==</span> <span class=mi>3</span><span class=p>)</span> <span class=ow>and</span> <span class=n>b</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span><span class=o>.</span><span class=n>isdigit</span><span class=p>()</span>
+        <span class=ow>and</span> <span class=n>b</span><span class=p>[</span><span class=o>-</span><span class=mi>2</span><span class=p>]</span><span class=o>.</span><span class=n>isdigit</span><span class=p>()),</span> <span class=mi>3</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>a_divided</span><span class=p>)</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+        <span class=n>subnames</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>None</span><span class=p>]</span> <span class=k>if</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>a_divided</span><span class=p>)</span> <span class=o><=</span> <span class=mi>1</span><span class=p>)</span> <span class=k>else</span> <span class=p>(</span>
+            <span class=p>[</span><span class=s2>"small"</span><span class=p>,</span> <span class=s2>"large"</span><span class=p>]</span> <span class=k>if</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>a_divided</span><span class=p>)</span> <span class=o><=</span> <span class=mi>2</span><span class=p>)</span> <span class=k>else</span>
+            <span class=p>[</span><span class=s2>"small"</span><span class=p>,</span> <span class=s2>"med"</span><span class=p>,</span> <span class=s2>"large"</span><span class=p>])</span>
+        <span class=k>for</span> <span class=n>a_idx</span><span class=p>,</span> <span class=n>a_group</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>a_divided</span><span class=p>):</span>
+            <span class=n>v</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+                <span class=s2>"a"</span><span class=p>,</span> <span class=n>subnames</span><span class=p>[</span><span class=n>a_idx</span><span class=p>],</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>a_group</span><span class=p>))</span>
+            <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>v</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+                <span class=n>groups</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>v</span><span class=p>)</span>
+
+    <span class=n>v</span> <span class=o>=</span> <span class=p>(</span><span class=s2>"beng"</span><span class=p>,</span> <span class=s2>"1-8"</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span>
+        <span class=n>b</span> <span class=k>for</span> <span class=n>b</span> <span class=ow>in</span> <span class=n>instances</span> <span class=k>if</span> <span class=n>b</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=s2>"beng"</span><span class=p>)</span>
+        <span class=ow>and</span> <span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=n>b</span><span class=p>[</span><span class=o>-</span><span class=mi>2</span><span class=p>:])</span> <span class=o><</span> <span class=mi>9</span><span class=p>))))</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>v</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+        <span class=n>groups</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>v</span><span class=p>)</span>
+
+    <span class=n>v</span> <span class=o>=</span> <span class=p>(</span><span class=s2>"beng"</span><span class=p>,</span> <span class=s2>"9-10"</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span>
+        <span class=n>b</span> <span class=k>for</span> <span class=n>b</span> <span class=ow>in</span> <span class=n>instances</span> <span class=k>if</span> <span class=n>b</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=s2>"beng"</span><span class=p>)</span>
+        <span class=ow>and</span> <span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=n>b</span><span class=p>[</span><span class=o>-</span><span class=mi>2</span><span class=p>:])</span> <span class=o>>=</span> <span class=mi>9</span><span class=p>))))</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>v</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+        <span class=n>groups</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>v</span><span class=p>)</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mi>11</span><span class=p>):</span>
+        <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"class </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>"</span>
+        <span class=n>preprefix</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"cl0</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>"</span> <span class=k>if</span> <span class=n>i</span> <span class=o><</span> <span class=mi>10</span> <span class=k>else</span> <span class=sa>f</span><span class=s2>"cl</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>"</span>
+        <span class=k>for</span> <span class=n>n</span> <span class=ow>in</span> <span class=p>(</span><span class=mi>20</span><span class=p>,</span> <span class=mi>40</span><span class=p>,</span> <span class=mi>60</span><span class=p>,</span> <span class=mi>80</span><span class=p>,</span> <span class=mi>100</span><span class=p>):</span>
+            <span class=n>prefix</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>preprefix</span><span class=si>}</span><span class=s2>_0</span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2>_"</span> \
+                <span class=k>if</span> <span class=n>n</span> <span class=o><</span> <span class=mi>100</span> <span class=k>else</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>preprefix</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2>_"</span>
+            <span class=n>v</span> <span class=o>=</span> <span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>(</span><span class=n>n</span><span class=p>),</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span>
+                <span class=n>b</span> <span class=k>for</span> <span class=n>b</span> <span class=ow>in</span> <span class=n>_INSTANCES</span> <span class=k>if</span> <span class=n>b</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>prefix</span><span class=p>))))</span>
+            <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>v</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+                <span class=n>groups</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>v</span><span class=p>)</span>
+
+    <span class=n>v</span> <span class=o>=</span> <span class=p>(</span><span class=s2>"asqas"</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>sorted</span><span class=p>(</span>
+        <span class=n>b</span> <span class=k>for</span> <span class=n>b</span> <span class=ow>in</span> <span class=n>_INSTANCES</span> <span class=k>if</span> <span class=n>b</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=s2>"asqas"</span><span class=p>))))</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>v</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+        <span class=n>groups</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>v</span><span class=p>)</span>
+
+    <span class=n>all_set</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+    <span class=k>for</span> <span class=n>g</span> <span class=ow>in</span> <span class=n>groups</span><span class=p>:</span>
+        <span class=n>all_set</span><span class=o>.</span><span class=n>update</span><span class=p>(</span><span class=n>g</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span>
+    <span class=n>inst_set</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>(</span><span class=n>instances</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>all_set</span> <span class=o>!=</span> <span class=n>inst_set</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"group instances is </span><span class=si>{</span><span class=n>all_set</span><span class=si>!r}</span><span class=s2> but "</span>
+                         <span class=sa>f</span><span class=s2>"instance set is </span><span class=si>{</span><span class=n>inst_set</span><span class=si>!r}</span><span class=s2>!"</span><span class=p>)</span>
+    <span class=k>return</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>groups</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__cutsq</span><span class=p>(</span><span class=n>matrix</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Cut all items into squares via the CUTSQ procedure.</span>
+
+<span class=sd>    :param matrix: the item matrix</span>
+<span class=sd>    :return: the list of squares</span>
+
+<span class=sd>    >>> __cutsq(np.array([[14, 12, 1]], int))</span>
+<span class=sd>    [12, 2, 2, 2, 2, 2, 2]</span>
+
+<span class=sd>    >>> __cutsq(np.array([[14, 12, 2]], int))</span>
+<span class=sd>    [12, 12, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]</span>
+<span class=sd>    """</span>
+    <span class=c1># create list of items in horizontal orientation</span>
+    <span class=n>j_sq</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>  <span class=c1># the list of squares (width = height)</span>
+    <span class=n>s</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>  <span class=c1># a temporary list</span>
+    <span class=k>for</span> <span class=n>row</span> <span class=ow>in</span> <span class=n>matrix</span><span class=p>:</span>
+        <span class=n>w</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span>
+        <span class=n>h</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>1</span><span class=p>])</span>
+        <span class=k>if</span> <span class=n>h</span> <span class=o>></span> <span class=n>w</span><span class=p>:</span>
+            <span class=n>w</span><span class=p>,</span> <span class=n>h</span> <span class=o>=</span> <span class=n>h</span><span class=p>,</span> <span class=n>w</span>
+        <span class=k>while</span> <span class=n>h</span> <span class=o>></span> <span class=mi>1</span><span class=p>:</span>
+            <span class=n>k</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>w</span> <span class=o>//</span> <span class=n>h</span>
+            <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>k</span><span class=p>):</span>
+                <span class=n>s</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>h</span><span class=p>)</span>
+            <span class=n>w</span><span class=p>,</span> <span class=n>h</span> <span class=o>=</span> <span class=n>h</span><span class=p>,</span> <span class=n>w</span> <span class=o>-</span> <span class=p>(</span><span class=n>k</span> <span class=o>*</span> <span class=n>h</span><span class=p>)</span>
+        <span class=n>times</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=mi>2</span><span class=p>])</span>
+        <span class=n>j_sq</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>s</span> <span class=o>*</span> <span class=n>times</span> <span class=k>if</span> <span class=n>times</span> <span class=o>></span> <span class=mi>1</span> <span class=k>else</span> <span class=n>s</span><span class=p>)</span>
+        <span class=n>s</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+
+    <span class=n>j_sq</span><span class=o>.</span><span class=n>sort</span><span class=p>(</span><span class=n>reverse</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>  <span class=c1># sort the squares in decreasing size</span>
+    <span class=k>return</span> <span class=n>j_sq</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__lb_q</span><span class=p>(</span><span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>q</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>j_js</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>])</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the lower bound for a given q.</span>
+
+<span class=sd>    :param bin_width: the bin width</span>
+<span class=sd>    :param bin_height: the bin height</span>
+<span class=sd>    :param q: the parameter q</span>
+<span class=sd>    :param j_js: the sorted square list</span>
+<span class=sd>    :return: the lower bound</span>
+
+<span class=sd>    >>> jj = [18, 18, 12, 12, 11, 11, 11, 11, 11, 7, 7, 7, 7, 7, 7]</span>
+<span class=sd>    >>> len(jj)</span>
+<span class=sd>    15</span>
+<span class=sd>    >>> __lb_q(23, 20, 6, jj)</span>
+<span class=sd>    6</span>
+<span class=sd>    """</span>
+    <span class=n>m</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>j_js</span><span class=p>)</span>
+    <span class=n>half_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_width</span> <span class=o>/</span> <span class=mi>2</span>
+    <span class=n>half_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_height</span> <span class=o>/</span> <span class=mi>2</span>
+    <span class=n>width_m_q</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_width</span> <span class=o>-</span> <span class=n>q</span>
+
+    <span class=c1># First we compute sets S1 to S4.</span>
+    <span class=n>s1</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>  <span class=c1># S1 from Equation 2</span>
+    <span class=n>s2</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>  <span class=c1># S2 from Equation 3</span>
+    <span class=n>s3</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>  <span class=c1># S2 from Equation 4</span>
+    <span class=n>s4</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>  <span class=c1># S2 from Equation 5</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>m</span><span class=p>):</span>
+        <span class=n>l_i</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>j_js</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+        <span class=k>if</span> <span class=n>l_i</span> <span class=o>></span> <span class=n>width_m_q</span><span class=p>:</span>
+            <span class=n>s1</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>i</span><span class=p>)</span>  <span class=c1># Equation 2</span>
+        <span class=k>elif</span> <span class=n>l_i</span> <span class=o>></span> <span class=n>half_width</span><span class=p>:</span>
+            <span class=n>s2</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>i</span><span class=p>)</span>  <span class=c1># Equation 3</span>
+        <span class=k>elif</span> <span class=n>l_i</span> <span class=o>></span> <span class=n>half_height</span><span class=p>:</span>
+            <span class=n>s3</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>i</span><span class=p>)</span>  <span class=c1># Equation 4</span>
+        <span class=k>elif</span> <span class=n>l_i</span> <span class=o>>=</span> <span class=n>q</span><span class=p>:</span>
+            <span class=n>s4</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>i</span><span class=p>)</span>  <span class=c1># Equation 5</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=k>break</span>
+
+    <span class=c1># compute set S23 as in Theorem 3 under Equation 7</span>
+    <span class=n>height_m_q</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_height</span> <span class=o>-</span> <span class=n>q</span>
+    <span class=n>s23</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=n>j</span> <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=p>(</span><span class=n>s2</span> <span class=o>+</span> <span class=n>s3</span><span class=p>)</span> <span class=k>if</span> <span class=n>j_js</span><span class=p>[</span><span class=n>j</span><span class=p>]</span> <span class=o>></span> <span class=n>height_m_q</span><span class=p>]</span>
+
+    <span class=c1># Now we sort S2 by non-increasing value of residual space.</span>
+    <span class=n>s2</span><span class=o>.</span><span class=n>reverse</span><span class=p>()</span>  <span class=c1># = .sort(key=lambda i: bin_width - j_js[i], reverse=True)</span>
+
+    <span class=c1># Now we compute S3 - ^S3^</span>
+    <span class=n>s3_minus_s3d</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>s3</span><span class=o>.</span><span class=n>copy</span><span class=p>()</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=n>s2</span><span class=p>:</span>
+        <span class=n>residual</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>bin_width</span> <span class=o>-</span> <span class=n>j_js</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+        <span class=n>not_found</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=k>for</span> <span class=n>j</span><span class=p>,</span> <span class=n>idx</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>s3_minus_s3d</span><span class=p>):</span>
+            <span class=n>needs</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>j_js</span><span class=p>[</span><span class=n>idx</span><span class=p>]</span>
+            <span class=k>if</span> <span class=n>needs</span> <span class=o><=</span> <span class=n>residual</span><span class=p>:</span>
+                <span class=k>del</span> <span class=n>s3_minus_s3d</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>
+                <span class=n>not_found</span> <span class=o>=</span> <span class=kc>False</span>
+                <span class=k>break</span>
+        <span class=k>if</span> <span class=n>not_found</span><span class=p>:</span>
+            <span class=k>break</span>
+
+    <span class=n>sum_s3_l</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>sum</span><span class=p>(</span><span class=n>j_js</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=n>s3_minus_s3d</span><span class=p>)</span>
+    <span class=n>b1</span> <span class=o>=</span> <span class=n>sum_s3_l</span> <span class=o>//</span> <span class=n>bin_width</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>b1</span> <span class=o>*</span> <span class=n>bin_width</span><span class=p>)</span> <span class=o><</span> <span class=n>sum_s3_l</span><span class=p>:</span>
+        <span class=n>b1</span> <span class=o>+=</span> <span class=mi>1</span>
+
+    <span class=n>len_s3</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>s3_minus_s3d</span><span class=p>)</span>
+    <span class=n>div</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>bin_width</span> <span class=o>//</span> <span class=p>((</span><span class=n>bin_height</span> <span class=o>//</span> <span class=mi>2</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span>
+    <span class=n>b2</span> <span class=o>=</span> <span class=n>len_s3</span> <span class=o>//</span> <span class=n>div</span>
+    <span class=k>if</span> <span class=p>(</span><span class=n>b2</span> <span class=o>*</span> <span class=n>div</span><span class=p>)</span> <span class=o><</span> <span class=n>len_s3</span><span class=p>:</span>
+        <span class=n>b2</span> <span class=o>+=</span> <span class=mi>1</span>
+
+    <span class=n>l_tilde</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>s2</span><span class=p>)</span> <span class=o>+</span> <span class=nb>max</span><span class=p>(</span><span class=n>b1</span><span class=p>,</span> <span class=n>b2</span><span class=p>)</span>  <span class=c1># Equation 6.</span>
+    <span class=n>bound</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>s1</span><span class=p>)</span> <span class=o>+</span> <span class=n>l_tilde</span>
+
+    <span class=c1># Now compute the final bound based on Theorem 3 / Equation 7.</span>
+    <span class=n>bin_size</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_width</span> <span class=o>*</span> <span class=n>bin_height</span>
+    <span class=n>denom</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>sum</span><span class=p>(</span><span class=n>j_js</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>**</span> <span class=mi>2</span> <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=p>(</span><span class=n>s2</span> <span class=o>+</span> <span class=n>s3</span> <span class=o>+</span> <span class=n>s4</span><span class=p>))</span> \
+        <span class=o>-</span> <span class=p>((</span><span class=n>bin_size</span> <span class=o>*</span> <span class=n>l_tilde</span><span class=p>)</span> <span class=o>-</span> <span class=nb>sum</span><span class=p>(</span><span class=n>j_js</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>*</span> <span class=p>(</span>
+            <span class=n>bin_height</span> <span class=o>-</span> <span class=n>j_js</span><span class=p>[</span><span class=n>i</span><span class=p>])</span> <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=n>s23</span><span class=p>))</span>
+    <span class=k>if</span> <span class=n>denom</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+        <span class=n>b</span> <span class=o>=</span> <span class=n>denom</span> <span class=o>//</span> <span class=n>bin_size</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>b</span> <span class=o>*</span> <span class=n>bin_size</span><span class=p>)</span> <span class=o><</span> <span class=n>denom</span><span class=p>:</span>
+            <span class=n>b</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=n>bound</span> <span class=o>+=</span> <span class=n>b</span>
+
+    <span class=k>return</span> <span class=n>bound</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_lower_bound_damv</span><span class=p>(</span><span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>matrix</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the lower bound as defined by Dell'Amico et al.</span>
+
+<span class=sd>    :param bin_width: the bin width</span>
+<span class=sd>    :param bin_height: the bin height</span>
+<span class=sd>    :param matrix: the item matrix</span>
+<span class=sd>    :return: the lower bound</span>
+
+<span class=sd>    >>> mat = np.array([[10, 5, 1], [3, 3, 1], [3, 3, 1]])</span>
+<span class=sd>    >>> _lower_bound_damv(23, 20, mat)</span>
+<span class=sd>    1</span>
+
+<span class=sd>    >>> mat = np.array([[20, 5, 3], [13, 23, 1], [13, 9, 3]])</span>
+<span class=sd>    >>> _lower_bound_damv(23, 20, mat)</span>
+<span class=sd>    3</span>
+<span class=sd>    """</span>
+    <span class=c1># ensure horizontal orientation (width >= height)</span>
+    <span class=k>if</span> <span class=n>bin_height</span> <span class=o>></span> <span class=n>bin_width</span><span class=p>:</span>
+        <span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span> <span class=o>=</span> <span class=n>bin_height</span><span class=p>,</span> <span class=n>bin_width</span>
+    <span class=n>j_sq</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=n>__cutsq</span><span class=p>(</span><span class=n>matrix</span><span class=p>)</span>
+    <span class=n>res</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>__lb_q</span><span class=p>(</span><span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>,</span> <span class=n>q</span><span class=p>,</span> <span class=n>j_sq</span><span class=p>)</span>
+                          <span class=k>for</span> <span class=n>q</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>((</span><span class=n>bin_height</span> <span class=o>//</span> <span class=mi>2</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>))</span>
+    <span class=k>return</span> <span class=nb>max</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=n>res</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=Instance>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Instance</span><span class=p>(</span><span class=n>Component</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    An instance of the 2D Bin Packing Problem.</span>
+
+<span class=sd>    Each row of the matrix contains three values: 1. the item's width, 2. the</span>
+<span class=sd>    item's height, 3. how often the item occurs.</span>
+<span class=sd>    """</span>
+
+    <span class=c1>#: the name of the instance</span>
+    <span class=n>name</span><span class=p>:</span> <span class=nb>str</span>
+    <span class=c1>#: the total number of items (including repetitions)</span>
+    <span class=n>n_items</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the number of different items</span>
+    <span class=n>n_different_items</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the total area occupied by all items</span>
+    <span class=n>total_item_area</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the bin width</span>
+    <span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the bin height</span>
+    <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the minimum number of bins that this instance requires</span>
+    <span class=n>lower_bound_bins</span><span class=p>:</span> <span class=nb>int</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__new__</span><span class=p>(</span><span class=bp>cls</span><span class=p>,</span> <span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+                <span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                <span class=n>matrix</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>|</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]])</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create an instance of the 2D bin packing problem.</span>
+
+<span class=sd>        :param cls: the class</span>
+<span class=sd>        :param name: the name of the instance</span>
+<span class=sd>        :param bin_width: the bin width</span>
+<span class=sd>        :param bin_height: the bin height</span>
+<span class=sd>        :param matrix: the matrix with the data (will be copied); rows have</span>
+<span class=sd>            the form `(width, height, repetitions)`</span>
+<span class=sd>        """</span>
+        <span class=n>use_name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>sanitize_name</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>name</span> <span class=o>!=</span> <span class=n>use_name</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Name </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2> is not a valid name."</span><span class=p>)</span>
+
+        <span class=n>check_int_range</span><span class=p>(</span><span class=n>bin_width</span><span class=p>,</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=n>check_int_range</span><span class=p>(</span><span class=n>bin_height</span><span class=p>,</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=n>max_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>)</span>
+        <span class=n>min_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>)</span>
+
+        <span class=n>n_different_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=nb>len</span><span class=p>(</span><span class=n>matrix</span><span class=p>),</span> <span class=s2>"n_different_items"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>100_000_000</span><span class=p>)</span>
+        <span class=n>use_shape</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n_different_items</span><span class=p>,</span> <span class=mi>3</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>matrix</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=n>npu</span><span class=o>.</span><span class=n>is_np_int</span><span class=p>(</span><span class=n>matrix</span><span class=o>.</span><span class=n>dtype</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=s2>"Matrix must have an integer type, but is of type "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>matrix</span><span class=o>.</span><span class=n>dtype</span><span class=p>)</span><span class=si>!r}</span><span class=s2> in instance </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>matrix</span><span class=o>.</span><span class=n>shape</span> <span class=o>!=</span> <span class=n>use_shape</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"Invalid shape </span><span class=si>{</span><span class=nb>str</span><span class=p>(</span><span class=n>matrix</span><span class=o>.</span><span class=n>shape</span><span class=p>)</span><span class=si>!r}</span><span class=s2> of matrix: "</span>
+                    <span class=s2>"must have three columns and two dimensions, must be "</span>
+                    <span class=sa>f</span><span class=s2>"equal to </span><span class=si>{</span><span class=n>use_shape</span><span class=si>}</span><span class=s2> in instance </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>matrix</span><span class=p>,</span> <span class=nb>list</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>matrix</span><span class=p>,</span> <span class=s2>"matrix"</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span>
+
+        <span class=n>n_items</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>max_size</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+        <span class=n>item_area</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_different_items</span><span class=p>):</span>
+            <span class=n>row</span> <span class=o>=</span> <span class=n>matrix</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>row</span><span class=p>,</span> <span class=nb>list</span> <span class=o>|</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                    <span class=n>row</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>row</span><span class=si>}</span><span class=s2> at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> in </span><span class=si>{</span><span class=n>use_name</span><span class=si>!r}</span><span class=s2>"</span><span class=p>,</span>
+                    <span class=p>(</span><span class=nb>list</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>))</span>
+            <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>row</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>3</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"invalid row </span><span class=si>{</span><span class=n>row</span><span class=si>}</span><span class=s2> at index </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2> in </span><span class=si>{</span><span class=n>use_name</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>width</span><span class=p>,</span> <span class=n>height</span><span class=p>,</span> <span class=n>repetitions</span> <span class=o>=</span> <span class=n>row</span>
+            <span class=n>width</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=n>width</span><span class=p>),</span> <span class=s2>"width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>max_dim</span><span class=p>)</span>
+            <span class=n>height</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=n>height</span><span class=p>),</span> <span class=s2>"height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>max_dim</span><span class=p>)</span>
+            <span class=n>repetitions</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=n>repetitions</span><span class=p>),</span> <span class=s2>"repetitions"</span><span class=p>,</span>
+                                          <span class=mi>1</span><span class=p>,</span> <span class=mi>100_000_000</span><span class=p>)</span>
+            <span class=n>item_area</span> <span class=o>+=</span> <span class=p>(</span><span class=n>width</span> <span class=o>*</span> <span class=n>height</span> <span class=o>*</span> <span class=n>repetitions</span><span class=p>)</span>
+            <span class=n>max_size</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>max_size</span><span class=p>,</span> <span class=n>width</span><span class=p>,</span> <span class=n>height</span><span class=p>)</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>width</span> <span class=o>></span> <span class=n>min_dim</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=n>height</span> <span class=o>></span> <span class=n>min_dim</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"object with width=</span><span class=si>{</span><span class=n>width</span><span class=si>}</span><span class=s2> and height=</span><span class=si>{</span><span class=n>height</span><span class=si>}</span><span class=s2> does "</span>
+                    <span class=sa>f</span><span class=s2>"not fit into bin with width=</span><span class=si>{</span><span class=n>width</span><span class=si>}</span><span class=s2> and "</span>
+                    <span class=sa>f</span><span class=s2>"height=</span><span class=si>{</span><span class=n>height</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+            <span class=n>n_items</span> <span class=o>+=</span> <span class=n>repetitions</span>
+
+        <span class=n>obj</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__new__</span><span class=p>(</span>
+            <span class=bp>cls</span><span class=p>,</span> <span class=n>use_shape</span><span class=p>,</span> <span class=n>int_range_to_dtype</span><span class=p>(</span>
+                <span class=n>min_value</span><span class=o>=</span><span class=mi>0</span><span class=p>,</span> <span class=n>max_value</span><span class=o>=</span><span class=nb>max</span><span class=p>(</span>
+                    <span class=n>max_dim</span> <span class=o>+</span> <span class=n>max_size</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>n_items</span> <span class=o>+</span> <span class=mi>1</span><span class=p>),</span> <span class=n>force_signed</span><span class=o>=</span><span class=kc>True</span><span class=p>))</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_different_items</span><span class=p>):</span>
+            <span class=n>obj</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=p>:]</span> <span class=o>=</span> <span class=n>matrix</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+
+        <span class=c1>#: the name of the instance</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>name</span> <span class=o>=</span> <span class=n>use_name</span>
+        <span class=c1>#: the number of different items</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>n_different_items</span> <span class=o>=</span> <span class=n>n_different_items</span>
+        <span class=c1>#: the total number of items, i.e., the number of different items</span>
+        <span class=c1>#: multiplied with their repetition counts</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>n_items</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>n_items</span><span class=p>,</span> <span class=s2>"n_items"</span><span class=p>,</span> <span class=n>n_different_items</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=c1>#: the height of the bins</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>bin_height</span> <span class=o>=</span> <span class=n>bin_height</span>
+        <span class=c1>#: the width of the bins</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>bin_width</span> <span class=o>=</span> <span class=n>bin_width</span>
+        <span class=c1>#: the total area occupied by all items</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>total_item_area</span> <span class=o>=</span> <span class=n>item_area</span>
+
+<span class=c1># We need at least as many bins such that their area is big enough</span>
+<span class=c1># for the total area of the items.</span>
+        <span class=n>bin_area</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>bin_height</span> <span class=o>*</span> <span class=n>bin_width</span>
+        <span class=n>lower_bound_geo</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>item_area</span> <span class=o>//</span> <span class=n>bin_area</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>lower_bound_geo</span> <span class=o>*</span> <span class=n>bin_area</span><span class=p>)</span> <span class=o><</span> <span class=n>item_area</span><span class=p>:</span>
+            <span class=n>lower_bound_geo</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=n>lower_bound_geo</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>lower_bound_geo</span><span class=p>,</span> <span class=s2>"lower_bound_bins_geometric"</span><span class=p>,</span>
+            <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+
+<span class=c1># We now compute the lower bound by Dell'Amico et al.</span>
+        <span class=n>lower_bound_damv</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=n>_lower_bound_damv</span><span class=p>(</span>
+            <span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>,</span> <span class=n>obj</span><span class=p>),</span> <span class=s2>"lower_bound_bins_damv"</span><span class=p>,</span>
+            <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+
+<span class=c1># The overall computed lower bound is the maximum of the geometric and the</span>
+<span class=c1># Dell'Amico lower bound.</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>lower_bound_bins</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>lower_bound_damv</span><span class=p>,</span> <span class=n>lower_bound_geo</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>obj</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this instance.</span>
+
+<span class=sd>        :return: the name of this instance</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>name</span>
+
+<div class=viewcode-block id=Instance.get_standard_item_sequence>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance.get_standard_item_sequence>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>get_standard_item_sequence</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the standardized item sequence.</span>
+
+<span class=sd>        :return: the standardized item sequence</span>
+
+<span class=sd>        >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 1]])</span>
+<span class=sd>        >>> ins.get_standard_item_sequence()</span>
+<span class=sd>        [1, 2, 3]</span>
+<span class=sd>        >>> ins = Instance("a", 100, 50, [[10, 5, 1], [3, 3, 1], [5, 5, 2]])</span>
+<span class=sd>        >>> ins.get_standard_item_sequence()</span>
+<span class=sd>        [1, 2, 3, 3]</span>
+<span class=sd>        >>> ins = Instance("a", 100, 50, [[10, 5, 2], [3, 3, 3], [5, 5, 4]])</span>
+<span class=sd>        >>> ins.get_standard_item_sequence()</span>
+<span class=sd>        [1, 1, 2, 2, 2, 3, 3, 3, 3]</span>
+<span class=sd>        """</span>
+        <span class=n>base_string</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_different_items</span> <span class=o>+</span> <span class=mi>1</span><span class=p>):</span>
+            <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=bp>self</span><span class=p>[</span><span class=n>i</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span> <span class=n>IDX_REPETITION</span><span class=p>]):</span>
+                <span class=n>base_string</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=nb>int</span><span class=p>(</span><span class=n>i</span><span class=p>))</span>
+        <span class=k>return</span> <span class=n>base_string</span></div>
+
+
+<div class=viewcode-block id=Instance.from_2dpacklib>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance.from_2dpacklib>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_2dpacklib</span><span class=p>(</span><span class=n>file</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Load a problem instance from the 2dpacklib format.</span>
+
+<span class=sd>        :param file: the file path</span>
+<span class=sd>        :return: the instance</span>
+<span class=sd>        """</span>
+        <span class=n>path</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>file_path</span><span class=p>(</span><span class=n>file</span><span class=p>)</span>
+        <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>basename</span><span class=p>(</span><span class=n>path</span><span class=p>)</span><span class=o>.</span><span class=n>lower</span><span class=p>()</span>
+        <span class=k>if</span> <span class=n>name</span><span class=o>.</span><span class=n>endswith</span><span class=p>(</span><span class=s2>".ins2d"</span><span class=p>):</span>
+            <span class=n>name</span> <span class=o>=</span> <span class=n>sanitize_name</span><span class=p>(</span><span class=n>name</span><span class=p>[:</span><span class=o>-</span><span class=mi>6</span><span class=p>])</span>
+
+        <span class=n>lines</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>splitlines</span><span class=p>(</span><span class=n>path</span><span class=o>.</span><span class=n>read_all_str</span><span class=p>())</span>
+        <span class=n>n_different_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+            <span class=n>lines</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=s2>"n_different_items"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>100_000_000</span><span class=p>)</span>
+
+        <span class=n>wh</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>lines</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span>
+        <span class=n>spaceidx</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>wh</span><span class=o>.</span><span class=n>index</span><span class=p>(</span><span class=s2>" "</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>spaceidx</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Did not find space in second line."</span><span class=p>)</span>
+        <span class=n>bin_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+            <span class=n>wh</span><span class=p>[:</span><span class=n>spaceidx</span><span class=p>],</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=n>bin_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+            <span class=n>wh</span><span class=p>[</span><span class=n>spaceidx</span> <span class=o>+</span> <span class=mi>1</span><span class=p>:],</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=k>del</span> <span class=n>lines</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=mi>2</span><span class=p>]</span>
+
+        <span class=n>max_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>)</span>
+        <span class=n>data</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>old_item_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>for</span> <span class=n>line</span> <span class=ow>in</span> <span class=n>lines</span><span class=p>:</span>
+            <span class=n>text</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=s2>" "</span><span class=p>)</span>
+            <span class=n>itemid</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                <span class=n>text</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=s2>"item-id"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>n_different_items</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>itemid</span> <span class=o>!=</span> <span class=p>(</span><span class=n>old_item_id</span> <span class=o>+</span> <span class=mi>1</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"non-sequential item id </span><span class=si>{</span><span class=n>itemid</span><span class=si>}</span><span class=s2> after </span><span class=si>{</span><span class=n>old_item_id</span><span class=si>}</span><span class=s2>!"</span><span class=p>)</span>
+            <span class=n>old_item_id</span> <span class=o>=</span> <span class=n>itemid</span>
+            <span class=n>width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>text</span><span class=p>[</span><span class=mi>1</span><span class=p>],</span> <span class=s2>"width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>max_dim</span><span class=p>)</span>
+            <span class=n>height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>text</span><span class=p>[</span><span class=mi>2</span><span class=p>],</span> <span class=s2>"height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>max_dim</span><span class=p>)</span>
+            <span class=n>count</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span> <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>text</span><span class=p>)</span> <span class=o><=</span> <span class=mi>3</span> <span class=k>else</span> \
+                <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>text</span><span class=p>[</span><span class=mi>3</span><span class=p>],</span> <span class=s2>"count"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+            <span class=n>data</span><span class=o>.</span><span class=n>append</span><span class=p>([</span><span class=n>width</span><span class=p>,</span> <span class=n>height</span><span class=p>,</span> <span class=n>count</span><span class=p>])</span>
+        <span class=n>data</span><span class=o>.</span><span class=n>sort</span><span class=p>()</span>
+        <span class=k>return</span> <span class=n>Instance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>,</span> <span class=n>data</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.to_compact_str>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance.to_compact_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>to_compact_str</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert the instance to a compact string.</span>
+
+<span class=sd>        The format of the string is a single line of semi-colon separated</span>
+<span class=sd>        values. The values are: `name;n_items;bin_width;bin_height`,</span>
+<span class=sd>        followed by the sequence of items, each in the form of</span>
+<span class=sd>        `;width,heigh[,times]`, where `times` is optional and only added</span>
+<span class=sd>        if the item occurs more than once.</span>
+
+<span class=sd>        :return: a single line string with all the instance data</span>
+
+<span class=sd>        >>> ins = Instance("x", 500, 50, [[3, 5, 1], [2, 5, 2]])</span>
+<span class=sd>        >>> ins.to_compact_str()</span>
+<span class=sd>        'x;2;500;50;3,5;2,5,2'</span>
+<span class=sd>        >>> ins.n_different_items</span>
+<span class=sd>        2</span>
+<span class=sd>        """</span>
+        <span class=n>lst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>),</span>
+                                 <span class=nb>str</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=p>),</span> <span class=nb>str</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span><span class=p>)]</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>):</span>
+            <span class=n>width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=bp>self</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_WIDTH</span><span class=p>]</span>
+            <span class=n>height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=bp>self</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_HEIGHT</span><span class=p>]</span>
+            <span class=n>repetitions</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=bp>self</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_REPETITION</span><span class=p>]</span>
+            <span class=n>lst</span><span class=o>.</span><span class=n>append</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>width</span><span class=si>}{</span><span class=n>INTERNAL_SEP</span><span class=si>}{</span><span class=n>height</span><span class=si>}</span><span class=s2>"</span> <span class=k>if</span> <span class=n>repetitions</span> <span class=o>==</span> <span class=mi>1</span> <span class=k>else</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>width</span><span class=si>}{</span><span class=n>INTERNAL_SEP</span><span class=si>}{</span><span class=n>height</span><span class=si>}{</span><span class=n>INTERNAL_SEP</span><span class=si>}{</span><span class=n>repetitions</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>CSV_SEPARATOR</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>lst</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.from_compact_str>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance.from_compact_str>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_compact_str</span><span class=p>(</span><span class=n>data</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Transform a compact string back to an instance.</span>
+
+<span class=sd>        :param data: the string data</span>
+<span class=sd>        :return: the instance</span>
+
+<span class=sd>        >>> ins = Instance("x", 500, 50, [[3, 5, 1], [2, 5, 2]])</span>
+<span class=sd>        >>> Instance.from_compact_str(ins.to_compact_str()).to_compact_str()</span>
+<span class=sd>        'x;2;500;50;3,5;2,5,2'</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>data</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>data</span><span class=p>,</span> <span class=s2>"data"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=n>text</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=n>data</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>)</span>
+        <span class=n>name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>text</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=n>n_different_items</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+            <span class=n>text</span><span class=p>[</span><span class=mi>1</span><span class=p>],</span> <span class=s2>"n_different_items"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>100_000_000</span><span class=p>)</span>
+        <span class=n>bin_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+            <span class=n>text</span><span class=p>[</span><span class=mi>2</span><span class=p>],</span> <span class=s2>"bin_width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=n>bin_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+            <span class=n>text</span><span class=p>[</span><span class=mi>3</span><span class=p>],</span> <span class=s2>"bin_height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=n>max_dim</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>)</span>
+        <span class=n>items</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>4</span><span class=p>,</span> <span class=n>n_different_items</span> <span class=o>+</span> <span class=mi>4</span><span class=p>):</span>
+            <span class=n>s</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>text</span><span class=p>[</span><span class=n>i</span><span class=p>]</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=n>INTERNAL_SEP</span><span class=p>)</span>
+            <span class=n>row</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span>
+                <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>s</span><span class=p>[</span><span class=n>IDX_WIDTH</span><span class=p>],</span> <span class=s2>"width"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>max_dim</span><span class=p>),</span>
+                <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>s</span><span class=p>[</span><span class=n>IDX_HEIGHT</span><span class=p>],</span> <span class=s2>"height"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>max_dim</span><span class=p>),</span>
+                <span class=mi>1</span> <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>s</span><span class=p>)</span> <span class=o><=</span> <span class=n>IDX_REPETITION</span> <span class=k>else</span>
+                <span class=n>check_to_int_range</span><span class=p>(</span>
+                    <span class=n>s</span><span class=p>[</span><span class=n>IDX_REPETITION</span><span class=p>],</span> <span class=s2>"times"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>100_000_000</span><span class=p>)]</span>
+            <span class=n>items</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>row</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>Instance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=n>bin_width</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>,</span> <span class=n>items</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters describing this bin packing instance to the logger.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+
+<span class=sd>        >>> from moptipy.utils.logger import InMemoryLogger</span>
+<span class=sd>        >>> with InMemoryLogger() as l:</span>
+<span class=sd>        ...     with l.key_values("I") as kv:</span>
+<span class=sd>        ...         Instance.from_resource("beng05").log_parameters_to(kv)</span>
+<span class=sd>        ...     print(repr('@'.join(l.get_log())))</span>
+<span class=sd>        'BEGIN_I@name: beng05@class: moptipyapps.binpacking2d\</span>
+<span class=sd>.instance.Instance@nItems: 100@nDifferentItems: 100@binWidth: 25\</span>
+<span class=sd>@binHeight: 10@dtype: b@END_I'</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=n>N_ITEMS</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_items</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=n>N_DIFFERENT_ITEMS</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=n>BIN_WIDTH</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_width</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=n>BIN_HEIGHT</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>bin_height</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=n>npu</span><span class=o>.</span><span class=n>KEY_NUMPY_TYPE</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>dtype</span><span class=o>.</span><span class=n>char</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.list_resources>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance.list_resources>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>list_resources</span><span class=p>()</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get a tuple of all the instances available as resource.</span>
+
+<span class=sd>        :return: the tuple with the instance names</span>
+
+<span class=sd>        >>> len(list(Instance.list_resources()))</span>
+<span class=sd>        557</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>_INSTANCES</span></div>
+
+
+<div class=viewcode-block id=Instance.list_resources_groups>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance.list_resources_groups>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>list_resources_groups</span><span class=p>()</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span>
+            <span class=nb>str</span><span class=p>,</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]],</span> <span class=o>...</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        List the instance groups in the resources.</span>
+
+<span class=sd>        One problem of the benchmark set for 2-dimensional bin packing is that</span>
+<span class=sd>        it has many instances:</span>
+
+<span class=sd>        >>> len(Instance.list_resources())</span>
+<span class=sd>        557</span>
+
+<span class=sd>        With this function, we can group several of these instances together</span>
+<span class=sd>        in a way that is compliant with literature in order to then compute</span>
+<span class=sd>        statistics over these groups. Presenting data gathered over...</span>
+
+<span class=sd>        >>> len(Instance.list_resources_groups())</span>
+<span class=sd>        56</span>
+
+<span class=sd>        ...groups is much easier than dealing with over 500 instances.</span>
+
+<span class=sd>        :return: the instance groups, in a two level hierarchy. The result is</span>
+<span class=sd>            a sequence of tuples. Each tuple has the top-level group name and,</span>
+<span class=sd>            optionally, a second-level group name (or `None` if no second</span>
+<span class=sd>            level group exists). The third tuple element is a sequence of</span>
+<span class=sd>            instance names.</span>
+
+<span class=sd>        >>> [(v[0], v[1], len(v[2])) for v in</span>
+<span class=sd>        ...     Instance.list_resources_groups()]</span>
+<span class=sd>        [('a', 'small', 14), ('a', 'med', 14), ('a', 'large', 15), \</span>
+<span class=sd>('beng', '1-8', 8), ('beng', '9-10', 2), ('class 1', '20', 10), \</span>
+<span class=sd>('class 1', '40', 10), ('class 1', '60', 10), ('class 1', '80', 10), \</span>
+<span class=sd>('class 1', '100', 10), ('class 2', '20', 10), ('class 2', '40', 10), \</span>
+<span class=sd>('class 2', '60', 10), ('class 2', '80', 10), ('class 2', '100', 10), \</span>
+<span class=sd>('class 3', '20', 10), ('class 3', '40', 10), ('class 3', '60', 10), \</span>
+<span class=sd>('class 3', '80', 10), ('class 3', '100', 10), ('class 4', '20', 10), \</span>
+<span class=sd>('class 4', '40', 10), ('class 4', '60', 10), ('class 4', '80', 10), \</span>
+<span class=sd>('class 4', '100', 10), ('class 5', '20', 10), ('class 5', '40', 10), \</span>
+<span class=sd>('class 5', '60', 10), ('class 5', '80', 10), ('class 5', '100', 10), \</span>
+<span class=sd>('class 6', '20', 10), ('class 6', '40', 10), ('class 6', '60', 10), \</span>
+<span class=sd>('class 6', '80', 10), ('class 6', '100', 10), ('class 7', '20', 10), \</span>
+<span class=sd>('class 7', '40', 10), ('class 7', '60', 10), ('class 7', '80', 10), \</span>
+<span class=sd>('class 7', '100', 10), ('class 8', '20', 10), ('class 8', '40', 10), \</span>
+<span class=sd>('class 8', '60', 10), ('class 8', '80', 10), ('class 8', '100', 10), \</span>
+<span class=sd>('class 9', '20', 10), ('class 9', '40', 10), ('class 9', '60', 10), \</span>
+<span class=sd>('class 9', '80', 10), ('class 9', '100', 10), ('class 10', '20', 10), \</span>
+<span class=sd>('class 10', '40', 10), ('class 10', '60', 10), ('class 10', '80', 10), \</span>
+<span class=sd>('class 10', '100', 10), ('asqas', None, 4)]</span>
+<span class=sd>        """</span>
+        <span class=n>obj</span><span class=p>:</span> <span class=nb>object</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>list_resources_groups</span>
+        <span class=n>attr</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>"__gs"</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>obj</span><span class=p>,</span> <span class=n>attr</span><span class=p>):</span>
+            <span class=n>gs</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]],</span> <span class=o>...</span><span class=p>]</span> <span class=o>=</span>\
+                <span class=n>_make_instance_groups</span><span class=p>(</span><span class=n>Instance</span><span class=o>.</span><span class=n>list_resources</span><span class=p>())</span>
+            <span class=nb>setattr</span><span class=p>(</span><span class=n>obj</span><span class=p>,</span> <span class=n>attr</span><span class=p>,</span> <span class=n>gs</span><span class=p>)</span>
+            <span class=k>return</span> <span class=n>gs</span>
+        <span class=k>return</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"tuple[tuple[str, str | None, tuple[str, ...]], ...]"</span><span class=p>,</span>
+                    <span class=nb>getattr</span><span class=p>(</span><span class=n>obj</span><span class=p>,</span> <span class=n>attr</span><span class=p>))</span></div>
+
+
+<div class=viewcode-block id=Instance.from_resource>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.instance.Instance.from_resource>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_resource</span><span class=p>(</span><span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Load an instance from a resource.</span>
+
+<span class=sd>        :param name: the name string</span>
+<span class=sd>        :return: the instance</span>
+
+<span class=sd>        >>> Instance.from_resource("a01").to_compact_str()</span>
+<span class=sd>        'a01;2;2750;1220;463,386,18;1680,420,6'</span>
+<span class=sd>        >>> Instance.from_resource("a07").to_compact_str()</span>
+<span class=sd>        'a07;5;2750;1220;706,286,8;706,516,16;986,433,10;1120,486,\</span>
+<span class=sd>12;1120,986,12'</span>
+<span class=sd>        >>> Instance.from_resource("a08") is Instance.from_resource("a08")</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> Instance.from_resource("a08") is Instance.from_resource("a09")</span>
+<span class=sd>        False</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=s2>"name"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=n>container</span><span class=p>:</span> <span class=n>Final</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span>
+        <span class=n>inst_attr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"__inst_</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>"</span>
+        <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>):</span>  <span class=c1># instance loaded?</span>
+            <span class=k>return</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Instance"</span><span class=p>,</span> <span class=nb>getattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>))</span>
+        <span class=n>text_attr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"__text_</span><span class=si>{</span><span class=n>INSTANCES_RESOURCE</span><span class=si>}</span><span class=s2>"</span>
+        <span class=n>text</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span>
+        <span class=n>total_attr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"__total_insts"</span>
+        <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>text_attr</span><span class=p>):</span>  <span class=c1># ok, we got the text already</span>
+            <span class=n>text</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"list[str]"</span><span class=p>,</span> <span class=nb>getattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>text_attr</span><span class=p>))</span>
+        <span class=k>else</span><span class=p>:</span>  <span class=c1># the first time we load the text</span>
+            <span class=k>with</span> <span class=n>resources</span><span class=o>.</span><span class=n>files</span><span class=p>(</span><span class=n>__package__</span><span class=p>)</span><span class=o>.</span><span class=n>joinpath</span><span class=p>(</span>
+                    <span class=n>INSTANCES_RESOURCE</span><span class=p>)</span><span class=o>.</span><span class=n>open</span><span class=p>(</span><span class=s2>"r"</span><span class=p>,</span> <span class=n>encoding</span><span class=o>=</span><span class=n>UTF8</span><span class=p>)</span> <span class=k>as</span> <span class=n>stream</span><span class=p>:</span>
+                <span class=n>text</span> <span class=o>=</span> <span class=p>[</span><span class=n>line</span> <span class=k>for</span> <span class=n>line</span> <span class=ow>in</span> <span class=p>(</span><span class=n>line_raw</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span> <span class=k>for</span> <span class=n>line_raw</span>
+                                          <span class=ow>in</span> <span class=n>stream</span><span class=o>.</span><span class=n>readlines</span><span class=p>())</span>
+                        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>line</span><span class=p>)</span> <span class=o>></span> <span class=mi>0</span><span class=p>]</span>
+            <span class=nb>setattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>text_attr</span><span class=p>,</span> <span class=n>text</span><span class=p>)</span>
+            <span class=nb>setattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>total_attr</span><span class=p>,</span> <span class=mi>0</span><span class=p>)</span>  <span class=c1># so far, no instance</span>
+
+        <span class=n>imax</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>text</span><span class=p>)</span>
+        <span class=n>imin</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>while</span> <span class=n>imin</span> <span class=o><=</span> <span class=n>imax</span><span class=p>:</span>  <span class=c1># binary search for instance</span>
+            <span class=n>imid</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=p>(</span><span class=n>imax</span> <span class=o>+</span> <span class=n>imin</span><span class=p>)</span> <span class=o>//</span> <span class=mi>2</span>
+            <span class=n>line</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>text</span><span class=p>[</span><span class=n>imid</span><span class=p>]</span>
+            <span class=n>idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>index</span><span class=p>(</span><span class=n>CSV_SEPARATOR</span><span class=p>)</span>
+            <span class=n>prefix</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>line</span><span class=p>[</span><span class=mi>0</span><span class=p>:</span><span class=n>idx</span><span class=p>]</span>
+            <span class=k>if</span> <span class=n>prefix</span> <span class=o>==</span> <span class=n>name</span><span class=p>:</span>
+                <span class=n>instance</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_compact_str</span><span class=p>(</span><span class=n>line</span><span class=p>)</span>
+                <span class=nb>setattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>,</span> <span class=n>instance</span><span class=p>)</span>
+                <span class=n>got</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>getattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>total_attr</span><span class=p>)</span>
+                <span class=n>got</span> <span class=o>+=</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>got</span> <span class=o>>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>_INSTANCES</span><span class=p>):</span>  <span class=c1># got all instances, can del text</span>
+                    <span class=nb>delattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>total_attr</span><span class=p>)</span>
+                    <span class=nb>delattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>text_attr</span><span class=p>)</span>
+                <span class=k>return</span> <span class=n>instance</span>
+            <span class=k>if</span> <span class=n>prefix</span> <span class=o><</span> <span class=n>name</span><span class=p>:</span>
+                <span class=n>imin</span> <span class=o>=</span> <span class=n>imid</span> <span class=o>+</span> <span class=mi>1</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>imax</span> <span class=o>=</span> <span class=n>imid</span> <span class=o>-</span> <span class=mi>1</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"instance </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2> not found."</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.instance</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

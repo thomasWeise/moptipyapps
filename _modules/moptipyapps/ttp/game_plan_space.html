@@ -1,0 +1,231 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.ttp.game_plan_space — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/ttp/game_plan_space.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.game_plan_space</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.ttp.game_plan_space</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Here we provide a :class:`~moptipy.api.space.Space` of bin game plans.</span>
+
+<span class=sd>The bin game plans object is defined in module</span>
+<span class=sd>:mod:`~moptipyapps.ttp.game_plan`. Basically, it is a</span>
+<span class=sd>two-dimensional numpy array holding, for each day (or time slot) for each team</span>
+<span class=sd>the opposing team.</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.space</span><span class=w> </span><span class=kn>import</span> <span class=n>Space</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>CSV_SEPARATOR</span><span class=p>,</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.game_plan</span><span class=w> </span><span class=kn>import</span> <span class=n>GamePlan</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>SCOPE_INSTANCE</span>
+
+
+<div class=viewcode-block id=GamePlanSpace>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_plan_space.GamePlanSpace>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>GamePlanSpace</span><span class=p>(</span><span class=n>Space</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An implementation of the `Space` API of for game plans."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a 2D packing space.</span>
+
+<span class=sd>        :param instance: the 2d bin packing instance</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("circ4")</span>
+<span class=sd>        >>> space = GamePlanSpace(inst)</span>
+<span class=sd>        >>> space.instance is inst</span>
+<span class=sd>        True</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=c1>#: The instance to which the packings apply.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>copy</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>copyto</span>  <span class=c1># type: ignore</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>to_str</span> <span class=o>=</span> <span class=n>GamePlan</span><span class=o>.</span><span class=fm>__str__</span>  <span class=c1># type: ignore</span>
+
+<div class=viewcode-block id=GamePlanSpace.create>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_plan_space.GamePlanSpace.create>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>create</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=n>GamePlan</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a game plan without assigning items to locations.</span>
+
+<span class=sd>        :return: the (empty, uninitialized) packing object</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("circ8")</span>
+<span class=sd>        >>> space = GamePlanSpace(inst)</span>
+<span class=sd>        >>> x = space.create()</span>
+<span class=sd>        >>> print(inst.rounds)</span>
+<span class=sd>        2</span>
+<span class=sd>        >>> print(inst.n_cities)</span>
+<span class=sd>        8</span>
+<span class=sd>        >>> x.shape</span>
+<span class=sd>        (14, 8)</span>
+<span class=sd>        >>> x.instance is inst</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> type(x)</span>
+<span class=sd>        &LTclass 'moptipyapps.ttp.game_plan.GamePlan'></span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>GamePlan</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=GamePlanSpace.is_equal>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_plan_space.GamePlanSpace.is_equal>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>is_equal</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x1</span><span class=p>:</span> <span class=n>GamePlan</span><span class=p>,</span> <span class=n>x2</span><span class=p>:</span> <span class=n>GamePlan</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Check if two bin game plans have the same contents.</span>
+
+<span class=sd>        :param x1: the first game plan</span>
+<span class=sd>        :param x2: the second game plan</span>
+<span class=sd>        :return: `True` if both game plans are for the same instance and have</span>
+<span class=sd>            the same structure</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("circ4")</span>
+<span class=sd>        >>> space = GamePlanSpace(inst)</span>
+<span class=sd>        >>> y1 = space.create()</span>
+<span class=sd>        >>> y1.fill(0)</span>
+<span class=sd>        >>> y2 = space.create()</span>
+<span class=sd>        >>> y2.fill(0)</span>
+<span class=sd>        >>> space.is_equal(y1, y2)</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> y1 is y2</span>
+<span class=sd>        False</span>
+<span class=sd>        >>> y1[0, 0] = 1</span>
+<span class=sd>        >>> space.is_equal(y1, y2)</span>
+<span class=sd>        False</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=n>x1</span><span class=o>.</span><span class=n>instance</span> <span class=ow>is</span> <span class=n>x2</span><span class=o>.</span><span class=n>instance</span><span class=p>)</span> <span class=ow>and</span> <span class=n>np</span><span class=o>.</span><span class=n>array_equal</span><span class=p>(</span><span class=n>x1</span><span class=p>,</span> <span class=n>x2</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=GamePlanSpace.from_str>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_plan_space.GamePlanSpace.from_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>text</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=n>GamePlan</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert a string to a packing.</span>
+
+<span class=sd>        :param text: the string</span>
+<span class=sd>        :return: the packing</span>
+
+<span class=sd>        >>> inst = Instance.from_resource("circ6")</span>
+<span class=sd>        >>> space = GamePlanSpace(inst)</span>
+<span class=sd>        >>> y1 = space.create()</span>
+<span class=sd>        >>> y1.fill(0)</span>
+<span class=sd>        >>> y2 = space.from_str(space.to_str(y1))</span>
+<span class=sd>        >>> space.is_equal(y1, y2)</span>
+<span class=sd>        True</span>
+<span class=sd>        >>> y1 is y2</span>
+<span class=sd>        False</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=s2>"packing text"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+
+        <span class=c1># we only want the very first line</span>
+        <span class=n>text</span> <span class=o>=</span> <span class=n>text</span><span class=o>.</span><span class=n>lstrip</span><span class=p>()</span>
+        <span class=n>lb</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>text</span><span class=o>.</span><span class=n>find</span><span class=p>(</span><span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>lb</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>text</span> <span class=o>=</span> <span class=n>text</span><span class=p>[:</span><span class=n>lb</span><span class=p>]</span><span class=o>.</span><span class=n>rstrip</span><span class=p>()</span>
+
+        <span class=n>x</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>GamePlan</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>
+        <span class=n>np</span><span class=o>.</span><span class=n>copyto</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>fromstring</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=n>dtype</span><span class=o>=</span><span class=n>x</span><span class=o>.</span><span class=n>dtype</span><span class=p>,</span> <span class=n>sep</span><span class=o>=</span><span class=n>CSV_SEPARATOR</span><span class=p>)</span>
+                  <span class=o>.</span><span class=n>reshape</span><span class=p>(</span><span class=n>x</span><span class=o>.</span><span class=n>shape</span><span class=p>))</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>validate</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>x</span></div>
+
+
+<div class=viewcode-block id=GamePlanSpace.validate>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_plan_space.GamePlanSpace.validate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>validate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>GamePlan</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Check if a game plan is an instance of the right object.</span>
+
+<span class=sd>        This method performs a superficial feasibility check, as in the TTP,</span>
+<span class=sd>        we try to find feasible game plans and may have infeasible ones. All</span>
+<span class=sd>        we check here is that the object is of the right type and dimensions</span>
+<span class=sd>        and that it does not contain some out-of-bounds value.</span>
+
+<span class=sd>        :param x: the game plan</span>
+<span class=sd>        :raises TypeError: if any component of the game plan is of the wrong</span>
+<span class=sd>            type</span>
+<span class=sd>        :raises ValueError: if the game plan is not feasible</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>GamePlan</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=s2>"x"</span><span class=p>,</span> <span class=n>GamePlan</span><span class=p>)</span>
+        <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span>
+        <span class=k>if</span> <span class=n>inst</span> <span class=ow>is</span> <span class=ow>not</span> <span class=n>x</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"x.instance must be </span><span class=si>{</span><span class=n>inst</span><span class=si>}</span><span class=s2> but is </span><span class=si>{</span><span class=n>x</span><span class=o>.</span><span class=n>instance</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>game_plan_dtype</span> <span class=ow>is</span> <span class=ow>not</span> <span class=n>x</span><span class=o>.</span><span class=n>dtype</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"inst.game_plan_dtype = </span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>game_plan_dtype</span><span class=si>}</span><span class=s2>"</span>
+                             <span class=sa>f</span><span class=s2>" but x.dtype=</span><span class=si>{</span><span class=n>x</span><span class=o>.</span><span class=n>dtype</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_cities</span>  <span class=c1># the number of teams</span>
+        <span class=c1># each team plays every other team 'rounds'  times</span>
+        <span class=n>n_days</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>inst</span><span class=o>.</span><span class=n>rounds</span>
+
+        <span class=n>needed_shape</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n_days</span><span class=p>,</span> <span class=n>n</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>x</span><span class=o>.</span><span class=n>shape</span> <span class=o>!=</span> <span class=n>needed_shape</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"x.shape=</span><span class=si>{</span><span class=n>x</span><span class=o>.</span><span class=n>shape</span><span class=si>}</span><span class=s2>, but must be </span><span class=si>{</span><span class=n>needed_shape</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>min_id</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=o>-</span><span class=n>n</span>
+
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_days</span><span class=p>):</span>
+            <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+                <span class=n>v</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>min_id</span> <span class=o><=</span> <span class=n>v</span> <span class=o><=</span> <span class=n>n</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"value </span><span class=si>{</span><span class=n>v</span><span class=si>}</span><span class=s2> at x[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2>] should be in "</span>
+                                     <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>min_id</span><span class=si>}</span><span class=s2>...</span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2>, but is not."</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=GamePlanSpace.n_points>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_plan_space.GamePlanSpace.n_points>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>n_points</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the number of game plans.</span>
+
+<span class=sd>        The values in a game plan go from `-n..n`, including zero, and we have</span>
+<span class=sd>        `days*n` values. This gives `(2n + 1) ** (days * n)`, where `days`</span>
+<span class=sd>        equals `(n - 1) * rounds` and `rounds` is the number of rounds. In</span>
+<span class=sd>        total, this gives `(2n + 1) ** ((n - 1) * rounds * n)`.</span>
+
+<span class=sd>        :return: the number of possible game plans</span>
+
+<span class=sd>        >>> space = GamePlanSpace(Instance.from_resource("circ6"))</span>
+<span class=sd>        >>> print((2 * 6 + 1) ** ((6 - 1) * 2 * 6))</span>
+<span class=sd>        6864377172744689378196133203444067624537070830997366604446306636401</span>
+<span class=sd>        >>> space.n_points()</span>
+<span class=sd>        6864377172744689378196133203444067624537070830997366604446306636401</span>
+<span class=sd>        >>> space = GamePlanSpace(Instance.from_resource("circ4"))</span>
+<span class=sd>        >>> space.n_points()</span>
+<span class=sd>        79766443076872509863361</span>
+<span class=sd>        >>> print((2 * 4 + 1) ** ((4 - 1) * 2 * 4))</span>
+<span class=sd>        79766443076872509863361</span>
+<span class=sd>        """</span>
+        <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span>
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_cities</span>
+        <span class=n>n_days</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>inst</span><span class=o>.</span><span class=n>rounds</span>
+        <span class=n>total_values</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>2</span> <span class=o>*</span> <span class=n>n</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=k>return</span> <span class=n>total_values</span> <span class=o>**</span> <span class=p>(</span><span class=n>n_days</span> <span class=o>*</span> <span class=n>n</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the game plan space.</span>
+
+<span class=sd>        :return: the name, simply `gp_` + the instance name</span>
+
+<span class=sd>        >>> print(GamePlanSpace(Instance.from_resource("bra24")))</span>
+<span class=sd>        gp_bra24</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=sa>f</span><span class=s2>"gp_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=si>}</span><span class=s2>"</span>
+
+<div class=viewcode-block id=GamePlanSpace.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_plan_space.GamePlanSpace.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of the space to the given logger.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=n>SCOPE_INSTANCE</span><span class=p>)</span> <span class=k>as</span> <span class=n>kv</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>kv</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.game_plan_space</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

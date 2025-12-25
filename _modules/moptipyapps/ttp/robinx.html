@@ -1,0 +1,37 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.ttp.robinx — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/ttp/robinx.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.robinx</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.ttp.robinx</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>The `RobinX` example data for the Traveling Tournament Problem (TTP).</span>
+
+<span class=sd>David Van Bulck of the Sports Scheduling Research group, part of the</span>
+<span class=sd>Faculty of Economics and Business Administration at Ghent University, Belgium,</span>
+<span class=sd>maintains "RobinX: An XML-driven Classification for Round-Robin Sports</span>
+<span class=sd>Timetabling", a set of benchmark data instances and results of the TTP.</span>
+<span class=sd>Here we include some of these TTP instances into our package.</span>
+
+<span class=sd>This package does not offer anything useful except for holding the TTP</span>
+<span class=sd>files. You can find the documentation and actual classes for solving and</span>
+<span class=sd>playing around with the TSP in package :mod:`~moptipyapps.ttp`.</span>
+
+<span class=sd>The original data of `robinX` can be found at</span>
+<span class=sd>&LThttps://robinxval.ugent.be/RobinX/travelRepo.php></span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>importlib</span><span class=w> </span><span class=kn>import</span> <span class=n>resources</span>  <span class=c1># nosem</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>TextIO</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>UTF8</span>
+
+
+<div class=viewcode-block id=open_resource_stream>
+<a class=viewcode-back href=../../../moptipyapps.ttp.robinx.html#moptipyapps.ttp.robinx.open_resource_stream>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>open_resource_stream</span><span class=p>(</span><span class=n>file_name</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=n>TextIO</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Open a RobinX resource stream.</span>
+
+<span class=sd>    :param file_name: the file name of the resource</span>
+<span class=sd>    :return: the stream</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"TextIO"</span><span class=p>,</span> <span class=n>resources</span><span class=o>.</span><span class=n>files</span><span class=p>(</span><span class=n>__package__</span><span class=p>)</span><span class=o>.</span><span class=n>joinpath</span><span class=p>(</span>
+        <span class=n>file_name</span><span class=p>)</span><span class=o>.</span><span class=n>open</span><span class=p>(</span><span class=s2>"r"</span><span class=p>,</span> <span class=n>encoding</span><span class=o>=</span><span class=n>UTF8</span><span class=p>))</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.robinx</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

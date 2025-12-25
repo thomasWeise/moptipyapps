@@ -1,0 +1,434 @@
+<!doctype html><html data-content_root=../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.encodings.ibl_encoding_1 — moptipyapps 0.8.79 documentation</title><link href="../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../_static/documentation_options.js?v=38375235"></script><script src="../../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/encodings/ibl_encoding_1.html rel=canonical><link href=../../../../genindex.html rel=index title=Index><link href=../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.encodings.ibl_encoding_1</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.encodings.ibl_encoding_1</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An improved bottom left encoding by Liu and Teng extended to multiple bins.</span>
+
+<span class=sd>Here we provide an implementation of the improved bottom left encoding by Liu</span>
+<span class=sd>and Teng [1], but extended to bins with limited height. If the height of the</span>
+<span class=sd>bin is a limiting factor, then our implementation will automatically use</span>
+<span class=sd>multiple bins. Another implementation is given in</span>
+<span class=sd>:mod:`moptipyapps.binpacking2d.encodings.ibl_encoding_2`.</span>
+
+<span class=sd>An :mod:`~moptipyapps.binpacking2d.instance` of the</span>
+<span class=sd>two-dimensional bin packing problem defines a set of objects to be packed</span>
+<span class=sd>and a bin size (width and height). Each object to be packed has itself a</span>
+<span class=sd>width and a height as well as a repetition counter, which is `1` if the object</span>
+<span class=sd>only occurs a single time and larger otherwise (i.e., if the repetition</span>
+<span class=sd>counter is `5`, the object needs to be packaged five times).</span>
+
+<span class=sd>The encoding receives signed permutations with repetitions as input. Each</span>
+<span class=sd>element of the permutation identifies one object from the bin packing</span>
+<span class=sd>instance. Each such object ID must occur exactly as often as the repetition</span>
+<span class=sd>counter of the object in the instance data suggest. But the ID may also occur</span>
+<span class=sd>negated, in which case the object is supposed to rotated by 90°.</span>
+
+<span class=sd>Now our encoding processes such a permutation from beginning to end. It starts</span>
+<span class=sd>with an empty bin `1`. Each object is first placed with its right end at the</span>
+<span class=sd>right end of the bin and with its bottom line exactly at the top of the bin,</span>
+<span class=sd>i.e., outside of the bin. Then, in each step, we move the object as far down</span>
+<span class=sd>as possible. Then, we move it to the left as far as possible, but we</span>
+<span class=sd>immediately stop if there was another chance to move the object down. In</span>
+<span class=sd>other words, downward movements are preferred over left movements. This is</span>
+<span class=sd>repeated until no movement of the object is possible anymore.</span>
+
+<span class=sd>Once the object cannot be moved anymore, we check if it is fully inside the</span>
+<span class=sd>bin. If yes, then the object is included in the bin and we continue with the</span>
+<span class=sd>next object. If not, it does not fit into the bin.</span>
+
+<span class=sd>This is the "Improved Bottom Left" heuristic by Liu and Teng [1].</span>
+
+<span class=sd>If the object does not fit into the current bin, we place it at the</span>
+<span class=sd>bottom-left corner of a new bin. We therefore increase the bin counter.</span>
+<span class=sd>From now on, all the following objects will be placed into this bin until</span>
+<span class=sd>the bin is full as well, in which case we move to the next bin again.</span>
+<span class=sd>This means that the current bin is closed at the same moment the first</span>
+<span class=sd>object is encountered that does not fit into it anymore. Therefore,</span>
+<span class=sd>the objects in a closed bin do no longer need to be considered when packing</span>
+<span class=sd>subsequent objects.</span>
+
+<span class=sd>This is different from the second variant of this encoding implemented in file</span>
+<span class=sd>:mod:`moptipyapps.binpacking2d.encodings.ibl_encoding_2`, which always checks</span>
+<span class=sd>all the bins, starting at bin `1`, when placing any object. That other</span>
+<span class=sd>encoding variant therefore must always consider all bins and is thus slower,</span>
+<span class=sd>but tends to yield better packings.</span>
+
+<span class=sd>This procedure has originally been developed and implemented by Mr. Rui ZHAO</span>
+<span class=sd>(赵睿), &LTzr1329142665@163.com> a Master's student at the Institute of Applied</span>
+<span class=sd>Optimization (应用优化研究所) of the School of</span>
+<span class=sd>Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University</span>
+<span class=sd>(合肥大学) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of</span>
+<span class=sd>Prof. Dr. Thomas Weise (汤卫思教授).</span>
+
+<span class=sd>1. Dequan Liu and Hongfei Teng. An Improved BL-Algorithm for Genetic Algorithm</span>
+<span class=sd>   of the Orthogonal Packing of Rectangles. European Journal of Operational</span>
+<span class=sd>   Research. 112(2):413-420. January (1999).</span>
+<span class=sd>   https://doi.org/10.1016/S0377-2217(97)00437-2.</span>
+<span class=sd>   http://www.paper.edu.cn/scholar/showpdf/MUT2AN0IOTD0Mxxh.</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.encoding</span><span class=w> </span><span class=kn>import</span> <span class=n>Encoding</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>IDX_HEIGHT</span><span class=p>,</span>
+    <span class=n>IDX_WIDTH</span><span class=p>,</span>
+    <span class=n>Instance</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>IDX_BIN</span><span class=p>,</span>
+    <span class=n>IDX_BOTTOM_Y</span><span class=p>,</span>
+    <span class=n>IDX_ID</span><span class=p>,</span>
+    <span class=n>IDX_LEFT_X</span><span class=p>,</span>
+    <span class=n>IDX_RIGHT_X</span><span class=p>,</span>
+    <span class=n>IDX_TOP_Y</span><span class=p>,</span>
+    <span class=n>Packing</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>SCOPE_INSTANCE</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>nogil</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>__move_down</span><span class=p>(</span><span class=n>packing</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>bin_start</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>i1</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Move the box at index `i1` down as far as possible in the current bin.</span>
+
+<span class=sd>    `bin_start` is the index of the first object that has already been placed</span>
+<span class=sd>    in the current bin. It always holds that `i1 >= bin_start`. In the case</span>
+<span class=sd>    that `i1 == bin_start`, then we can move the object directly to the bottom</span>
+<span class=sd>    of the bin without any issue.</span>
+
+<span class=sd>    If `i1 > bin_start` we iterate over all objects at indices</span>
+<span class=sd>    `bin_start...i1-1`. We first set `min_down` to the bottom-y coordinate of</span>
+<span class=sd>    the box, because this is how far down we can move at most. Then, for each</span>
+<span class=sd>    of the objects already placed in the bin, we check if there is any</span>
+<span class=sd>    intersection of the horizontal with the current box. If there is no</span>
+<span class=sd>    intersection *or* if the object is already above the current box, then the</span>
+<span class=sd>    object will not influence the downward movement of our object. If there is</span>
+<span class=sd>    an intersection, then we cannot move the current box deeper than the top-y</span>
+<span class=sd>    coordinate of the other box.</span>
+
+<span class=sd>    *Only* the box at index `i1` is modified and if it is modified, this</span>
+<span class=sd>    function will return `True`.</span>
+
+<span class=sd>    :param packing: the packing under construction</span>
+<span class=sd>    :param bin_start: the starting index of the current bin</span>
+<span class=sd>    :param i1: the index of the current box</span>
+<span class=sd>    :return: `True` if the object was moved down, `False` if the object cannot</span>
+<span class=sd>        be moved down any further because either it has reached the bottom or</span>
+<span class=sd>        because it would intersect with other objects</span>
+
+<span class=sd>    >>> # itemID, binID, left-x, bottom-y, right-x, top-y</span>
+<span class=sd>    >>> r = np.array([[1, 1, 10, 20, 30, 40],</span>
+<span class=sd>    ...               [2, 1, 30, 30, 50, 60],</span>
+<span class=sd>    ...               [3, 1, 40, 100, 60, 200]])</span>
+<span class=sd>    >>> __move_down(r, 0, 2)  # try to move down the box at index 2</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(r[2, :])</span>
+<span class=sd>    [  3   1  40  60  60 160]</span>
+<span class=sd>    >>> __move_down(r, 0, 2)  # try to move down the box at index 2 again</span>
+<span class=sd>    False</span>
+<span class=sd>    >>> __move_down(r, 0, 1)  # try to move down the box at index 1 (ignore 2)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(r[1, :])</span>
+<span class=sd>    [ 2  1 30  0 50 30]</span>
+<span class=sd>    >>> __move_down(r, 0, 1)  # try to move down the box at index 1 again</span>
+<span class=sd>    False</span>
+<span class=sd>    >>> __move_down(r, 0, 2)  # try to move down the box at index 2 again now</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(r[2, :])</span>
+<span class=sd>    [  3   1  40  30  60 130]</span>
+<span class=sd>    >>> __move_down(r, 0, 2)  # try to move down the box at index 2 again</span>
+<span class=sd>    False</span>
+<span class=sd>    >>> __move_down(r, 0, 0)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(r[0, :])</span>
+<span class=sd>    [ 1  1 10  0 30 20]</span>
+<span class=sd>    >>> __move_down(r, 0, 0)</span>
+<span class=sd>    False</span>
+<span class=sd>    """</span>
+    <span class=c1># load the coordinates of i1 into local variables to speed up computation</span>
+    <span class=n>packing_i1_left_x</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>])</span>
+    <span class=n>packing_i1_bottom_y</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>])</span>
+    <span class=n>packing_i1_right_x</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>])</span>
+    <span class=n>packing_i1_top_y</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>])</span>
+    <span class=n>min_down</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>packing_i1_bottom_y</span>  <span class=c1># maximum move: down to bottom</span>
+    <span class=k>for</span> <span class=n>i0</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>bin_start</span><span class=p>,</span> <span class=n>i1</span><span class=p>):</span>  <span class=c1># iterate over all boxes in current bin</span>
+        <span class=c1># An intersection exists if the right-x of an existing box is larger</span>
+        <span class=c1># than the left-x of the new box AND if the left-x of the existing box</span>
+        <span class=c1># is less than the right-x of the new box.</span>
+        <span class=c1># Only intersections matter and only with objects not above us.</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]</span> <span class=o>></span> <span class=n>packing_i1_left_x</span><span class=p>)</span> <span class=ow>and</span> \
+                <span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>]</span> <span class=o><</span> <span class=n>packing_i1_right_x</span><span class=p>)</span> <span class=ow>and</span> \
+                <span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>]</span> <span class=o><</span> <span class=n>packing_i1_top_y</span><span class=p>):</span>
+            <span class=c1># The object would horizontally intersect with the current object</span>
+            <span class=n>min_down</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>min_down</span><span class=p>,</span> <span class=nb>int</span><span class=p>(</span>
+                <span class=n>packing_i1_bottom_y</span> <span class=o>-</span> <span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]))</span>
+    <span class=k>if</span> <span class=n>min_down</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># Can we move down? If yes, update box.</span>
+        <span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>]</span> <span class=o>=</span> <span class=n>packing_i1_bottom_y</span> <span class=o>-</span> <span class=n>min_down</span>
+        <span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]</span> <span class=o>=</span> <span class=n>packing_i1_top_y</span> <span class=o>-</span> <span class=n>min_down</span>
+        <span class=k>return</span> <span class=kc>True</span>
+    <span class=k>return</span> <span class=kc>False</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>nogil</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>__move_left</span><span class=p>(</span><span class=n>packing</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>bin_start</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>i1</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Move the box at index `i1` left as far as possible in the current bin.</span>
+
+<span class=sd>    This function moves a box to the left without changing its vertical</span>
+<span class=sd>    position. It is slightly more tricky than the downwards moving function,</span>
+<span class=sd>    because in the improved bottom left heuristic, downward moves are</span>
+<span class=sd>    preferred compared to left moves. This means that the box needs to be</span>
+<span class=sd>    stopped when reaching the edge of a box on whose top it sits.</span>
+
+<span class=sd>    This function is to be called *after* `__move_down` and in an alternating</span>
+<span class=sd>    fashion.</span>
+
+<span class=sd>    *Only* the box at index `i1` is modified and if it is modified, this</span>
+<span class=sd>    function will return `True`.</span>
+
+<span class=sd>    :param packing: the packing under construction</span>
+<span class=sd>    :param bin_start: the starting index of the current bin</span>
+<span class=sd>    :param i1: the index of the current box</span>
+<span class=sd>    :return: `True` if the object was moved down, `False` if the object cannot</span>
+<span class=sd>        be moved down any further because either it has reached the bottom or</span>
+<span class=sd>        because it would intersect with other objects</span>
+
+<span class=sd>    >>> # itemID, binID, left-x, bottom-y, right-x, top-y</span>
+<span class=sd>    >>> r = np.array([[1, 1,  0,  0, 30, 10],</span>
+<span class=sd>    ...               [2, 1, 35,  0, 45, 30],</span>
+<span class=sd>    ...               [3, 1,  0, 10, 10, 20],</span>
+<span class=sd>    ...               [4, 1, 40, 30, 50, 40]])</span>
+<span class=sd>    >>> __move_left(r, 0, 3)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(r[3, :])</span>
+<span class=sd>    [ 4  1 25 30 35 40]</span>
+<span class=sd>    >>> __move_left(r, 0, 3)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(r[3, :])</span>
+<span class=sd>    [ 4  1  0 30 10 40]</span>
+<span class=sd>    >>> r[3, :] = [4, 1, 25, 10, 35, 20]</span>
+<span class=sd>    >>> __move_left(r, 0, 3)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(r[3, :])</span>
+<span class=sd>    [ 4  1 10 10 20 20]</span>
+<span class=sd>    >>> __move_left(r, 0, 3)</span>
+<span class=sd>    False</span>
+<span class=sd>    >>> # itemID, binID, left-x, bottom-y, right-x, top-y</span>
+<span class=sd>    >>> r = np.array([[1, 1,  0,  0, 10, 2],</span>
+<span class=sd>    ...               [2, 1, 10,  0, 20, 5],</span>
+<span class=sd>    ...               [3, 1,  8,  2, 10, 4]])</span>
+<span class=sd>    >>> __move_left(r, 0, 2)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(r[2, :])</span>
+<span class=sd>    [3 1 0 2 2 4]</span>
+<span class=sd>    """</span>
+    <span class=n>packing_i1_left_x</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>])</span>
+    <span class=n>packing_i1_bottom_y</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>])</span>
+    <span class=n>packing_i1_right_x</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>])</span>
+    <span class=n>packing_i1_top_y</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>])</span>
+    <span class=n>min_left</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>packing_i1_left_x</span>
+    <span class=k>for</span> <span class=n>i0</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>bin_start</span><span class=p>,</span> <span class=n>i1</span><span class=p>):</span>
+        <span class=k>if</span> <span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>]</span> <span class=o>>=</span> <span class=n>packing_i1_right_x</span><span class=p>:</span>
+            <span class=k>continue</span>  <span class=c1># the object is already behind us, so it can be ignored</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]</span> <span class=o>></span> <span class=n>packing_i1_left_x</span><span class=p>)</span> \
+                <span class=ow>and</span> <span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>]</span> <span class=o><</span> <span class=n>packing_i1_right_x</span><span class=p>):</span>
+            <span class=c1># we have a horizontal intersection with a box below</span>
+            <span class=k>if</span> <span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]</span> <span class=o>==</span> <span class=n>packing_i1_bottom_y</span><span class=p>:</span>
+                <span class=c1># only consider those the box *directly* below and move the</span>
+                <span class=c1># right end of the new box to the left end of that box below</span>
+                <span class=n>min_left</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>min_left</span><span class=p>,</span> <span class=nb>int</span><span class=p>(</span>
+                    <span class=n>packing_i1_right_x</span> <span class=o>-</span> <span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>]))</span>
+        <span class=k>elif</span> <span class=p>(</span><span class=n>packing_i1_top_y</span> <span class=o>></span> <span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>])</span> \
+                <span class=ow>and</span> <span class=p>(</span><span class=n>packing_i1_bottom_y</span> <span class=o><</span> <span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]):</span>
+            <span class=n>min_left</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>min_left</span><span class=p>,</span> <span class=nb>int</span><span class=p>(</span>
+                <span class=n>packing_i1_left_x</span> <span class=o>-</span> <span class=n>packing</span><span class=p>[</span><span class=n>i0</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]))</span>
+    <span class=k>if</span> <span class=n>min_left</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+        <span class=c1># move the box to the left</span>
+        <span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>]</span> <span class=o>=</span> <span class=n>packing_i1_left_x</span> <span class=o>-</span> <span class=n>min_left</span>
+        <span class=n>packing</span><span class=p>[</span><span class=n>i1</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]</span> <span class=o>=</span> <span class=n>packing_i1_right_x</span> <span class=o>-</span> <span class=n>min_left</span>
+        <span class=k>return</span> <span class=kc>True</span>
+    <span class=k>return</span> <span class=kc>False</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>nogil</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>_decode</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+            <span class=n>bin_width</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Decode a (signed) permutation to a packing.</span>
+
+<span class=sd>    The permutation is processed from the beginning to the end.</span>
+<span class=sd>    Each element identifies one object by its ID. If the ID is negative,</span>
+<span class=sd>    the object will be inserted rotated by 90°. If the ID is positive, the</span>
+<span class=sd>    object will be inserted as is.</span>
+
+<span class=sd>    The absolute value of the ID-1 will be used to look up the width and</span>
+<span class=sd>    height of the object in the `instance` data. If the object needs to be</span>
+<span class=sd>    rotated, width and height will be swapped.</span>
+
+<span class=sd>    Each object is, at the beginning, placed with its right side at the right</span>
+<span class=sd>    end of the bin. The bottom line of the object is initially put on top of</span>
+<span class=sd>    the bin, i.e., initially the object is outside of the bin.</span>
+
+<span class=sd>    Then, the object is iteratively moved downward as far as possible. Once it</span>
+<span class=sd>    reaches another object, we move it to the left until either its right side</span>
+<span class=sd>    reaches the left end of the object beneath it or until its left side</span>
+<span class=sd>    touches another object. Then we try to move the object down again, and so</span>
+<span class=sd>    on.</span>
+
+<span class=sd>    Once the object can no longer be moved down, we check if it is now fully</span>
+<span class=sd>    inside of the bin. If yes, then good, the object's bin index is set to the</span>
+<span class=sd>    ID of the current bin. If not, then we cannot place the object into this</span>
+<span class=sd>    bin. In this case, we increase the bin ID by one. The object is put into</span>
+<span class=sd>    a new and empty bin. We move it to the bottom-left corner of this bin. In</span>
+<span class=sd>    other words, the left side of the object touches the left side of the bin,</span>
+<span class=sd>    i.e., is `0`. The bottom-line of the object is also the bottom of the bin,</span>
+<span class=sd>    i.e., has coordinate `0` as well.</span>
+
+<span class=sd>    All objects that are placed from now on will go into this bin until the</span>
+<span class=sd>    bin is full. Then we move on to the next bin, and so on. In other words,</span>
+<span class=sd>    once a bin is full, we no longer consider it for receiving any further</span>
+<span class=sd>    objects.</span>
+
+<span class=sd>    :param x: a possibly signed permutation</span>
+<span class=sd>    :param y: the packing object</span>
+<span class=sd>    :param instance: the packing instance data</span>
+<span class=sd>    :param bin_width: the bin width</span>
+<span class=sd>    :param bin_height: the bin height</span>
+<span class=sd>    :returns: the number of bins</span>
+
+<span class=sd>    As example, we use a slightly modified version (we add more objects so we</span>
+<span class=sd>    get to see the use of a second bin) of Figure 2 of the Liu and Teng paper</span>
+<span class=sd>    "An Improved BL-Algorithm for Genetic Algorithm of the Orthogonal Packing</span>
+<span class=sd>    of Rectangles."</span>
+
+<span class=sd>    >>> # [width, height, repetitions]</span>
+<span class=sd>    >>> inst = np.array([[10, 20, 5], [5, 5, 5]])</span>
+<span class=sd>    >>> # [id = plain, -id = rotated]</span>
+<span class=sd>    >>> xx = np.array([1, -1, 2, -2, 1, -2, -2, -1, -1, 2])</span>
+<span class=sd>    >>> # [id, bin, left-x, bottom-y, right-x, top-y] ...</span>
+<span class=sd>    >>> yy = np.empty((10, 6), int)</span>
+<span class=sd>    >>> print(_decode(xx, yy, inst, 30, 30))</span>
+<span class=sd>    2</span>
+<span class=sd>    >>> print(yy[0, :])</span>
+<span class=sd>    [ 1  1  0  0 10 20]</span>
+<span class=sd>    >>> print(yy[1, :])</span>
+<span class=sd>    [ 1  1 10  0 30 10]</span>
+<span class=sd>    >>> print(yy[2, :])</span>
+<span class=sd>    [ 2  1 10 10 15 15]</span>
+<span class=sd>    >>> print(yy[3, :])</span>
+<span class=sd>    [ 2  1 15 10 20 15]</span>
+<span class=sd>    >>> print(yy[4, :])</span>
+<span class=sd>    [ 1  1 20 10 30 30]</span>
+<span class=sd>    >>> print(yy[5, :])</span>
+<span class=sd>    [ 2  1 10 15 15 20]</span>
+<span class=sd>    >>> print(yy[6, :])</span>
+<span class=sd>    [ 2  1 15 15 20 20]</span>
+<span class=sd>    >>> print(yy[7, :])</span>
+<span class=sd>    [ 1  1  0 20 20 30]</span>
+<span class=sd>    >>> print(yy[8, :])</span>
+<span class=sd>    [ 1  2  0  0 20 10]</span>
+<span class=sd>    >>> print(yy[9, :])</span>
+<span class=sd>    [ 2  2 20  0 25  5]</span>
+<span class=sd>    """</span>
+    <span class=n>w</span><span class=p>:</span> <span class=nb>int</span>  <span class=c1># the width of the current object</span>
+    <span class=n>h</span><span class=p>:</span> <span class=nb>int</span>  <span class=c1># the height of the current object</span>
+    <span class=n>use_id</span><span class=p>:</span> <span class=nb>int</span>  <span class=c1># the id of the current object</span>
+    <span class=n>bin_start</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># the index of the first object in the current bin</span>
+    <span class=n>bin_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>1</span>  <span class=c1># the id of the current bin</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>item_id</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>x</span><span class=p>):</span>  <span class=c1># iterate over all objects</span>
+        <span class=k>if</span> <span class=n>item_id</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># object should be rotated</span>
+            <span class=n>use_id</span> <span class=o>=</span> <span class=o>-</span><span class=p>(</span><span class=n>item_id</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span>  <span class=c1># get absolute id - 1</span>
+            <span class=n>w</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>instance</span><span class=p>[</span><span class=n>use_id</span><span class=p>,</span> <span class=n>IDX_HEIGHT</span><span class=p>])</span>  <span class=c1># width = height (rotated!)</span>
+            <span class=n>h</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>instance</span><span class=p>[</span><span class=n>use_id</span><span class=p>,</span> <span class=n>IDX_WIDTH</span><span class=p>])</span>   <span class=c1># height = width (rotated!)</span>
+        <span class=k>else</span><span class=p>:</span>  <span class=c1># the object will not be rotated</span>
+            <span class=n>use_id</span> <span class=o>=</span> <span class=n>item_id</span> <span class=o>-</span> <span class=mi>1</span>   <span class=c1># id - 1</span>
+            <span class=n>w</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>instance</span><span class=p>[</span><span class=n>use_id</span><span class=p>,</span> <span class=n>IDX_WIDTH</span><span class=p>])</span>  <span class=c1># get width</span>
+            <span class=n>h</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>instance</span><span class=p>[</span><span class=n>use_id</span><span class=p>,</span> <span class=n>IDX_HEIGHT</span><span class=p>])</span>  <span class=c1># get height</span>
+
+<span class=c1># It could be that an object is too wide or too high for the bin in its</span>
+<span class=c1># current rotation even if the bin was empty entirely. In this case, we simply</span>
+<span class=c1># force-rotate it. A bin packing instance will not permit objects that do not</span>
+<span class=c1># fit into the bin in any rotation. So if the object does not fit in its</span>
+<span class=c1># current rotation, it must fit if we simply rotate it by 90°.</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>w</span> <span class=o>></span> <span class=n>bin_width</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>h</span> <span class=o>></span> <span class=n>bin_height</span><span class=p>):</span>
+            <span class=n>w</span><span class=p>,</span> <span class=n>h</span> <span class=o>=</span> <span class=n>h</span><span class=p>,</span> <span class=n>w</span>
+
+<span class=c1># At first, the object's right corner is at the right corner of the bin.</span>
+<span class=c1># The object sits exactly at the top of the bin, i.e., its bottom line</span>
+<span class=c1># is the top line of the bin.</span>
+        <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_ID</span><span class=p>]</span> <span class=o>=</span> <span class=n>use_id</span> <span class=o>+</span> <span class=mi>1</span>  <span class=c1># the id of the object</span>
+        <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_width</span> <span class=o>-</span> <span class=n>w</span>  <span class=c1># the left end</span>
+        <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_height</span>  <span class=c1># object sits on top of bin</span>
+        <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_width</span>  <span class=c1># object ends at right end of bin</span>
+        <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_height</span> <span class=o>+</span> <span class=n>h</span>  <span class=c1># top of object is outside of bin</span>
+
+        <span class=k>while</span> <span class=n>__move_down</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=n>bin_start</span><span class=p>,</span> <span class=n>i</span><span class=p>)</span> <span class=ow>or</span> <span class=n>__move_left</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=n>bin_start</span><span class=p>,</span> <span class=n>i</span><span class=p>):</span>
+            <span class=k>pass</span>  <span class=c1># loop until object can no longer be moved</span>
+
+<span class=c1># If the object is not fully inside the current bin, we move to a new bin.</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]</span> <span class=o>></span> <span class=n>bin_width</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]</span> <span class=o>></span> <span class=n>bin_height</span><span class=p>):</span>
+            <span class=n>bin_id</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># step to the next bin</span>
+            <span class=n>bin_start</span> <span class=o>=</span> <span class=n>i</span>  <span class=c1># set the starting index of the bin</span>
+            <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># the object goes to the left end of the bin</span>
+            <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># the object goes to the bottom of the bin</span>
+            <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>]</span> <span class=o>=</span> <span class=n>w</span>  <span class=c1># so its right end is its width</span>
+            <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>]</span> <span class=o>=</span> <span class=n>h</span>  <span class=c1># and its top end is its height</span>
+        <span class=n>y</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>IDX_BIN</span><span class=p>]</span> <span class=o>=</span> <span class=n>bin_id</span>  <span class=c1># store the bin id</span>
+    <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=n>bin_id</span><span class=p>)</span>  <span class=c1># return the total number of bins</span>
+
+
+<div class=viewcode-block id=ImprovedBottomLeftEncoding1>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.encodings.html#moptipyapps.binpacking2d.encodings.ibl_encoding_1.ImprovedBottomLeftEncoding1>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>ImprovedBottomLeftEncoding1</span><span class=p>(</span><span class=n>Encoding</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An Improved Bottem Left Encoding by Liu and Teng for multiple bins."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Instantiate the improved best first encoding.</span>
+
+<span class=sd>        :param instance: the packing instance</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=c1>#: the internal instance reference</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+
+<div class=viewcode-block id=ImprovedBottomLeftEncoding1.decode>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.encodings.html#moptipyapps.binpacking2d.encodings.ibl_encoding_1.ImprovedBottomLeftEncoding1.decode>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>decode</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>y</span><span class=p>:</span> <span class=n>Packing</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Map a potentially signed permutation to a packing.</span>
+
+<span class=sd>        :param x: the array</span>
+<span class=sd>        :param y: the Gantt chart</span>
+<span class=sd>        """</span>
+        <span class=n>y</span><span class=o>.</span><span class=n>n_bins</span> <span class=o>=</span> <span class=n>_decode</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>y</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__instance</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__instance</span><span class=o>.</span><span class=n>bin_width</span><span class=p>,</span>
+                           <span class=bp>self</span><span class=o>.</span><span class=n>__instance</span><span class=o>.</span><span class=n>bin_height</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this encoding.</span>
+
+<span class=sd>        :return: `"ibf1"`</span>
+<span class=sd>        :rtype: str</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"ibf1"</span>
+
+<div class=viewcode-block id=ImprovedBottomLeftEncoding1.log_parameters_to>
+<a class=viewcode-back href=../../../../moptipyapps.binpacking2d.encodings.html#moptipyapps.binpacking2d.encodings.ibl_encoding_1.ImprovedBottomLeftEncoding1.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=n>SCOPE_INSTANCE</span><span class=p>)</span> <span class=k>as</span> <span class=n>kv</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__instance</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>kv</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.encodings.ibl_encoding_1</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

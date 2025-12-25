@@ -1,0 +1,145 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.qap.objective — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/qap/objective.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.qap.objective</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.qap.objective</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>The objective function for the Quadratic Assignment Problem.</span>
+
+<span class=sd>The candidate solutions to the QAP are</span>
+<span class=sd>:mod:`~moptipy.spaces.permutations` `p` of length `n` of the numbers `0`, `1`,</span>
+<span class=sd>..., `n-1`. An :mod:`~moptipyapps.qap.instance` of the Quadratic Assignment</span>
+<span class=sd>Problem (QAP) presents a `n*n` matrix `D` with</span>
+<span class=sd>:attr:`~moptipyapps.qap.instance.Instance.distances` and a `n*n` matrix `F`</span>
+<span class=sd>with flows :attr:`~moptipyapps.qap.instance.Instance.flows`. The objective</span>
+<span class=sd>value, subject to minimization, is then the</span>
+<span class=sd>`sum( F[i,j] * D[p[i], p[j]] for i, j in 0..n-1 )`, i.e., the sum of the</span>
+<span class=sd>products of the flows between facilities and the distances of their assigned</span>
+<span class=sd>locations.</span>
+
+<span class=sd>1. Eliane Maria Loiola, Nair Maria Maia de Abreu, Paulo Oswaldo</span>
+<span class=sd>   Boaventura-Netto, Peter Hahn, and Tania Querido. A survey for the</span>
+<span class=sd>   Quadratic Assignment Problem. European Journal of Operational Research.</span>
+<span class=sd>   176(2):657-690. January 2007. https://doi.org/10.1016/j.ejor.2005.09.032.</span>
+<span class=sd>2. Rainer E. Burkard, Eranda Çela, Panos M. Pardalos, and</span>
+<span class=sd>   Leonidas S. Pitsoulis. The Quadratic Assignment Problem. In Ding-Zhu Du,</span>
+<span class=sd>   Panos M. Pardalos, eds., Handbook of Combinatorial Optimization,</span>
+<span class=sd>   pages 1713-1809, 1998, Springer New York, NY, USA.</span>
+<span class=sd>   https://doi.org/10.1007/978-1-4613-0303-9_27.</span>
+
+<span class=sd>>>> inst = Instance.from_resource("bur26a")</span>
+<span class=sd>>>> QAPObjective(inst).evaluate(np.array([</span>
+<span class=sd>...     25, 14, 10, 6, 3, 11, 12, 1, 5, 17, 0, 4, 8, 20,</span>
+<span class=sd>...     7, 13, 2, 19, 18, 24, 16, 9, 15, 23, 22, 21]))</span>
+<span class=sd>5426670</span>
+
+<span class=sd>>>> inst = Instance.from_resource("nug12")</span>
+<span class=sd>>>> QAPObjective(inst).evaluate(np.array([</span>
+<span class=sd>...     11, 6, 8, 2, 3, 7, 10, 0, 4, 5, 9, 1]))</span>
+<span class=sd>578</span>
+
+<span class=sd>>>> inst = Instance.from_resource("tai12a")</span>
+<span class=sd>>>> QAPObjective(inst).evaluate(np.array([</span>
+<span class=sd>...     7, 0, 5, 1, 10, 9, 2, 4, 8, 6, 11, 3]))</span>
+<span class=sd>224416</span>
+<span class=sd>"""</span>
+
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.qap.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>SCOPE_INSTANCE</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>_evaluate</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>distances</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>flows</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Evaluate a solution to the QAP.</span>
+
+<span class=sd>    :param x: the permutation representing the solution</span>
+<span class=sd>    :param distances: the distance matrix</span>
+<span class=sd>    :param flows: the flow matrix</span>
+<span class=sd>    :return: the objective value</span>
+<span class=sd>    """</span>
+    <span class=n>result</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>xi</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>x</span><span class=p>):</span>
+        <span class=k>for</span> <span class=n>j</span><span class=p>,</span> <span class=n>xj</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>x</span><span class=p>):</span>
+            <span class=n>result</span> <span class=o>+=</span> <span class=n>flows</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>*</span> <span class=n>distances</span><span class=p>[</span><span class=n>xi</span><span class=p>,</span> <span class=n>xj</span><span class=p>]</span>
+    <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=n>result</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=QAPObjective>
+<a class=viewcode-back href=../../../moptipyapps.qap.html#moptipyapps.qap.objective.QAPObjective>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>QAPObjective</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An objective function for the quadratic assignment problem."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the QAP objective function.</span>
+
+<span class=sd>        :param instance: the one-dimensional ordering problem.</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=c1>#: the instance data</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+
+<div class=viewcode-block id=QAPObjective.evaluate>
+<a class=viewcode-back href=../../../moptipyapps.qap.html#moptipyapps.qap.objective.QAPObjective.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute the quadratic assignment problem objective value.</span>
+
+<span class=sd>        :param x: the permutation of elements</span>
+<span class=sd>        :return: the sum of flows times distances</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>_evaluate</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>distances</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>flows</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this objective.</span>
+
+<span class=sd>        :return: `"qap"`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"qap"</span>
+
+<div class=viewcode-block id=QAPObjective.lower_bound>
+<a class=viewcode-back href=../../../moptipyapps.qap.html#moptipyapps.qap.objective.QAPObjective.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound of this objective function.</span>
+
+<span class=sd>        :return: the lower bound</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>lower_bound</span></div>
+
+
+<div class=viewcode-block id=QAPObjective.upper_bound>
+<a class=viewcode-back href=../../../moptipyapps.qap.html#moptipyapps.qap.objective.QAPObjective.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the upper bound of this objective function.</span>
+
+<span class=sd>        :return: the upper bound</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>upper_bound</span></div>
+
+
+<div class=viewcode-block id=QAPObjective.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.qap.html#moptipyapps.qap.objective.QAPObjective.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=n>SCOPE_INSTANCE</span><span class=p>)</span> <span class=k>as</span> <span class=n>scope</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>scope</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.qap.objective</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

@@ -1,0 +1,568 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.ttp.instance — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/ttp/instance.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.instance</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.ttp.instance</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An instance of the Traveling Tournament Problem (TTP).</span>
+
+<span class=sd>The Traveling Tournament Problem (TTP) describes the logistics of a sports</span>
+<span class=sd>league. In this league, `n` teams compete. In each time slot, each team plays</span>
+<span class=sd>against one other team. In each game, one team plays at home and one team</span>
+<span class=sd>plays away with the other team. In each round, every team plays once against</span>
+<span class=sd>every other team. The league may have multiple :attr:`~moptipyapps.ttp.\</span>
+<span class=sd>instance.Instance.rounds`. If there are two rounds, then each team plays</span>
+<span class=sd>against each other team once at home and once abroad. If a team plays at home</span>
+<span class=sd>(or abroad) several times in a row, this is called a "streak". There are</span>
+<span class=sd>minimum and maximum streak length constraints defined, for both at home and</span>
+<span class=sd>abroad. Additionally, if team A plays a team B in one time slot, then the</span>
+<span class=sd>exact inverse game cannot take place in the next time slot. A minimum</span>
+<span class=sd>number of games must take place in between for separation. There can also be</span>
+<span class=sd>a maximum separation length.</span>
+
+<span class=sd>David Van Bulck of the Sports Scheduling Research group, part of the</span>
+<span class=sd>Faculty of Economics and Business Administration at Ghent University, Belgium,</span>
+<span class=sd>maintains "RobinX: An XML-driven Classification for Round-Robin Sports</span>
+<span class=sd>Timetabling", a set of benchmark data instances and results of the TTP.</span>
+<span class=sd>We provide some of these instances as resources here. You can also download</span>
+<span class=sd>them directly at &LThttps://robinxval.ugent.be/RobinX/travelRepo.php>. Also,</span>
+<span class=sd>see &LThttps://robinxval.ugent.be/> for more information.</span>
+
+<span class=sd>1. David Van Bulck. Minimum Travel Objective Repository. *RobinX: An</span>
+<span class=sd>   XML-driven Classification for Round-Robin Sports Timetabling.* Faculty of</span>
+<span class=sd>   Economics and Business Administration at Ghent University, Belgium.</span>
+<span class=sd>   https://robinxval.ugent.be/</span>
+<span class=sd>2. Kelly Easton, George L. Nemhauser, and Michael K. Trick. The Traveling</span>
+<span class=sd>   Tournament Problem Description and Benchmarks. In *Principles and Practice</span>
+<span class=sd>   of Constraint Programming (CP'01),*  November 26 - December 1, 2001, Paphos,</span>
+<span class=sd>   Cyprus, pages 580-584, Berlin/Heidelberg, Germany: Springer.</span>
+<span class=sd>   ISBN: 978-3-540-42863-3. https://doi.org/10.1007/3-540-45578-7_43</span>
+<span class=sd>   https://www.researchgate.net/publication/220270875</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>TextIO</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>defusedxml</span><span class=w> </span><span class=kn>import</span> <span class=n>ElementTree</span>  <span class=c1># type: ignore</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>DEFAULT_INT</span><span class=p>,</span> <span class=n>int_range_to_dtype</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.strings</span><span class=w> </span><span class=kn>import</span> <span class=n>sanitize_name</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span><span class=p>,</span> <span class=n>file_path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>check_to_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.tsp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span> <span class=k>as</span> <span class=n>TSPInstance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.robinx</span><span class=w> </span><span class=kn>import</span> <span class=n>open_resource_stream</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_from_stream</span><span class=p>(</span><span class=n>stream</span><span class=p>:</span> <span class=n>TextIO</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Read a TTP instance from an `robinxval.ugent.be`-formatted XML file.</span>
+
+<span class=sd>    This procedure ignores most of the data in the file and only focuses on</span>
+<span class=sd>    the instance name, the team names, and the distance matrix as well as the</span>
+<span class=sd>    constraints for home streak length, away streak length, and same-game</span>
+<span class=sd>    separations. Everything else is ignored.</span>
+
+<span class=sd>    :param stream: the text stream</span>
+<span class=sd>    :return: the instance</span>
+<span class=sd>    """</span>
+    <span class=n>used_names</span><span class=p>:</span> <span class=nb>set</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>set</span><span class=p>()</span>
+    <span class=n>team_names</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+    <span class=n>distances</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>],</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>{}</span>
+    <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>rounds</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>home_streak_min</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>home_streak_max</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>away_streak_min</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>away_streak_max</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>separation_min</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+    <span class=n>separation_max</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+
+    <span class=k>for</span> <span class=n>_event</span><span class=p>,</span> <span class=n>element</span> <span class=ow>in</span> <span class=n>ElementTree</span><span class=o>.</span><span class=n>iterparse</span><span class=p>(</span><span class=n>stream</span><span class=p>,</span> <span class=n>forbid_dtd</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span>
+                                                 <span class=n>forbid_entities</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span>
+                                                 <span class=n>forbid_external</span><span class=o>=</span><span class=kc>True</span><span class=p>):</span>
+        <span class=k>if</span> <span class=n>element</span><span class=o>.</span><span class=n>tag</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>tag</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>element</span><span class=o>.</span><span class=n>tag</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span><span class=o>.</span><span class=n>lower</span><span class=p>()</span>
+        <span class=k>if</span> <span class=n>tag</span> <span class=o>==</span> <span class=s2>"instancename"</span><span class=p>:</span>
+            <span class=k>if</span> <span class=n>name</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=n>name</span> <span class=o>=</span> <span class=n>sanitize_name</span><span class=p>(</span><span class=n>element</span><span class=o>.</span><span class=n>text</span><span class=p>)</span><span class=o>.</span><span class=n>lower</span><span class=p>()</span>
+                <span class=k>if</span> <span class=n>name</span> <span class=ow>in</span> <span class=n>used_names</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"name </span><span class=si>{</span><span class=n>element</span><span class=o>.</span><span class=n>text</span><span class=si>!r}</span><span class=s2> invalid, as it "</span>
+                        <span class=sa>f</span><span class=s2>"maps to </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>, which is already used."</span><span class=p>)</span>
+                <span class=n>used_names</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"already got name=</span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>, but tag "</span>
+                                 <span class=sa>f</span><span class=s2>"'InstanceName' appears again?"</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>tag</span> <span class=o>==</span> <span class=s2>"distance"</span><span class=p>:</span>
+            <span class=n>t1</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"team1"</span><span class=p>],</span>
+                                         <span class=s2>"team1"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+            <span class=n>t2</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"team2"</span><span class=p>],</span>
+                                         <span class=s2>"team2"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+            <span class=n>dst</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"dist"</span><span class=p>],</span> <span class=s2>"dist"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>t1</span> <span class=o>==</span> <span class=n>t2</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>dst</span> <span class=o>==</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>continue</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"distance for team1=</span><span class=si>{</span><span class=n>t1</span><span class=si>}</span><span class=s2>, team2=</span><span class=si>{</span><span class=n>t2</span><span class=si>}</span><span class=s2> is"</span>
+                                 <span class=sa>f</span><span class=s2>" </span><span class=si>{</span><span class=n>dst</span><span class=si>}</span><span class=s2> but must be 0."</span><span class=p>)</span>
+            <span class=n>tpl</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>t1</span><span class=p>,</span> <span class=n>t2</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>tpl</span> <span class=ow>in</span> <span class=n>distances</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"got distance=</span><span class=si>{</span><span class=n>dst</span><span class=si>}</span><span class=s2> for </span><span class=si>{</span><span class=n>tpl</span><span class=si>!r}</span><span class=s2>, but "</span>
+                    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>distances</span><span class=p>[</span><span class=n>tpl</span><span class=p>]</span><span class=si>}</span><span class=s2> was already specified before"</span><span class=p>)</span>
+            <span class=n>distances</span><span class=p>[</span><span class=n>tpl</span><span class=p>]</span> <span class=o>=</span> <span class=n>dst</span>
+        <span class=k>elif</span> <span class=n>element</span><span class=o>.</span><span class=n>tag</span> <span class=o>==</span> <span class=s2>"team"</span><span class=p>:</span>
+            <span class=n>team</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"id"</span><span class=p>],</span> <span class=s2>"id"</span><span class=p>,</span>
+                                           <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span>
+            <span class=n>nn</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"name"</span><span class=p>]</span>
+            <span class=n>tname</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>nn</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+            <span class=k>if</span> <span class=n>tname</span> <span class=ow>in</span> <span class=n>used_names</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"name </span><span class=si>{</span><span class=n>nn</span><span class=si>!r}</span><span class=s2> is invalid, as it maps to "</span>
+                                 <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>tname</span><span class=si>!r}</span><span class=s2>, which is already used."</span><span class=p>)</span>
+            <span class=n>used_names</span><span class=o>.</span><span class=n>add</span><span class=p>(</span><span class=n>tname</span><span class=p>)</span>
+            <span class=n>team_names</span><span class=p>[</span><span class=n>team</span><span class=p>]</span> <span class=o>=</span> <span class=n>tname</span>
+        <span class=k>elif</span> <span class=n>element</span><span class=o>.</span><span class=n>tag</span> <span class=o>==</span> <span class=s2>"numberroundrobin"</span><span class=p>:</span>
+            <span class=k>if</span> <span class=n>rounds</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"rounds already set to </span><span class=si>{</span><span class=n>rounds</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+            <span class=n>rounds</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>element</span><span class=o>.</span><span class=n>text</span><span class=p>,</span> <span class=s2>"rounds"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1000</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>tag</span> <span class=o>==</span> <span class=s2>"ca3"</span><span class=p>:</span>
+            <span class=k>if</span> <span class=s2>"mode1"</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>:</span>
+                <span class=k>continue</span>
+            <span class=k>if</span> <span class=s2>"mode2"</span> <span class=ow>not</span> <span class=ow>in</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>:</span>
+                <span class=k>continue</span>
+            <span class=k>if</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"mode2"</span><span class=p>]</span><span class=o>.</span><span class=n>lower</span><span class=p>()</span> <span class=o>!=</span> <span class=s2>"games"</span><span class=p>:</span>
+                <span class=k>continue</span>
+            <span class=n>mode</span> <span class=o>=</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"mode1"</span><span class=p>]</span><span class=o>.</span><span class=n>lower</span><span class=p>()</span>
+            <span class=n>mi</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"min"</span><span class=p>],</span> <span class=s2>"min"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span> \
+                <span class=k>if</span> <span class=s2>"min"</span> <span class=ow>in</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span> <span class=k>else</span> <span class=kc>None</span>
+            <span class=n>ma</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"max"</span><span class=p>],</span> <span class=s2>"max"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span> \
+                <span class=k>if</span> <span class=s2>"max"</span> <span class=ow>in</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span> <span class=k>else</span> <span class=kc>None</span>
+            <span class=k>if</span> <span class=n>mode</span> <span class=o>==</span> <span class=s2>"h"</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>mi</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>if</span> <span class=n>home_streak_min</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"minimum home streak already defined"</span><span class=p>)</span>
+                    <span class=n>home_streak_min</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>mi</span><span class=p>,</span> <span class=mi>1</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>ma</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>if</span> <span class=n>home_streak_max</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"maximum home streak already defined"</span><span class=p>)</span>
+                    <span class=n>home_streak_max</span> <span class=o>=</span> <span class=n>ma</span>
+            <span class=k>elif</span> <span class=n>mode</span> <span class=o>==</span> <span class=s2>"a"</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>mi</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>if</span> <span class=n>away_streak_min</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"minimum away streak already defined"</span><span class=p>)</span>
+                    <span class=n>away_streak_min</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>mi</span><span class=p>,</span> <span class=mi>1</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>ma</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>if</span> <span class=n>away_streak_max</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"maximum away streak already defined"</span><span class=p>)</span>
+                    <span class=n>away_streak_max</span> <span class=o>=</span> <span class=n>ma</span>
+        <span class=k>elif</span> <span class=n>tag</span> <span class=o>==</span> <span class=s2>"se1"</span><span class=p>:</span>
+            <span class=n>mi</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"min"</span><span class=p>],</span> <span class=s2>"min"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span> \
+                <span class=k>if</span> <span class=s2>"min"</span> <span class=ow>in</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span> <span class=k>else</span> <span class=kc>None</span>
+            <span class=n>ma</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span>
+                <span class=n>element</span><span class=o>.</span><span class=n>attrib</span><span class=p>[</span><span class=s2>"max"</span><span class=p>],</span> <span class=s2>"max"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000</span><span class=p>)</span> \
+                <span class=k>if</span> <span class=s2>"max"</span> <span class=ow>in</span> <span class=n>element</span><span class=o>.</span><span class=n>attrib</span> <span class=k>else</span> <span class=kc>None</span>
+            <span class=k>if</span> <span class=n>mi</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>separation_min</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"minimum separation already defined"</span><span class=p>)</span>
+                <span class=n>separation_min</span> <span class=o>=</span> <span class=n>mi</span>
+            <span class=k>if</span> <span class=n>ma</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>separation_max</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"maximum separation already defined"</span><span class=p>)</span>
+                <span class=n>separation_max</span> <span class=o>=</span> <span class=n>ma</span>
+
+    <span class=k>if</span> <span class=n>name</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"did not find instance name"</span><span class=p>)</span>
+    <span class=n>n_teams</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>team_names</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>n_teams</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"did not find any team name"</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>used_names</span><span class=p>)</span> <span class=o>!=</span> <span class=p>(</span><span class=n>n_teams</span> <span class=o>+</span> <span class=mi>1</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"set of used names </span><span class=si>{</span><span class=n>used_names</span><span class=si>!r}</span><span class=s2> has wrong "</span>
+                         <span class=sa>f</span><span class=s2>"length, should be </span><span class=si>{</span><span class=n>n_teams</span><span class=w> </span><span class=o>+</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=n>dm</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=n>n_teams</span><span class=p>,</span> <span class=n>n_teams</span><span class=p>),</span> <span class=n>DEFAULT_INT</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>tup</span><span class=p>,</span> <span class=n>dst</span> <span class=ow>in</span> <span class=n>distances</span><span class=o>.</span><span class=n>items</span><span class=p>():</span>
+        <span class=n>dm</span><span class=p>[</span><span class=n>tup</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=n>tup</span><span class=p>[</span><span class=mi>1</span><span class=p>]]</span> <span class=o>=</span> <span class=n>dst</span>
+
+    <span class=k>if</span> <span class=n>rounds</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>rounds</span> <span class=o>=</span> <span class=mi>2</span>
+    <span class=n>ll</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>rounds</span> <span class=o>*</span> <span class=n>n_teams</span> <span class=o>-</span> <span class=mi>1</span>
+    <span class=k>if</span> <span class=n>home_streak_min</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>home_streak_min</span> <span class=o>=</span> <span class=mi>1</span>
+    <span class=k>if</span> <span class=n>home_streak_max</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>home_streak_max</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=n>home_streak_min</span><span class=p>,</span> <span class=mi>3</span><span class=p>),</span> <span class=n>ll</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>away_streak_min</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>away_streak_min</span> <span class=o>=</span> <span class=mi>1</span>
+    <span class=k>if</span> <span class=n>away_streak_max</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>away_streak_max</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=n>away_streak_min</span><span class=p>,</span> <span class=mi>3</span><span class=p>),</span> <span class=n>ll</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>separation_min</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>separation_min</span> <span class=o>=</span> <span class=mi>1</span>
+    <span class=k>if</span> <span class=n>separation_max</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>separation_max</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=nb>max</span><span class=p>(</span><span class=n>separation_min</span><span class=p>,</span> <span class=mi>1</span><span class=p>),</span> <span class=n>ll</span><span class=p>)</span>
+
+    <span class=k>return</span> <span class=n>Instance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=n>dm</span><span class=p>,</span> <span class=p>[</span><span class=n>team_names</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n_teams</span><span class=p>)],</span>
+                    <span class=n>rounds</span><span class=p>,</span> <span class=n>home_streak_min</span><span class=p>,</span> <span class=n>home_streak_max</span><span class=p>,</span> <span class=n>away_streak_min</span><span class=p>,</span>
+                    <span class=n>away_streak_max</span><span class=p>,</span> <span class=n>separation_min</span><span class=p>,</span> <span class=n>separation_max</span><span class=p>)</span>
+
+
+<span class=c1>#: The instances made available within this package are taken from</span>
+<span class=c1>#: &LThttps://robinxval.ugent.be/RobinX/travelRepo.php>, where the following</span>
+<span class=c1>#: descriptions are given:</span>
+<span class=c1>#: - *Constant Distance (`con*`):* The constant distance instances are the</span>
+<span class=c1>#:   most simple instances in which the distance between the home venues of</span>
+<span class=c1>#:   any two teams is one. In this case, Urrutia and Ribeiro showed that</span>
+<span class=c1>#:   distance minimization is equivalent with break maximization.</span>
+<span class=c1>#: - *Circular Distance (`circ*`):* Somewhat similar are the circular</span>
+<span class=c1>#:   distance instances in which the teams' venues are placed on a</span>
+<span class=c1>#:   circle. Any two consecutive teams are connected by an edge and the</span>
+<span class=c1>#:   distance between two teams is equal to the minimal number of edges that</span>
+<span class=c1>#:   must be traversed to get to the other team. Although traveling</span>
+<span class=c1>#:   salesperson problems with a circular distance matrix have a trivial</span>
+<span class=c1>#:   solution, it remains challenging to solve circular traveling tournament</span>
+<span class=c1>#:   instances.</span>
+<span class=c1>#: - *Galaxy (`gal*`):* This artificial instance class consists of the Galaxy</span>
+<span class=c1>#:   instances that use a 3D-space that embeds the Earth and 39 other</span>
+<span class=c1>#:   exoplanets.</span>
+<span class=c1>#: - *National league (`nl*`):* The `nl`-instances are based on air distance</span>
+<span class=c1>#:   between the city centers from teams in the National League of the Major</span>
+<span class=c1>#:   League Baseball.</span>
+<span class=c1>#: - *National football league (`nfl*`):* The NFL-instances are based on air</span>
+<span class=c1>#:   distance between the city centers from teams in the National Football</span>
+<span class=c1>#:   League.</span>
+<span class=c1>#: - *Super 14 (`sup*`):* The super 14 instances are based on air distance</span>
+<span class=c1>#:   between the city centers from teams in the Super 14 rugby cup.</span>
+<span class=c1>#: - *Brazilian (`bra24`)):* The Brazilian instance is based on the air</span>
+<span class=c1>#:   distance between the home cities of 24 teams in the main division of the</span>
+<span class=c1>#:   2003 edition of the Brazilian soccer championship.</span>
+<span class=c1>#: - *Linear (`line*`):* In the linear instances, `n` teams are located on a</span>
+<span class=c1>#:   straight line with a distance of one unit separating each pair of</span>
+<span class=c1>#:   adjacent teams.</span>
+<span class=c1>#: - *Increasing distance (`incr*`):* In the increasing distance instances,</span>
+<span class=c1>#:   `n` teams are located on a straight line with an increasing distance</span>
+<span class=c1>#:   separating each pair of adjacent teams such that the distance between</span>
+<span class=c1>#:   team `k` and `k+1` equals `k`.</span>
+<span class=n>_INSTANCES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+    <span class=s2>"bra24"</span><span class=p>,</span> <span class=s2>"circ4"</span><span class=p>,</span> <span class=s2>"circ6"</span><span class=p>,</span> <span class=s2>"circ8"</span><span class=p>,</span> <span class=s2>"circ10"</span><span class=p>,</span> <span class=s2>"circ12"</span><span class=p>,</span> <span class=s2>"circ14"</span><span class=p>,</span>
+    <span class=s2>"circ16"</span><span class=p>,</span> <span class=s2>"circ18"</span><span class=p>,</span> <span class=s2>"circ20"</span><span class=p>,</span> <span class=s2>"circ22"</span><span class=p>,</span> <span class=s2>"circ24"</span><span class=p>,</span> <span class=s2>"circ26"</span><span class=p>,</span> <span class=s2>"circ28"</span><span class=p>,</span>
+    <span class=s2>"circ30"</span><span class=p>,</span> <span class=s2>"circ32"</span><span class=p>,</span> <span class=s2>"circ34"</span><span class=p>,</span> <span class=s2>"circ36"</span><span class=p>,</span> <span class=s2>"circ38"</span><span class=p>,</span> <span class=s2>"circ40"</span><span class=p>,</span> <span class=s2>"con4"</span><span class=p>,</span>
+    <span class=s2>"con6"</span><span class=p>,</span> <span class=s2>"con8"</span><span class=p>,</span> <span class=s2>"con10"</span><span class=p>,</span> <span class=s2>"con12"</span><span class=p>,</span> <span class=s2>"con14"</span><span class=p>,</span> <span class=s2>"con16"</span><span class=p>,</span> <span class=s2>"con18"</span><span class=p>,</span> <span class=s2>"con20"</span><span class=p>,</span>
+    <span class=s2>"con22"</span><span class=p>,</span> <span class=s2>"con24"</span><span class=p>,</span> <span class=s2>"con26"</span><span class=p>,</span> <span class=s2>"con28"</span><span class=p>,</span> <span class=s2>"con30"</span><span class=p>,</span> <span class=s2>"con32"</span><span class=p>,</span> <span class=s2>"con34"</span><span class=p>,</span> <span class=s2>"con36"</span><span class=p>,</span>
+    <span class=s2>"con38"</span><span class=p>,</span> <span class=s2>"con40"</span><span class=p>,</span> <span class=s2>"gal4"</span><span class=p>,</span> <span class=s2>"gal6"</span><span class=p>,</span> <span class=s2>"gal8"</span><span class=p>,</span> <span class=s2>"gal10"</span><span class=p>,</span> <span class=s2>"gal12"</span><span class=p>,</span> <span class=s2>"gal14"</span><span class=p>,</span>
+    <span class=s2>"gal16"</span><span class=p>,</span> <span class=s2>"gal18"</span><span class=p>,</span> <span class=s2>"gal20"</span><span class=p>,</span> <span class=s2>"gal22"</span><span class=p>,</span> <span class=s2>"gal24"</span><span class=p>,</span> <span class=s2>"gal26"</span><span class=p>,</span> <span class=s2>"gal28"</span><span class=p>,</span> <span class=s2>"gal30"</span><span class=p>,</span>
+    <span class=s2>"gal32"</span><span class=p>,</span> <span class=s2>"gal34"</span><span class=p>,</span> <span class=s2>"gal36"</span><span class=p>,</span> <span class=s2>"gal38"</span><span class=p>,</span> <span class=s2>"gal40"</span><span class=p>,</span> <span class=s2>"incr4"</span><span class=p>,</span> <span class=s2>"incr6"</span><span class=p>,</span> <span class=s2>"incr8"</span><span class=p>,</span>
+    <span class=s2>"incr10"</span><span class=p>,</span> <span class=s2>"incr12"</span><span class=p>,</span> <span class=s2>"incr14"</span><span class=p>,</span> <span class=s2>"incr16"</span><span class=p>,</span> <span class=s2>"incr18"</span><span class=p>,</span> <span class=s2>"incr20"</span><span class=p>,</span> <span class=s2>"incr22"</span><span class=p>,</span>
+    <span class=s2>"incr24"</span><span class=p>,</span> <span class=s2>"incr26"</span><span class=p>,</span> <span class=s2>"incr28"</span><span class=p>,</span> <span class=s2>"incr30"</span><span class=p>,</span> <span class=s2>"incr32"</span><span class=p>,</span> <span class=s2>"incr34"</span><span class=p>,</span> <span class=s2>"incr36"</span><span class=p>,</span>
+    <span class=s2>"incr38"</span><span class=p>,</span> <span class=s2>"incr40"</span><span class=p>,</span> <span class=s2>"line4"</span><span class=p>,</span> <span class=s2>"line6"</span><span class=p>,</span> <span class=s2>"line8"</span><span class=p>,</span> <span class=s2>"line10"</span><span class=p>,</span> <span class=s2>"line12"</span><span class=p>,</span>
+    <span class=s2>"line14"</span><span class=p>,</span> <span class=s2>"line16"</span><span class=p>,</span> <span class=s2>"line18"</span><span class=p>,</span> <span class=s2>"line20"</span><span class=p>,</span> <span class=s2>"line22"</span><span class=p>,</span> <span class=s2>"line24"</span><span class=p>,</span> <span class=s2>"line26"</span><span class=p>,</span>
+    <span class=s2>"line28"</span><span class=p>,</span> <span class=s2>"line30"</span><span class=p>,</span> <span class=s2>"line32"</span><span class=p>,</span> <span class=s2>"line34"</span><span class=p>,</span> <span class=s2>"line36"</span><span class=p>,</span> <span class=s2>"line38"</span><span class=p>,</span> <span class=s2>"line40"</span><span class=p>,</span>
+    <span class=s2>"nfl16"</span><span class=p>,</span> <span class=s2>"nfl18"</span><span class=p>,</span> <span class=s2>"nfl20"</span><span class=p>,</span> <span class=s2>"nfl22"</span><span class=p>,</span> <span class=s2>"nfl24"</span><span class=p>,</span> <span class=s2>"nfl26"</span><span class=p>,</span> <span class=s2>"nfl28"</span><span class=p>,</span> <span class=s2>"nfl30"</span><span class=p>,</span>
+    <span class=s2>"nfl32"</span><span class=p>,</span> <span class=s2>"nl4"</span><span class=p>,</span> <span class=s2>"nl6"</span><span class=p>,</span> <span class=s2>"nl8"</span><span class=p>,</span> <span class=s2>"nl10"</span><span class=p>,</span> <span class=s2>"nl12"</span><span class=p>,</span> <span class=s2>"nl14"</span><span class=p>,</span> <span class=s2>"nl16"</span><span class=p>,</span> <span class=s2>"sup4"</span><span class=p>,</span>
+    <span class=s2>"sup6"</span><span class=p>,</span> <span class=s2>"sup8"</span><span class=p>,</span> <span class=s2>"sup10"</span><span class=p>,</span> <span class=s2>"sup12"</span><span class=p>,</span> <span class=s2>"sup14"</span><span class=p>)</span>
+
+
+<span class=c1>#: The lower and upper bound for the *optimal* total tournament length, taken</span>
+<span class=c1>#: from https://robinxval.ugent.be/RobinX/travelRepo.php on 2024-05-10.</span>
+<span class=n>_OPT_DISTANCE_BOUNDS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>{</span>
+    <span class=s2>"bra24"</span><span class=p>:</span> <span class=p>(</span><span class=mi>451406</span><span class=p>,</span> <span class=mi>538866</span><span class=p>),</span> <span class=s2>"circ4"</span><span class=p>:</span> <span class=p>(</span><span class=mi>20</span><span class=p>,</span> <span class=mi>20</span><span class=p>),</span> <span class=s2>"circ6"</span><span class=p>:</span> <span class=p>(</span><span class=mi>64</span><span class=p>,</span> <span class=mi>64</span><span class=p>),</span>
+    <span class=s2>"circ8"</span><span class=p>:</span> <span class=p>(</span><span class=mi>132</span><span class=p>,</span> <span class=mi>132</span><span class=p>),</span> <span class=s2>"circ10"</span><span class=p>:</span> <span class=p>(</span><span class=mi>242</span><span class=p>,</span> <span class=mi>242</span><span class=p>),</span> <span class=s2>"circ12"</span><span class=p>:</span> <span class=p>(</span><span class=mi>388</span><span class=p>,</span> <span class=mi>400</span><span class=p>),</span>
+    <span class=s2>"circ14"</span><span class=p>:</span> <span class=p>(</span><span class=mi>588</span><span class=p>,</span> <span class=mi>616</span><span class=p>),</span> <span class=s2>"circ16"</span><span class=p>:</span> <span class=p>(</span><span class=mi>846</span><span class=p>,</span> <span class=mi>898</span><span class=p>),</span> <span class=s2>"circ18"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1188</span><span class=p>,</span> <span class=mi>1268</span><span class=p>),</span>
+    <span class=s2>"circ20"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1600</span><span class=p>,</span> <span class=mi>1724</span><span class=p>),</span> <span class=s2>"circ22"</span><span class=p>:</span> <span class=p>(</span><span class=mi>2068</span><span class=p>,</span> <span class=mi>2366</span><span class=p>),</span> <span class=s2>"circ24"</span><span class=p>:</span> <span class=p>(</span><span class=mi>2688</span><span class=p>,</span> <span class=mi>3146</span><span class=p>),</span>
+    <span class=s2>"circ26"</span><span class=p>:</span> <span class=p>(</span><span class=mi>3380</span><span class=p>,</span> <span class=mi>3992</span><span class=p>),</span> <span class=s2>"circ28"</span><span class=p>:</span> <span class=p>(</span><span class=mi>4144</span><span class=p>,</span> <span class=mi>4642</span><span class=p>),</span> <span class=s2>"circ30"</span><span class=p>:</span> <span class=p>(</span><span class=mi>5100</span><span class=p>,</span> <span class=mi>5842</span><span class=p>),</span>
+    <span class=s2>"circ32"</span><span class=p>:</span> <span class=p>(</span><span class=mi>6144</span><span class=p>,</span> <span class=mi>7074</span><span class=p>),</span> <span class=s2>"circ34"</span><span class=p>:</span> <span class=p>(</span><span class=mi>7276</span><span class=p>,</span> <span class=mi>8042</span><span class=p>),</span> <span class=s2>"circ36"</span><span class=p>:</span> <span class=p>(</span><span class=mi>8640</span><span class=p>,</span> <span class=mi>9726</span><span class=p>),</span>
+    <span class=s2>"circ38"</span><span class=p>:</span> <span class=p>(</span><span class=mi>10108</span><span class=p>,</span> <span class=mi>11424</span><span class=p>),</span> <span class=s2>"circ40"</span><span class=p>:</span> <span class=p>(</span><span class=mi>11680</span><span class=p>,</span> <span class=mi>12752</span><span class=p>),</span> <span class=s2>"con4"</span><span class=p>:</span> <span class=p>(</span><span class=mi>17</span><span class=p>,</span> <span class=mi>17</span><span class=p>),</span>
+    <span class=s2>"con6"</span><span class=p>:</span> <span class=p>(</span><span class=mi>43</span><span class=p>,</span> <span class=mi>43</span><span class=p>),</span> <span class=s2>"con8"</span><span class=p>:</span> <span class=p>(</span><span class=mi>80</span><span class=p>,</span> <span class=mi>80</span><span class=p>),</span> <span class=s2>"con10"</span><span class=p>:</span> <span class=p>(</span><span class=mi>124</span><span class=p>,</span> <span class=mi>124</span><span class=p>),</span>
+    <span class=s2>"con12"</span><span class=p>:</span> <span class=p>(</span><span class=mi>181</span><span class=p>,</span> <span class=mi>181</span><span class=p>),</span> <span class=s2>"con14"</span><span class=p>:</span> <span class=p>(</span><span class=mi>252</span><span class=p>,</span> <span class=mi>252</span><span class=p>),</span> <span class=s2>"con16"</span><span class=p>:</span> <span class=p>(</span><span class=mi>327</span><span class=p>,</span> <span class=mi>327</span><span class=p>),</span>
+    <span class=s2>"con18"</span><span class=p>:</span> <span class=p>(</span><span class=mi>414</span><span class=p>,</span> <span class=mi>416</span><span class=p>),</span> <span class=s2>"con20"</span><span class=p>:</span> <span class=p>(</span><span class=mi>520</span><span class=p>,</span> <span class=mi>520</span><span class=p>),</span> <span class=s2>"con22"</span><span class=p>:</span> <span class=p>(</span><span class=mi>626</span><span class=p>,</span> <span class=mi>626</span><span class=p>),</span>
+    <span class=s2>"con24"</span><span class=p>:</span> <span class=p>(</span><span class=mi>744</span><span class=p>,</span> <span class=mi>747</span><span class=p>),</span> <span class=s2>"con26"</span><span class=p>:</span> <span class=p>(</span><span class=mi>884</span><span class=p>,</span> <span class=mi>884</span><span class=p>),</span> <span class=s2>"con28"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1021</span><span class=p>,</span> <span class=mi>1021</span><span class=p>),</span>
+    <span class=s2>"con30"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1170</span><span class=p>,</span> <span class=mi>1177</span><span class=p>),</span> <span class=s2>"con32"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1344</span><span class=p>,</span> <span class=mi>1359</span><span class=p>),</span> <span class=s2>"con34"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1512</span><span class=p>,</span> <span class=mi>1512</span><span class=p>),</span>
+    <span class=s2>"con36"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1692</span><span class=p>,</span> <span class=mi>1703</span><span class=p>),</span> <span class=s2>"con38"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1900</span><span class=p>,</span> <span class=mi>1918</span><span class=p>),</span> <span class=s2>"con40"</span><span class=p>:</span> <span class=p>(</span><span class=mi>2099</span><span class=p>,</span> <span class=mi>2099</span><span class=p>),</span>
+    <span class=s2>"gal4"</span><span class=p>:</span> <span class=p>(</span><span class=mi>416</span><span class=p>,</span> <span class=mi>416</span><span class=p>),</span> <span class=s2>"gal6"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1365</span><span class=p>,</span> <span class=mi>1365</span><span class=p>),</span> <span class=s2>"gal8"</span><span class=p>:</span> <span class=p>(</span><span class=mi>2373</span><span class=p>,</span> <span class=mi>2373</span><span class=p>),</span>
+    <span class=s2>"gal10"</span><span class=p>:</span> <span class=p>(</span><span class=mi>4535</span><span class=p>,</span> <span class=mi>4535</span><span class=p>),</span> <span class=s2>"gal12"</span><span class=p>:</span> <span class=p>(</span><span class=mi>7034</span><span class=p>,</span> <span class=mi>7135</span><span class=p>),</span> <span class=s2>"gal14"</span><span class=p>:</span> <span class=p>(</span><span class=mi>10255</span><span class=p>,</span> <span class=mi>10840</span><span class=p>),</span>
+    <span class=s2>"gal16"</span><span class=p>:</span> <span class=p>(</span><span class=mi>13619</span><span class=p>,</span> <span class=mi>14583</span><span class=p>),</span> <span class=s2>"gal18"</span><span class=p>:</span> <span class=p>(</span><span class=mi>19050</span><span class=p>,</span> <span class=mi>20205</span><span class=p>),</span> <span class=s2>"gal20"</span><span class=p>:</span> <span class=p>(</span><span class=mi>23738</span><span class=p>,</span> <span class=mi>25401</span><span class=p>),</span>
+    <span class=s2>"gal22"</span><span class=p>:</span> <span class=p>(</span><span class=mi>31461</span><span class=p>,</span> <span class=mi>33901</span><span class=p>),</span> <span class=s2>"gal24"</span><span class=p>:</span> <span class=p>(</span><span class=mi>41287</span><span class=p>,</span> <span class=mi>44260</span><span class=p>),</span> <span class=s2>"gal26"</span><span class=p>:</span> <span class=p>(</span><span class=mi>53802</span><span class=p>,</span> <span class=mi>58968</span><span class=p>),</span>
+    <span class=s2>"gal28"</span><span class=p>:</span> <span class=p>(</span><span class=mi>69992</span><span class=p>,</span> <span class=mi>75276</span><span class=p>),</span> <span class=s2>"gal30"</span><span class=p>:</span> <span class=p>(</span><span class=mi>88831</span><span class=p>,</span> <span class=mi>95158</span><span class=p>),</span>
+    <span class=s2>"gal32"</span><span class=p>:</span> <span class=p>(</span><span class=mi>108374</span><span class=p>,</span> <span class=mi>119665</span><span class=p>),</span> <span class=s2>"gal34"</span><span class=p>:</span> <span class=p>(</span><span class=mi>133976</span><span class=p>,</span> <span class=mi>143298</span><span class=p>),</span>
+    <span class=s2>"gal36"</span><span class=p>:</span> <span class=p>(</span><span class=mi>158549</span><span class=p>,</span> <span class=mi>169387</span><span class=p>),</span> <span class=s2>"gal38"</span><span class=p>:</span> <span class=p>(</span><span class=mi>189126</span><span class=p>,</span> <span class=mi>204980</span><span class=p>),</span>
+    <span class=s2>"gal40"</span><span class=p>:</span> <span class=p>(</span><span class=mi>226820</span><span class=p>,</span> <span class=mi>241908</span><span class=p>),</span> <span class=s2>"incr4"</span><span class=p>:</span> <span class=p>(</span><span class=mi>48</span><span class=p>,</span> <span class=mi>48</span><span class=p>),</span> <span class=s2>"incr6"</span><span class=p>:</span> <span class=p>(</span><span class=mi>228</span><span class=p>,</span> <span class=mi>228</span><span class=p>),</span>
+    <span class=s2>"incr8"</span><span class=p>:</span> <span class=p>(</span><span class=mi>624</span><span class=p>,</span> <span class=mi>638</span><span class=p>),</span> <span class=s2>"incr10"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1440</span><span class=p>,</span> <span class=mi>1612</span><span class=p>),</span> <span class=s2>"incr12"</span><span class=p>:</span> <span class=p>(</span><span class=mi>2880</span><span class=p>,</span> <span class=mi>3398</span><span class=p>),</span>
+    <span class=s2>"incr14"</span><span class=p>:</span> <span class=p>(</span><span class=mi>5180</span><span class=p>,</span> <span class=mi>6488</span><span class=p>),</span> <span class=s2>"incr16"</span><span class=p>:</span> <span class=p>(</span><span class=mi>8640</span><span class=p>,</span> <span class=mi>10332</span><span class=p>),</span> <span class=s2>"incr18"</span><span class=p>:</span> <span class=p>(</span><span class=mi>13548</span><span class=p>,</span> <span class=mi>17278</span><span class=p>),</span>
+    <span class=s2>"incr20"</span><span class=p>:</span> <span class=p>(</span><span class=mi>20368</span><span class=p>,</span> <span class=mi>25672</span><span class=p>),</span> <span class=s2>"incr22"</span><span class=p>:</span> <span class=p>(</span><span class=mi>29484</span><span class=p>,</span> <span class=mi>40944</span><span class=p>),</span>
+    <span class=s2>"incr24"</span><span class=p>:</span> <span class=p>(</span><span class=mi>41360</span><span class=p>,</span> <span class=mi>56602</span><span class=p>),</span> <span class=s2>"incr26"</span><span class=p>:</span> <span class=p>(</span><span class=mi>56500</span><span class=p>,</span> <span class=mi>81866</span><span class=p>),</span>
+    <span class=s2>"incr28"</span><span class=p>:</span> <span class=p>(</span><span class=mi>75456</span><span class=p>,</span> <span class=mi>106870</span><span class=p>),</span> <span class=s2>"incr30"</span><span class=p>:</span> <span class=p>(</span><span class=mi>98820</span><span class=p>,</span> <span class=mi>136810</span><span class=p>),</span>
+    <span class=s2>"incr32"</span><span class=p>:</span> <span class=p>(</span><span class=mi>127224</span><span class=p>,</span> <span class=mi>177990</span><span class=p>),</span> <span class=s2>"incr34"</span><span class=p>:</span> <span class=p>(</span><span class=mi>161348</span><span class=p>,</span> <span class=mi>222082</span><span class=p>),</span>
+    <span class=s2>"incr36"</span><span class=p>:</span> <span class=p>(</span><span class=mi>201912</span><span class=p>,</span> <span class=mi>278060</span><span class=p>),</span> <span class=s2>"incr38"</span><span class=p>:</span> <span class=p>(</span><span class=mi>249686</span><span class=p>,</span> <span class=mi>336008</span><span class=p>),</span>
+    <span class=s2>"incr40"</span><span class=p>:</span> <span class=p>(</span><span class=mi>305470</span><span class=p>,</span> <span class=mi>406960</span><span class=p>),</span> <span class=s2>"line4"</span><span class=p>:</span> <span class=p>(</span><span class=mi>24</span><span class=p>,</span> <span class=mi>24</span><span class=p>),</span> <span class=s2>"line6"</span><span class=p>:</span> <span class=p>(</span><span class=mi>76</span><span class=p>,</span> <span class=mi>76</span><span class=p>),</span>
+    <span class=s2>"line8"</span><span class=p>:</span> <span class=p>(</span><span class=mi>156</span><span class=p>,</span> <span class=mi>162</span><span class=p>),</span> <span class=s2>"line10"</span><span class=p>:</span> <span class=p>(</span><span class=mi>288</span><span class=p>,</span> <span class=mi>370</span><span class=p>),</span> <span class=s2>"line12"</span><span class=p>:</span> <span class=p>(</span><span class=mi>480</span><span class=p>,</span> <span class=mi>584</span><span class=p>),</span>
+    <span class=s2>"line14"</span><span class=p>:</span> <span class=p>(</span><span class=mi>740</span><span class=p>,</span> <span class=mi>918</span><span class=p>),</span> <span class=s2>"line16"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1080</span><span class=p>,</span> <span class=mi>1320</span><span class=p>),</span> <span class=s2>"line18"</span><span class=p>:</span> <span class=p>(</span><span class=mi>1512</span><span class=p>,</span> <span class=mi>1926</span><span class=p>),</span>
+    <span class=s2>"line20"</span><span class=p>:</span> <span class=p>(</span><span class=mi>2044</span><span class=p>,</span> <span class=mi>2548</span><span class=p>),</span> <span class=s2>"line22"</span><span class=p>:</span> <span class=p>(</span><span class=mi>2688</span><span class=p>,</span> <span class=mi>3684</span><span class=p>),</span> <span class=s2>"line24"</span><span class=p>:</span> <span class=p>(</span><span class=mi>3456</span><span class=p>,</span> <span class=mi>4732</span><span class=p>),</span>
+    <span class=s2>"line26"</span><span class=p>:</span> <span class=p>(</span><span class=mi>4356</span><span class=p>,</span> <span class=mi>6382</span><span class=p>),</span> <span class=s2>"line28"</span><span class=p>:</span> <span class=p>(</span><span class=mi>5400</span><span class=p>,</span> <span class=mi>7778</span><span class=p>),</span> <span class=s2>"line30"</span><span class=p>:</span> <span class=p>(</span><span class=mi>6600</span><span class=p>,</span> <span class=mi>9312</span><span class=p>),</span>
+    <span class=s2>"line32"</span><span class=p>:</span> <span class=p>(</span><span class=mi>7964</span><span class=p>,</span> <span class=mi>11234</span><span class=p>),</span> <span class=s2>"line34"</span><span class=p>:</span> <span class=p>(</span><span class=mi>9504</span><span class=p>,</span> <span class=mi>13190</span><span class=p>),</span>
+    <span class=s2>"line36"</span><span class=p>:</span> <span class=p>(</span><span class=mi>11232</span><span class=p>,</span> <span class=mi>15536</span><span class=p>),</span> <span class=s2>"line38"</span><span class=p>:</span> <span class=p>(</span><span class=mi>13156</span><span class=p>,</span> <span class=mi>17862</span><span class=p>),</span>
+    <span class=s2>"line40"</span><span class=p>:</span> <span class=p>(</span><span class=mi>15294</span><span class=p>,</span> <span class=mi>20546</span><span class=p>),</span> <span class=s2>"nfl16"</span><span class=p>:</span> <span class=p>(</span><span class=mi>223800</span><span class=p>,</span> <span class=mi>231483</span><span class=p>),</span>
+    <span class=s2>"nfl18"</span><span class=p>:</span> <span class=p>(</span><span class=mi>272834</span><span class=p>,</span> <span class=mi>282258</span><span class=p>),</span> <span class=s2>"nfl20"</span><span class=p>:</span> <span class=p>(</span><span class=mi>316721</span><span class=p>,</span> <span class=mi>332041</span><span class=p>),</span>
+    <span class=s2>"nfl22"</span><span class=p>:</span> <span class=p>(</span><span class=mi>378813</span><span class=p>,</span> <span class=mi>400636</span><span class=p>),</span> <span class=s2>"nfl24"</span><span class=p>:</span> <span class=p>(</span><span class=mi>431226</span><span class=p>,</span> <span class=mi>463657</span><span class=p>),</span>
+    <span class=s2>"nfl26"</span><span class=p>:</span> <span class=p>(</span><span class=mi>495982</span><span class=p>,</span> <span class=mi>536792</span><span class=p>),</span> <span class=s2>"nfl28"</span><span class=p>:</span> <span class=p>(</span><span class=mi>560697</span><span class=p>,</span> <span class=mi>598123</span><span class=p>),</span>
+    <span class=s2>"nfl30"</span><span class=p>:</span> <span class=p>(</span><span class=mi>688875</span><span class=p>,</span> <span class=mi>739697</span><span class=p>),</span> <span class=s2>"nfl32"</span><span class=p>:</span> <span class=p>(</span><span class=mi>836031</span><span class=p>,</span> <span class=mi>914620</span><span class=p>),</span>
+    <span class=s2>"nl4"</span><span class=p>:</span> <span class=p>(</span><span class=mi>8276</span><span class=p>,</span> <span class=mi>8276</span><span class=p>),</span> <span class=s2>"nl6"</span><span class=p>:</span> <span class=p>(</span><span class=mi>23916</span><span class=p>,</span> <span class=mi>23916</span><span class=p>),</span> <span class=s2>"nl8"</span><span class=p>:</span> <span class=p>(</span><span class=mi>39721</span><span class=p>,</span> <span class=mi>39721</span><span class=p>),</span>
+    <span class=s2>"nl10"</span><span class=p>:</span> <span class=p>(</span><span class=mi>59436</span><span class=p>,</span> <span class=mi>59436</span><span class=p>),</span> <span class=s2>"nl12"</span><span class=p>:</span> <span class=p>(</span><span class=mi>108629</span><span class=p>,</span> <span class=mi>110729</span><span class=p>),</span>
+    <span class=s2>"nl14"</span><span class=p>:</span> <span class=p>(</span><span class=mi>183354</span><span class=p>,</span> <span class=mi>188728</span><span class=p>),</span> <span class=s2>"nl16"</span><span class=p>:</span> <span class=p>(</span><span class=mi>249477</span><span class=p>,</span> <span class=mi>261687</span><span class=p>),</span>
+    <span class=s2>"sup4"</span><span class=p>:</span> <span class=p>(</span><span class=mi>63405</span><span class=p>,</span> <span class=mi>63405</span><span class=p>),</span> <span class=s2>"sup6"</span><span class=p>:</span> <span class=p>(</span><span class=mi>130365</span><span class=p>,</span> <span class=mi>130365</span><span class=p>),</span>
+    <span class=s2>"sup8"</span><span class=p>:</span> <span class=p>(</span><span class=mi>182409</span><span class=p>,</span> <span class=mi>182409</span><span class=p>),</span> <span class=s2>"sup10"</span><span class=p>:</span> <span class=p>(</span><span class=mi>316329</span><span class=p>,</span> <span class=mi>316329</span><span class=p>),</span>
+    <span class=s2>"sup12"</span><span class=p>:</span> <span class=p>(</span><span class=mi>453860</span><span class=p>,</span> <span class=mi>458810</span><span class=p>),</span> <span class=s2>"sup14"</span><span class=p>:</span> <span class=p>(</span><span class=mi>557354</span><span class=p>,</span> <span class=mi>567891</span><span class=p>),</span>
+<span class=p>}</span>
+
+
+<div class=viewcode-block id=Instance>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.instance.Instance>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Instance</span><span class=p>(</span><span class=n>TSPInstance</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""An instance of Traveling Tournament Problem (TTP)."""</span>
+
+    <span class=c1>#: the names of the teams</span>
+    <span class=n>teams</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]</span>
+    <span class=c1>#: the number of rounds</span>
+    <span class=n>rounds</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the minimum number of games that can be played at home in a row</span>
+    <span class=n>home_streak_min</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the maximum number of games that can be played at home in a row</span>
+    <span class=n>home_streak_max</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the minimum number of games that can be played away in a row</span>
+    <span class=n>away_streak_min</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the maximum number of games that can be played away in a row</span>
+    <span class=n>away_streak_max</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the minimum number of games between a repetition of a game setup</span>
+    <span class=n>separation_min</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the maximum number of games between a repetition of a game setup</span>
+    <span class=n>separation_max</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the data type to be used for plans</span>
+    <span class=n>game_plan_dtype</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>dtype</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__new__</span><span class=p>(</span><span class=bp>cls</span><span class=p>,</span> <span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>matrix</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>teams</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>],</span>
+                <span class=n>rounds</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>home_streak_min</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>home_streak_max</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                <span class=n>away_streak_min</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>away_streak_max</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                <span class=n>separation_min</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>separation_max</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                <span class=n>tour_length_lower_bound</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create an instance of the Traveling Salesperson Problem.</span>
+
+<span class=sd>        :param cls: the class</span>
+<span class=sd>        :param name: the name of the instance</span>
+<span class=sd>        :param matrix: the matrix with the data (will be copied)</span>
+<span class=sd>        :param teams: the iterable with the team names</span>
+<span class=sd>        :param rounds: the number of rounds</span>
+<span class=sd>        :param tour_length_lower_bound: the lower bound of the tour length</span>
+<span class=sd>        :param home_streak_min: the minimum number of games that can be played</span>
+<span class=sd>            at home in a row</span>
+<span class=sd>        :param home_streak_max: the maximum number of games that can be played</span>
+<span class=sd>            at home in a row</span>
+<span class=sd>        :param away_streak_min: the minimum number of games that can be played</span>
+<span class=sd>            away in a row</span>
+<span class=sd>        :param away_streak_max: the maximum number of games that can be played</span>
+<span class=sd>            away in a row</span>
+<span class=sd>        :param separation_min: the minimum number of games between a repetition</span>
+<span class=sd>            of a game setup</span>
+<span class=sd>        :param separation_max: the maximum number of games between a repetition</span>
+<span class=sd>            of a game setup</span>
+<span class=sd>        """</span>
+        <span class=n>names</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>,</span> <span class=n>teams</span><span class=p>))</span>
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>names</span><span class=p>)</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>n</span> <span class=o>%</span> <span class=mi>2</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"the number of teams must be even, but is </span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>n</span> <span class=o>!=</span> <span class=nb>len</span><span class=p>(</span><span class=nb>set</span><span class=p>(</span><span class=n>names</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"some team name appears twice in </span><span class=si>{</span><span class=n>teams</span><span class=si>!r}</span><span class=s2> "</span>
+                             <span class=sa>f</span><span class=s2>"after fixing it to </span><span class=si>{</span><span class=n>names</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>nn</span> <span class=ow>in</span> <span class=n>names</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>char</span> <span class=ow>in</span> <span class=n>nn</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>char</span><span class=o>.</span><span class=n>isspace</span><span class=p>():</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"team name must not contain space, but </span><span class=si>{</span><span class=n>nn</span><span class=si>}</span><span class=s2> does."</span><span class=p>)</span>
+
+        <span class=n>obj</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Instance"</span><span class=p>,</span> <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__new__</span><span class=p>(</span>
+            <span class=bp>cls</span><span class=p>,</span> <span class=n>name</span><span class=p>,</span> <span class=n>tour_length_lower_bound</span><span class=p>,</span> <span class=n>matrix</span><span class=p>,</span> <span class=n>rounds</span> <span class=o>*</span> <span class=n>n</span><span class=p>))</span>
+
+        <span class=k>if</span> <span class=p>(</span><span class=n>obj</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>!=</span> <span class=n>n</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>obj</span><span class=o>.</span><span class=n>shape</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=o>!=</span> <span class=n>n</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=n>obj</span><span class=o>.</span><span class=n>n_cities</span> <span class=o>!=</span> <span class=n>n</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"inconsistent n_teams=</span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2>, n_cities="</span>
+                             <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>obj</span><span class=o>.</span><span class=n>n_cities</span><span class=si>}</span><span class=s2> and shape=</span><span class=si>{</span><span class=n>obj</span><span class=o>.</span><span class=n>shape</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=c1>#: the names of the teams that compete</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>teams</span> <span class=o>=</span> <span class=n>names</span>
+        <span class=c1>#: the number of rounds</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>rounds</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=n>rounds</span><span class=p>,</span> <span class=s2>"rounds"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>100</span><span class=p>)</span>
+        <span class=n>ll</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>rounds</span> <span class=o>*</span> <span class=n>n</span> <span class=o>-</span> <span class=mi>1</span>  <span class=c1># an upper bound for streaks</span>
+        <span class=c1>#: the minimum number of games that can be played at home in a row</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>home_streak_min</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>home_streak_min</span><span class=p>,</span> <span class=s2>"home_streak_min"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>ll</span><span class=p>)</span>
+        <span class=c1>#: the maximum number of games that can be played at home in a row</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>home_streak_max</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>home_streak_max</span><span class=p>,</span> <span class=s2>"home_streak_max"</span><span class=p>,</span> <span class=n>home_streak_min</span><span class=p>,</span> <span class=n>ll</span><span class=p>)</span>
+        <span class=c1>#: the minimum number of games that can be played away in a row</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>away_streak_min</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>away_streak_min</span><span class=p>,</span> <span class=s2>"away_streak_min"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=n>ll</span><span class=p>)</span>
+        <span class=c1>#: the maximum number of games that can be played away in a row</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>away_streak_max</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>away_streak_max</span><span class=p>,</span> <span class=s2>"away_streak_max"</span><span class=p>,</span> <span class=n>away_streak_min</span><span class=p>,</span> <span class=n>ll</span><span class=p>)</span>
+        <span class=c1>#: the minimum number of games between a repetition of a game setup</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>separation_min</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>separation_min</span><span class=p>,</span> <span class=s2>"separation_min"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>ll</span><span class=p>)</span>
+        <span class=c1>#: the maximum number of games between a repetition of a game setup</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>separation_max</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+            <span class=n>separation_max</span><span class=p>,</span> <span class=s2>"separation_max"</span><span class=p>,</span> <span class=n>separation_min</span><span class=p>,</span> <span class=n>ll</span><span class=p>)</span>
+        <span class=c1>#: the data type to be used for the game plans</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>game_plan_dtype</span> <span class=o>=</span> <span class=n>int_range_to_dtype</span><span class=p>(</span><span class=o>-</span><span class=n>n</span><span class=p>,</span> <span class=n>n</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>obj</span>
+
+<div class=viewcode-block id=Instance.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.instance.Instance.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of the instance to the given logger.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+
+<span class=sd>        >>> from moptipy.utils.logger import InMemoryLogger</span>
+<span class=sd>        >>> with InMemoryLogger() as l:</span>
+<span class=sd>        ...     with l.key_values("I") as kv:</span>
+<span class=sd>        ...         Instance.from_resource("gal4").log_parameters_to(kv)</span>
+<span class=sd>        ...     print(repr('@'.join(l.get_log())))</span>
+<span class=sd>        'BEGIN_I@name: gal4@class: moptipyapps.ttp.instance.Instance@\</span>
+<span class=sd>nCities: 4@tourLengthLowerBound: 67@tourLengthUpperBound: 160@symmetric: T@\</span>
+<span class=sd>dtype: h@rounds: 2@homeStreakMin: 1@homeStreakMax: 3@\</span>
+<span class=sd>awayStreakMin: 1@awayStreakMax: 3@separationMin: 1@separationMax: 6@\</span>
+<span class=sd>gamePlanDtype: b@END_I'</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"rounds"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>rounds</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"homeStreakMin"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>home_streak_min</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"homeStreakMax"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>home_streak_max</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"awayStreakMin"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>away_streak_min</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"awayStreakMax"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>away_streak_max</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"separationMin"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>separation_min</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"separationMax"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>separation_max</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"gamePlanDtype"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>game_plan_dtype</span><span class=o>.</span><span class=n>char</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.get_optimal_plan_length_bounds>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.instance.Instance.get_optimal_plan_length_bounds>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>get_optimal_plan_length_bounds</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get lower and upper bounds in which the *optimal* plan length resides.</span>
+
+<span class=sd>        These are the bounds for the optimal tour length of *feasible*</span>
+<span class=sd>        solutions. If we know the feasible solution with the smallest possible</span>
+<span class=sd>        tour length, then the :class:`~moptipyapps.ttp.game_plan` objective</span>
+<span class=sd>        function would return a value within these limits for this solution.</span>
+<span class=sd>        The limits for the RobinX instance have been taken from</span>
+<span class=sd>        https://robinxval.ugent.be/RobinX/travelRepo.php on 2024-05-10.</span>
+
+<span class=sd>        :return: a tuple of the lower and upper limit for the optimal</span>
+<span class=sd>            plan length</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>name</span> <span class=ow>in</span> <span class=n>_OPT_DISTANCE_BOUNDS</span><span class=p>:</span>
+            <span class=k>return</span> <span class=n>_OPT_DISTANCE_BOUNDS</span><span class=p>[</span><span class=bp>self</span><span class=o>.</span><span class=n>name</span><span class=p>]</span>
+        <span class=c1># unknown instance, compute bounds including penalty</span>
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>n_cities</span>
+        <span class=n>rounds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>rounds</span>
+        <span class=n>days</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>rounds</span>
+        <span class=k>return</span> <span class=mi>0</span><span class=p>,</span> <span class=p>((</span><span class=mi>2</span> <span class=o>*</span> <span class=nb>int</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>max</span><span class=p>()))</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>n</span> <span class=o>*</span> <span class=n>days</span></div>
+
+
+<div class=viewcode-block id=Instance.from_file>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.instance.Instance.from_file>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_file</span><span class=p>(</span><span class=n>path</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>lower_bound_getter</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>  <span class=c1># noqa: ARG004</span>
+            <span class=nb>str</span><span class=p>],</span> <span class=nb>int</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Read a TTP instance from a `robinX` formatted XML file.</span>
+
+<span class=sd>        :param path: the path to the file</span>
+<span class=sd>        :param lower_bound_getter: ignored</span>
+<span class=sd>        :return: the instance</span>
+
+<span class=sd>        >>> from os.path import dirname</span>
+<span class=sd>        >>> inst = Instance.from_file(dirname(__file__) + "/robinx/con20.xml")</span>
+<span class=sd>        >>> inst.name</span>
+<span class=sd>        'con20'</span>
+<span class=sd>        """</span>
+        <span class=n>file</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>file_path</span><span class=p>(</span><span class=n>path</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>file</span><span class=o>.</span><span class=n>open_for_read</span><span class=p>()</span> <span class=k>as</span> <span class=n>stream</span><span class=p>:</span>
+            <span class=k>try</span><span class=p>:</span>
+                <span class=k>return</span> <span class=n>_from_stream</span><span class=p>(</span><span class=n>cast</span><span class=p>(</span><span class=s2>"TextIO"</span><span class=p>,</span> <span class=n>stream</span><span class=p>))</span>
+            <span class=k>except</span> <span class=p>(</span><span class=ne>TypeError</span><span class=p>,</span> <span class=ne>ValueError</span><span class=p>)</span> <span class=k>as</span> <span class=n>err</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"error when parsing file </span><span class=si>{</span><span class=n>file</span><span class=si>!r}</span><span class=s2>"</span><span class=p>)</span> <span class=kn>from</span><span class=w> </span><span class=nn>err</span></div>
+
+
+<div class=viewcode-block id=Instance.list_resources>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.instance.Instance.list_resources>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>list_resources</span><span class=p>(</span><span class=n>symmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>,</span>
+                       <span class=n>asymmetric</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]:</span>  <span class=c1># noqa</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get a tuple of all the TTP instances available as resource.</span>
+
+<span class=sd>        All instances of the `robinX` set provided here are symmetric.</span>
+
+<span class=sd>        :param symmetric: include the instances with symmetric distance</span>
+<span class=sd>            matrices</span>
+<span class=sd>        :param asymmetric: include the asymmetric instances with asymmetric</span>
+<span class=sd>            distance matrices</span>
+<span class=sd>        :return: the tuple with the instance names</span>
+
+<span class=sd>        >>> len(Instance.list_resources())</span>
+<span class=sd>        118</span>
+<span class=sd>        >>> len(Instance.list_resources(False, True))</span>
+<span class=sd>        0</span>
+<span class=sd>        >>> len(Instance.list_resources(True, False))</span>
+<span class=sd>        118</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>_INSTANCES</span> <span class=k>if</span> <span class=n>symmetric</span> <span class=k>else</span> <span class=p>()</span></div>
+
+
+<div class=viewcode-block id=Instance.from_resource>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.instance.Instance.from_resource>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_resource</span><span class=p>(</span><span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Load a TTP instance from a resource.</span>
+
+<span class=sd>        :param name: the name string</span>
+<span class=sd>        :return: the instance</span>
+
+<span class=sd>        >>> insta = Instance.from_resource("bra24")</span>
+<span class=sd>        >>> insta.n_cities</span>
+<span class=sd>        24</span>
+<span class=sd>        >>> insta.name</span>
+<span class=sd>        'bra24'</span>
+<span class=sd>        >>> insta.teams[0]</span>
+<span class=sd>        'Atl.Mineiro'</span>
+<span class=sd>        >>> insta.teams[1]</span>
+<span class=sd>        'Atl.Paranaense'</span>
+<span class=sd>        >>> insta.rounds</span>
+<span class=sd>        2</span>
+<span class=sd>        >>> insta.home_streak_min</span>
+<span class=sd>        1</span>
+<span class=sd>        >>> insta.home_streak_max</span>
+<span class=sd>        3</span>
+<span class=sd>        >>> insta.away_streak_min</span>
+<span class=sd>        1</span>
+<span class=sd>        >>> insta.away_streak_max</span>
+<span class=sd>        3</span>
+<span class=sd>        >>> insta.separation_min</span>
+<span class=sd>        1</span>
+<span class=sd>        >>> insta.separation_max</span>
+<span class=sd>        46</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>name</span><span class=p>,</span> <span class=s2>"name"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+        <span class=n>container</span><span class=p>:</span> <span class=n>Final</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span>
+        <span class=n>inst_attr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"__inst_</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>"</span>
+        <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>):</span>  <span class=c1># instance loaded?</span>
+            <span class=k>return</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Instance"</span><span class=p>,</span> <span class=nb>getattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>))</span>
+
+        <span class=k>with</span> <span class=n>open_resource_stream</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>.xml"</span><span class=p>)</span> <span class=k>as</span> <span class=n>stream</span><span class=p>:</span>
+            <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>_from_stream</span><span class=p>(</span><span class=n>stream</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>name</span> <span class=o>!=</span> <span class=n>name</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"got </span><span class=si>{</span><span class=n>inst</span><span class=o>.</span><span class=n>name</span><span class=si>!r}</span><span class=s2> for instance </span><span class=si>{</span><span class=n>name</span><span class=si>!r}</span><span class=s2>?"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>inst</span><span class=o>.</span><span class=n>n_cities</span> <span class=o><=</span> <span class=mi>1000</span><span class=p>:</span>
+            <span class=nb>setattr</span><span class=p>(</span><span class=n>container</span><span class=p>,</span> <span class=n>inst_attr</span><span class=p>,</span> <span class=n>inst</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>inst</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.instance</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

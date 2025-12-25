@@ -1,0 +1,219 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.plot_packing — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/plot_packing.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.plot_packing</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.plot_packing</h1><div class=highlight><pre>
+<span></span><span class=sd>"""Plot a packing into one figure."""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>collections</span><span class=w> </span><span class=kn>import</span> <span class=n>Counter</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>moptipy.utils.plot_defaults</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>pd</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>moptipy.utils.plot_utils</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>pu</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>matplotlib.artist</span><span class=w> </span><span class=kn>import</span> <span class=n>Artist</span>  <span class=c1># type: ignore</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>matplotlib.axes</span><span class=w> </span><span class=kn>import</span> <span class=n>Axes</span>  <span class=c1># type: ignore</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>matplotlib.figure</span><span class=w> </span><span class=kn>import</span> <span class=n>Figure</span>  <span class=c1># type: ignore</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>matplotlib.patches</span><span class=w> </span><span class=kn>import</span> <span class=n>Rectangle</span>  <span class=c1># type: ignore</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>matplotlib.text</span><span class=w> </span><span class=kn>import</span> <span class=n>Text</span>  <span class=c1># type: ignore</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>IDX_BIN</span><span class=p>,</span>
+    <span class=n>IDX_BOTTOM_Y</span><span class=p>,</span>
+    <span class=n>IDX_ID</span><span class=p>,</span>
+    <span class=n>IDX_LEFT_X</span><span class=p>,</span>
+    <span class=n>IDX_RIGHT_X</span><span class=p>,</span>
+    <span class=n>IDX_TOP_Y</span><span class=p>,</span>
+    <span class=n>Packing</span><span class=p>,</span>
+<span class=p>)</span>
+
+
+<div class=viewcode-block id=default_packing_item_str>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.plot_packing.default_packing_item_str>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>default_packing_item_str</span><span class=p>(</span><span class=n>item_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>item_index</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                             <span class=n>item_in_bin_index</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get a packing item string(s).</span>
+
+<span class=sd>    The default idea is to include the item id, the index of the item in the</span>
+<span class=sd>    bin, and the overall index of the item. If the space is insufficient,</span>
+<span class=sd>    we remove the latter or the latter two. Hence, this function returns a</span>
+<span class=sd>    tuple of three strings.</span>
+
+<span class=sd>    :param item_id: the ID of the packing item</span>
+<span class=sd>    :param item_index: the item index</span>
+<span class=sd>    :param item_in_bin_index: the index of the item in its bin</span>
+<span class=sd>    :return: the string</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2>/</span><span class=si>{</span><span class=n>item_in_bin_index</span><span class=si>}</span><span class=s2>/</span><span class=si>{</span><span class=n>item_index</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span>
+            <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2>/</span><span class=si>{</span><span class=n>item_in_bin_index</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span> <span class=nb>str</span><span class=p>(</span><span class=n>item_id</span><span class=p>))</span></div>
+
+
+
+<div class=viewcode-block id=plot_packing>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.plot_packing.plot_packing>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>plot_packing</span><span class=p>(</span><span class=n>packing</span><span class=p>:</span> <span class=n>Packing</span> <span class=o>|</span> <span class=nb>str</span><span class=p>,</span>
+                 <span class=n>max_rows</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>3</span><span class=p>,</span>
+                 <span class=n>max_bins_per_row</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>3</span><span class=p>,</span>
+                 <span class=n>default_width_per_bin</span><span class=p>:</span> <span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=mf>8.6</span><span class=p>,</span>
+                 <span class=n>max_width</span><span class=p>:</span> <span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=mf>8.6</span><span class=p>,</span>
+                 <span class=n>default_height_per_bin</span><span class=p>:</span> <span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span>
+                 <span class=mf>5.315092303249095</span><span class=p>,</span>
+                 <span class=n>max_height</span><span class=p>:</span> <span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=mi>9</span><span class=p>,</span>
+                 <span class=n>packing_item_str</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[</span>
+                     <span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>],</span> <span class=nb>str</span> <span class=o>|</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span>
+                 <span class=n>default_packing_item_str</span><span class=p>,</span>
+                 <span class=n>importance_to_font_size_func</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>int</span><span class=p>],</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span>
+                 <span class=n>pd</span><span class=o>.</span><span class=n>importance_to_font_size</span><span class=p>,</span>
+                 <span class=n>dpi</span><span class=p>:</span> <span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=mf>384.0</span><span class=p>)</span> <span class=o>-></span> <span class=n>Figure</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Plot a packing.</span>
+
+<span class=sd>    Each item is drawn in a different color. Each item rectangle includes, if</span>
+<span class=sd>    there is enough space, the item-ID. If there is more space, also the index</span>
+<span class=sd>    of the item inside the bin (starting at 1) is included. If there is yet</span>
+<span class=sd>    more space, even the overall index of the item is included.</span>
+
+<span class=sd>    :param packing: the packing or the file to load it from</span>
+<span class=sd>    :param max_rows: the maximum number of rows</span>
+<span class=sd>    :param max_bins_per_row: the maximum number of bins per row</span>
+<span class=sd>    :param default_width_per_bin: the optional default width of a column</span>
+<span class=sd>    :param max_height: the maximum height</span>
+<span class=sd>    :param default_height_per_bin: the optional default height per row</span>
+<span class=sd>    :param max_width: the maximum width</span>
+<span class=sd>    :param packing_item_str: the function converting an item id,</span>
+<span class=sd>        item index, and item-in-bin index to a string or sequence of strings</span>
+<span class=sd>        (of decreasing length)</span>
+<span class=sd>    :param importance_to_font_size_func: the function converting</span>
+<span class=sd>        importance values to font sizes</span>
+<span class=sd>    :param dpi: the dpi value</span>
+<span class=sd>    :returns: the Figure object to allow you to add further plot elements</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>packing</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+        <span class=n>packing</span> <span class=o>=</span> <span class=n>Packing</span><span class=o>.</span><span class=n>from_log</span><span class=p>(</span><span class=n>packing</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>packing</span><span class=p>,</span> <span class=n>Packing</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>packing</span><span class=p>,</span> <span class=s2>"packing"</span><span class=p>,</span> <span class=p>(</span><span class=n>Packing</span><span class=p>,</span> <span class=nb>str</span><span class=p>))</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>packing_item_str</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>packing_item_str</span><span class=p>,</span> <span class=s2>"packing_item_str"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+
+    <span class=c1># allocate the figure ... this is hacky for now</span>
+    <span class=n>figure</span><span class=p>,</span> <span class=n>bin_figures</span> <span class=o>=</span> <span class=n>pu</span><span class=o>.</span><span class=n>create_figure_with_subplots</span><span class=p>(</span>
+        <span class=n>items</span><span class=o>=</span><span class=n>packing</span><span class=o>.</span><span class=n>n_bins</span><span class=p>,</span> <span class=n>max_items_per_plot</span><span class=o>=</span><span class=mi>1</span><span class=p>,</span> <span class=n>max_rows</span><span class=o>=</span><span class=n>max_rows</span><span class=p>,</span>
+        <span class=n>max_cols</span><span class=o>=</span><span class=n>max_bins_per_row</span><span class=p>,</span> <span class=n>min_rows</span><span class=o>=</span><span class=mi>1</span><span class=p>,</span> <span class=n>min_cols</span><span class=o>=</span><span class=mi>1</span><span class=p>,</span>
+        <span class=n>default_width_per_col</span><span class=o>=</span><span class=n>default_width_per_bin</span><span class=p>,</span> <span class=n>max_width</span><span class=o>=</span><span class=n>max_width</span><span class=p>,</span>
+        <span class=n>default_height_per_row</span><span class=o>=</span><span class=n>default_height_per_bin</span><span class=p>,</span> <span class=n>max_height</span><span class=o>=</span><span class=n>max_height</span><span class=p>,</span>
+        <span class=n>dpi</span><span class=o>=</span><span class=n>dpi</span><span class=p>)</span>
+
+    <span class=c1># initialize the different plots</span>
+    <span class=n>bin_width</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>packing</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>bin_width</span>
+    <span class=n>bin_height</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>packing</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>bin_height</span>
+    <span class=n>axes_list</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Axes</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=k>for</span> <span class=n>the_axes</span><span class=p>,</span> <span class=n>_</span><span class=p>,</span> <span class=n>_</span><span class=p>,</span> <span class=n>_</span><span class=p>,</span> <span class=n>_</span><span class=p>,</span> <span class=n>_</span> <span class=ow>in</span> <span class=n>bin_figures</span><span class=p>:</span>
+        <span class=n>axes</span> <span class=o>=</span> <span class=n>pu</span><span class=o>.</span><span class=n>get_axes</span><span class=p>(</span><span class=n>the_axes</span><span class=p>)</span>
+        <span class=n>axes_list</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>axes</span><span class=p>)</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_ylim</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>bin_width</span><span class=p>)</span>  <span class=c1># pylint: disable=E1101</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_ybound</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>bin_height</span><span class=p>)</span>  <span class=c1># pylint: disable=E1101</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_xlim</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>bin_width</span><span class=p>)</span>  <span class=c1># pylint: disable=E1101</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_xbound</span><span class=p>(</span><span class=mi>0</span><span class=p>,</span> <span class=n>bin_width</span><span class=p>)</span>  <span class=c1># pylint: disable=E1101</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>set_aspect</span><span class=p>(</span><span class=s2>"equal"</span><span class=p>,</span> <span class=kc>None</span><span class=p>,</span> <span class=s2>"C"</span><span class=p>)</span>  <span class=c1># pylint: disable=E1101</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>tick_params</span><span class=p>(</span>  <span class=c1># pylint: disable=E1101</span>
+            <span class=n>left</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>bottom</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>labelleft</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>labelbottom</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+
+    <span class=c1># get the color and font styles</span>
+    <span class=n>colors</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>]</span> <span class=o>=</span> <span class=n>pd</span><span class=o>.</span><span class=n>distinct_colors</span><span class=p>(</span>
+        <span class=n>packing</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n_different_items</span><span class=p>)</span>
+    <span class=n>font_size</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>importance_to_font_size_func</span><span class=p>(</span><span class=o>-</span><span class=mi>1</span><span class=p>)</span>
+
+    <span class=c1># get the transforms needed to obtain text dimensions</span>
+    <span class=n>renderers</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=n>pu</span><span class=o>.</span><span class=n>get_renderer</span><span class=p>(</span><span class=n>axes</span><span class=p>)</span> <span class=k>for</span> <span class=n>axes</span> <span class=ow>in</span> <span class=n>axes_list</span><span class=p>]</span>
+    <span class=n>inverse</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>transData</span><span class=o>.</span><span class=n>inverted</span><span class=p>()</span>  <span class=c1># type: ignore  # pylint: disable=E1101</span>
+        <span class=k>for</span> <span class=n>axes</span> <span class=ow>in</span> <span class=n>axes_list</span><span class=p>]</span>
+
+    <span class=n>z_order</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># the z-order of all drawing elements</span>
+
+    <span class=c1># we now plot the items one-by-one</span>
+    <span class=n>bin_counters</span><span class=p>:</span> <span class=n>Counter</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>Counter</span><span class=p>()</span>
+    <span class=k>for</span> <span class=n>item_index</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>packing</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n_items</span><span class=p>):</span>
+        <span class=n>item_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>item_index</span><span class=p>,</span> <span class=n>IDX_ID</span><span class=p>])</span>
+        <span class=n>item_bin</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>item_index</span><span class=p>,</span> <span class=n>IDX_BIN</span><span class=p>])</span>
+        <span class=n>x_left</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>item_index</span><span class=p>,</span> <span class=n>IDX_LEFT_X</span><span class=p>])</span>
+        <span class=n>y_bottom</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>item_index</span><span class=p>,</span> <span class=n>IDX_BOTTOM_Y</span><span class=p>])</span>
+        <span class=n>x_right</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>item_index</span><span class=p>,</span> <span class=n>IDX_RIGHT_X</span><span class=p>])</span>
+        <span class=n>y_top</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>packing</span><span class=p>[</span><span class=n>item_index</span><span class=p>,</span> <span class=n>IDX_TOP_Y</span><span class=p>])</span>
+        <span class=n>item_in_bin_index</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>bin_counters</span><span class=p>[</span><span class=n>item_bin</span><span class=p>]</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=n>bin_counters</span><span class=p>[</span><span class=n>item_bin</span><span class=p>]</span> <span class=o>=</span> <span class=n>item_in_bin_index</span>
+        <span class=n>width</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>x_right</span> <span class=o>-</span> <span class=n>x_left</span>
+        <span class=n>height</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>y_top</span> <span class=o>-</span> <span class=n>y_bottom</span>
+
+        <span class=n>background</span> <span class=o>=</span> <span class=n>colors</span><span class=p>[</span><span class=n>item_id</span> <span class=o>-</span> <span class=mi>1</span><span class=p>]</span>
+        <span class=n>foreground</span> <span class=o>=</span> <span class=n>pd</span><span class=o>.</span><span class=n>text_color_for_background</span><span class=p>(</span><span class=n>colors</span><span class=p>[</span><span class=n>item_id</span> <span class=o>-</span> <span class=mi>1</span><span class=p>])</span>
+
+        <span class=n>axes</span> <span class=o>=</span> <span class=n>axes_list</span><span class=p>[</span><span class=n>item_bin</span> <span class=o>-</span> <span class=mi>1</span><span class=p>]</span>
+        <span class=n>rend</span> <span class=o>=</span> <span class=n>renderers</span><span class=p>[</span><span class=n>item_bin</span> <span class=o>-</span> <span class=mi>1</span><span class=p>]</span>
+        <span class=n>inv</span> <span class=o>=</span> <span class=n>inverse</span><span class=p>[</span><span class=n>item_bin</span> <span class=o>-</span> <span class=mi>1</span><span class=p>]</span>
+
+        <span class=n>axes</span><span class=o>.</span><span class=n>add_artist</span><span class=p>(</span><span class=n>Rectangle</span><span class=p>(</span>  <span class=c1># paint the item's rectangle</span>
+            <span class=n>xy</span><span class=o>=</span><span class=p>(</span><span class=n>x_left</span><span class=p>,</span> <span class=n>y_bottom</span><span class=p>),</span> <span class=n>width</span><span class=o>=</span><span class=n>width</span><span class=p>,</span> <span class=n>height</span><span class=o>=</span><span class=n>height</span><span class=p>,</span>
+            <span class=n>facecolor</span><span class=o>=</span><span class=n>background</span><span class=p>,</span> <span class=n>linewidth</span><span class=o>=</span><span class=mf>0.75</span><span class=p>,</span> <span class=n>zorder</span><span class=o>=</span><span class=n>z_order</span><span class=p>,</span>
+            <span class=n>edgecolor</span><span class=o>=</span><span class=s2>"black"</span><span class=p>))</span>
+        <span class=n>z_order</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=n>x_center</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.5</span> <span class=o>*</span> <span class=p>(</span><span class=n>x_left</span> <span class=o>+</span> <span class=n>x_right</span><span class=p>)</span>
+        <span class=n>y_center</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.5</span> <span class=o>*</span> <span class=p>(</span><span class=n>y_bottom</span> <span class=o>+</span> <span class=n>y_top</span><span class=p>)</span>
+
+<span class=c1># get the box label string or string sequence</span>
+        <span class=n>strs</span> <span class=o>=</span> <span class=n>packing_item_str</span><span class=p>(</span><span class=n>item_id</span><span class=p>,</span> <span class=n>item_index</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>item_in_bin_index</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>strs</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=n>strs</span> <span class=o>=</span> <span class=p>[</span><span class=n>strs</span><span class=p>]</span>
+        <span class=k>elif</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>strs</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                <span class=n>strs</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"packing_item_str(</span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>item_index</span><span class=si>}</span><span class=s2>, "</span>
+                      <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>item_in_bin_index</span><span class=si>}</span><span class=s2>)"</span><span class=p>,</span> <span class=p>(</span><span class=nb>str</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>))</span>
+
+<span class=c1># iterate over the possible box label strings</span>
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>item_str</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>strs</span><span class=p>):</span>
+            <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>item_str</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span>
+                    <span class=nb>str</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"packing_item_str(</span><span class=si>{</span><span class=n>item_id</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>item_index</span><span class=si>}</span><span class=s2>, "</span>
+                         <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>item_in_bin_index</span><span class=si>}</span><span class=s2>)[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+<span class=c1># Get the size of the text using a temporary text  that gets immediately</span>
+<span class=c1># deleted again.</span>
+            <span class=n>tmp</span><span class=p>:</span> <span class=n>Text</span> <span class=o>=</span> <span class=n>axes</span><span class=o>.</span><span class=n>text</span><span class=p>(</span><span class=n>x</span><span class=o>=</span><span class=n>x_center</span><span class=p>,</span> <span class=n>y</span><span class=o>=</span><span class=n>y_center</span><span class=p>,</span> <span class=n>s</span><span class=o>=</span><span class=n>item_str</span><span class=p>,</span>
+                                  <span class=n>fontsize</span><span class=o>=</span><span class=n>font_size</span><span class=p>,</span>
+                                  <span class=n>color</span><span class=o>=</span><span class=n>foreground</span><span class=p>,</span>
+                                  <span class=n>horizontalalignment</span><span class=o>=</span><span class=s2>"center"</span><span class=p>,</span>
+                                  <span class=n>verticalalignment</span><span class=o>=</span><span class=s2>"baseline"</span><span class=p>)</span>
+            <span class=n>bb_bl</span> <span class=o>=</span> <span class=n>inv</span><span class=o>.</span><span class=n>transform_bbox</span><span class=p>(</span><span class=n>tmp</span><span class=o>.</span><span class=n>get_window_extent</span><span class=p>(</span>
+                <span class=n>renderer</span><span class=o>=</span><span class=n>rend</span><span class=p>))</span>
+            <span class=n>Artist</span><span class=o>.</span><span class=n>set_visible</span><span class=p>(</span><span class=n>tmp</span><span class=p>,</span> <span class=kc>False</span><span class=p>)</span>
+            <span class=n>Artist</span><span class=o>.</span><span class=n>remove</span><span class=p>(</span><span class=n>tmp</span><span class=p>)</span>
+            <span class=k>del</span> <span class=n>tmp</span>
+
+<span class=c1># Check if this text did fit into the rectangle.</span>
+            <span class=k>if</span> <span class=p>(</span><span class=n>bb_bl</span><span class=o>.</span><span class=n>width</span> <span class=o><</span> <span class=p>(</span><span class=mf>0.97</span> <span class=o>*</span> <span class=n>width</span><span class=p>))</span> <span class=ow>and</span> \
+                    <span class=p>(</span><span class=n>bb_bl</span><span class=o>.</span><span class=n>height</span> <span class=o><</span> <span class=p>(</span><span class=mf>0.97</span> <span class=o>*</span> <span class=n>height</span><span class=p>)):</span>
+                <span class=c1># OK, there is enough space. Let's re-compute the y offset</span>
+                <span class=c1># to do proper alignment using another temporary text.</span>
+                <span class=n>tmp</span> <span class=o>=</span> <span class=n>axes</span><span class=o>.</span><span class=n>text</span><span class=p>(</span><span class=n>x</span><span class=o>=</span><span class=n>x_center</span><span class=p>,</span> <span class=n>y</span><span class=o>=</span><span class=n>y_center</span><span class=p>,</span> <span class=n>s</span><span class=o>=</span><span class=n>item_str</span><span class=p>,</span>
+                                <span class=n>fontsize</span><span class=o>=</span><span class=n>font_size</span><span class=p>,</span>
+                                <span class=n>color</span><span class=o>=</span><span class=n>foreground</span><span class=p>,</span>
+                                <span class=n>horizontalalignment</span><span class=o>=</span><span class=s2>"center"</span><span class=p>,</span>
+                                <span class=n>verticalalignment</span><span class=o>=</span><span class=s2>"bottom"</span><span class=p>)</span>
+                <span class=n>bb_bt</span> <span class=o>=</span> <span class=n>inv</span><span class=o>.</span><span class=n>transform_bbox</span><span class=p>(</span><span class=n>tmp</span><span class=o>.</span><span class=n>get_window_extent</span><span class=p>(</span>
+                    <span class=n>renderer</span><span class=o>=</span><span class=n>rend</span><span class=p>))</span>
+                <span class=n>Artist</span><span class=o>.</span><span class=n>set_visible</span><span class=p>(</span><span class=n>tmp</span><span class=p>,</span> <span class=kc>False</span><span class=p>)</span>
+                <span class=n>Artist</span><span class=o>.</span><span class=n>remove</span><span class=p>(</span><span class=n>tmp</span><span class=p>)</span>
+                <span class=k>del</span> <span class=n>tmp</span>
+
+<span class=c1># Now we can really print the actual text with a more or less  nice vertical</span>
+<span class=c1># alignment.</span>
+                <span class=n>adj</span> <span class=o>=</span> <span class=n>bb_bl</span><span class=o>.</span><span class=n>y0</span> <span class=o>-</span> <span class=n>bb_bt</span><span class=o>.</span><span class=n>y0</span>
+                <span class=k>if</span> <span class=n>adj</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=n>y_center</span> <span class=o>+=</span> <span class=n>adj</span> <span class=o>/</span> <span class=mi>3</span>
+
+                <span class=n>axes</span><span class=o>.</span><span class=n>text</span><span class=p>(</span><span class=n>x</span><span class=o>=</span><span class=n>x_center</span><span class=p>,</span> <span class=n>y</span><span class=o>=</span><span class=n>y_center</span><span class=p>,</span> <span class=n>s</span><span class=o>=</span><span class=n>item_str</span><span class=p>,</span>
+                          <span class=n>fontsize</span><span class=o>=</span><span class=n>font_size</span><span class=p>,</span>
+                          <span class=n>color</span><span class=o>=</span><span class=n>foreground</span><span class=p>,</span>
+                          <span class=n>horizontalalignment</span><span class=o>=</span><span class=s2>"center"</span><span class=p>,</span>
+                          <span class=n>verticalalignment</span><span class=o>=</span><span class=s2>"center"</span><span class=p>,</span>
+                          <span class=n>zorder</span><span class=o>=</span><span class=n>z_order</span><span class=p>)</span>
+                <span class=n>z_order</span> <span class=o>+=</span> <span class=mi>1</span>
+                <span class=k>break</span>  <span class=c1># We found a text that fits, so we can quit.</span>
+    <span class=k>return</span> <span class=n>figure</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.plot_packing</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

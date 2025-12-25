@@ -1,0 +1,357 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.order1d.instance — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/order1d/instance.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.order1d.instance</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.order1d.instance</h1><div class=highlight><pre>
+<span></span><span class=sd>"""An instance of the ordering problem."""</span>
+
+
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>isfinite</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>,</span> <span class=n>TypeVar</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>DEFAULT_INT</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.strings</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>num_to_str_for_name</span><span class=p>,</span>
+    <span class=n>sanitize_name</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>scipy.stats</span><span class=w> </span><span class=kn>import</span> <span class=n>rankdata</span>  <span class=c1># type: ignore</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.qap.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span> <span class=k>as</span> <span class=n>QAPInstance</span>
+
+<span class=c1>#: the type variable for the source object</span>
+<span class=n>T</span> <span class=o>=</span> <span class=n>TypeVar</span><span class=p>(</span><span class=s2>"T"</span><span class=p>)</span>
+
+<span class=c1>#: the zero-based index column name</span>
+<span class=n>_ZERO_BASED_INDEX</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"indexZeroBased"</span>
+<span class=c1>#: the suggested x-coordinate</span>
+<span class=n>_SUGGESTED_X_IN_0_1</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"suggestedXin01"</span>
+
+
+<div class=viewcode-block id=Instance>
+<a class=viewcode-back href=../../../moptipyapps.order1d.html#moptipyapps.order1d.instance.Instance>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Instance</span><span class=p>(</span><span class=n>QAPInstance</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    An instance of the One-Dimensional Ordering Problem.</span>
+
+<span class=sd>    Such an instance represents the ranking of objects by their distance to</span>
+<span class=sd>    each other as a :mod:`~moptipyapps.qap` problem.</span>
+
+<span class=sd>    >>> def _dist(a, b):</span>
+<span class=sd>    ...     return abs(a - b)</span>
+<span class=sd>    >>> def _tags(a):</span>
+<span class=sd>    ...     return f"t{a}"</span>
+<span class=sd>    >>> the_instance = Instance.from_sequence_and_distance(</span>
+<span class=sd>    ...     [1, 2, 3], _dist, 1, 100, ("bla", ), _tags)</span>
+<span class=sd>    >>> print(the_instance)</span>
+<span class=sd>    order1d_3_1</span>
+<span class=sd>    >>> print(the_instance.distances)</span>
+<span class=sd>    [[0 1 2]</span>
+<span class=sd>     [1 0 1]</span>
+<span class=sd>     [2 1 0]]</span>
+<span class=sd>    >>> print(the_instance.flows)</span>
+<span class=sd>    [[0 4 2]</span>
+<span class=sd>     [3 0 3]</span>
+<span class=sd>     [2 4 0]]</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>distances</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                 <span class=n>flow_power</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>,</span>
+                 <span class=n>horizon</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>tag_titles</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>],</span>
+                 <span class=n>tags</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>|</span> <span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>]],</span>
+                 <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create an instance of the quadratic assignment problem.</span>
+
+<span class=sd>        :param distances: the original distance matrix</span>
+<span class=sd>        :param flow_power: the power to be used for constructing the flows</span>
+<span class=sd>            based on the original distances</span>
+<span class=sd>        :param horizon: the horizon for distance ranks, after which all</span>
+<span class=sd>            elements are ignored</span>
+<span class=sd>        :param tag_titles: the tag titles</span>
+<span class=sd>        :param tags: the assignment of rows to names</span>
+<span class=sd>        :param name: the instance name</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>flow_power</span><span class=p>,</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>flow_power</span><span class=p>,</span> <span class=s2>"flow_power"</span><span class=p>,</span> <span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=nb>float</span><span class=p>))</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>isfinite</span><span class=p>(</span><span class=n>flow_power</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=mi>0</span> <span class=o><</span> <span class=n>flow_power</span> <span class=o><</span> <span class=mi>100</span><span class=p>)):</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"flow_power must be in (0, 100), but is </span><span class=si>{</span><span class=n>flow_power</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>distances</span><span class=p>)</span>  <span class=c1># the number of elements</span>
+        <span class=n>horizon</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span><span class=n>horizon</span><span class=p>,</span> <span class=s2>"horizon"</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+
+        <span class=c1># construct the distance matrix</span>
+        <span class=n>dist_matrix</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=n>n</span><span class=p>,</span> <span class=n>n</span><span class=p>),</span> <span class=n>DEFAULT_INT</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+            <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>i</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span> <span class=n>n</span><span class=p>):</span>
+                <span class=n>dist_matrix</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>=</span> <span class=n>dist_matrix</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>j</span> <span class=o>-</span> <span class=n>i</span>
+
+        <span class=c1># construct the flow matrix</span>
+        <span class=n>flows</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>rankdata</span><span class=p>(</span>
+            <span class=n>distances</span><span class=p>,</span> <span class=n>axis</span><span class=o>=</span><span class=mi>1</span><span class=p>,</span> <span class=n>method</span><span class=o>=</span><span class=s2>"average"</span><span class=p>)</span> <span class=o>-</span> <span class=mf>1.0</span>
+
+        <span class=c1># get the flow rank multiplier</span>
+        <span class=n>multiplier</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>1.0</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+            <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>==</span> <span class=n>j</span><span class=p>:</span>
+                    <span class=k>continue</span>
+                <span class=n>f</span> <span class=o>=</span> <span class=n>flows</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span>
+                <span class=k>if</span> <span class=nb>int</span><span class=p>(</span><span class=n>f</span><span class=p>)</span> <span class=o><</span> <span class=n>f</span> <span class=o><=</span> <span class=n>horizon</span><span class=p>:</span>  <span class=c1># dow we need the multiplier?</span>
+                    <span class=n>multiplier</span> <span class=o>=</span> <span class=mf>0.5</span> <span class=o>**</span> <span class=p>(</span><span class=o>-</span><span class=n>flow_power</span><span class=p>)</span>
+                    <span class=k>break</span>
+
+        <span class=n>flow_matrix</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>zeros</span><span class=p>((</span><span class=n>n</span><span class=p>,</span> <span class=n>n</span><span class=p>),</span> <span class=n>DEFAULT_INT</span><span class=p>)</span>
+        <span class=n>max_val</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>min</span><span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span> <span class=n>horizon</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+            <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>==</span> <span class=n>j</span><span class=p>:</span>
+                    <span class=k>continue</span>
+                <span class=n>f</span> <span class=o>=</span> <span class=n>flows</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span>
+                <span class=k>if</span> <span class=n>f</span> <span class=o>></span> <span class=n>horizon</span><span class=p>:</span>
+                    <span class=k>continue</span>
+                <span class=n>flow_matrix</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>=</span> <span class=nb>round</span><span class=p>(</span>
+                    <span class=n>multiplier</span> <span class=o>*</span> <span class=p>((</span><span class=n>max_val</span> <span class=o>-</span> <span class=n>f</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span> <span class=o>**</span> <span class=n>flow_power</span><span class=p>))</span>
+
+        <span class=c1># construct a name if necessary</span>
+        <span class=k>if</span> <span class=n>name</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>name</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"order1d_</span><span class=si>{</span><span class=n>n</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>num_to_str_for_name</span><span class=p>(</span><span class=n>flow_power</span><span class=p>)</span><span class=si>}</span><span class=s2>"</span>
+            <span class=k>if</span> <span class=n>max_val</span> <span class=o><</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>):</span>
+                <span class=n>name</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>_</span><span class=si>{</span><span class=n>max_val</span><span class=si>}</span><span class=s2>"</span>
+
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>dist_matrix</span><span class=p>,</span> <span class=n>flow_matrix</span><span class=p>,</span> <span class=n>name</span><span class=o>=</span><span class=n>name</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>n</span> <span class=o>!=</span> <span class=n>n</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"error when assigning number of elements!"</span><span class=p>)</span>
+
+        <span class=c1>#: the flow power</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>flow_power</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>flow_power</span>
+        <span class=c1>#: the horizon</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>horizon</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>max_val</span>
+
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>tags</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>tags</span><span class=p>,</span> <span class=s2>"tags"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>tag_titles</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>tag_titles</span><span class=p>,</span> <span class=s2>"tag_titles"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+
+        <span class=c1>#: the tag titles</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>tag_titles</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span>
+            <span class=n>sanitize_name</span><span class=p>,</span> <span class=n>tag_titles</span><span class=p>))</span>
+        <span class=n>req_len</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>tag_titles</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>req_len</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"No tags specified."</span><span class=p>)</span>
+
+        <span class=c1>#: the tags, i.e., additional data for each original element</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=nb>int</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+            <span class=nb>tuple</span><span class=p>(((</span><span class=n>t</span><span class=p>,</span> <span class=p>)</span> <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>t</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+                   <span class=k>else</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>t</span><span class=p>),</span> <span class=n>k</span><span class=p>)</span> <span class=k>for</span> <span class=n>t</span><span class=p>,</span> <span class=n>k</span> <span class=ow>in</span> <span class=n>tags</span><span class=p>))</span>
+        <span class=k>if</span> <span class=n>_ZERO_BASED_INDEX</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_ZERO_BASED_INDEX</span><span class=si>}</span><span class=s2> not permitted in tags."</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>_SUGGESTED_X_IN_0_1</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_SUGGESTED_X_IN_0_1</span><span class=si>}</span><span class=s2> not permitted in tags."</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=p>)</span> <span class=o><</span> <span class=n>n</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"there must be at least </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>n</span><span class=si>}</span><span class=s2> tags, but got "</span>
+                             <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=p>)</span><span class=si>}</span><span class=s2>, i.e., </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>tag</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=p>:</span>
+            <span class=n>check_int_range</span><span class=p>(</span><span class=n>tag</span><span class=p>[</span><span class=mi>1</span><span class=p>],</span> <span class=s2>"id"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>n</span><span class=p>)</span>
+            <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>tag</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span> <span class=o>!=</span> <span class=n>req_len</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                    <span class=sa>f</span><span class=s2>"all tags must have the same length. "</span>
+                    <span class=sa>f</span><span class=s2>"while the first tag (</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=si>}</span><span class=s2>) has "</span>
+                    <span class=sa>f</span><span class=s2>"length </span><span class=si>{</span><span class=n>req_len</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>tag</span><span class=si>}</span><span class=s2> has length </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>tag</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+<div class=viewcode-block id=Instance.from_sequence_and_distance>
+<a class=viewcode-back href=../../../moptipyapps.order1d.html#moptipyapps.order1d.instance.Instance.from_sequence_and_distance>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_sequence_and_distance</span><span class=p>(</span>
+            <span class=n>data</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>T</span> <span class=o>|</span> <span class=kc>None</span><span class=p>],</span>
+            <span class=n>get_distance</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>T</span><span class=p>,</span> <span class=n>T</span><span class=p>],</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>],</span>
+            <span class=n>flow_power</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>,</span>
+            <span class=n>horizon</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+            <span class=n>tag_titles</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>],</span>
+            <span class=n>get_tags</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=n>T</span><span class=p>],</span> <span class=nb>str</span> <span class=o>|</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]],</span>
+            <span class=n>name</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Turn a sequence of objects into a One-Dimensional Ordering instance.</span>
+
+<span class=sd>        :param data: the data source, i.e., an iterable of data elements</span>
+<span class=sd>        :param get_tags: the function for extracting tags from objects</span>
+<span class=sd>        :param get_distance: the function for getting the distance between</span>
+<span class=sd>            objects</span>
+<span class=sd>        :param flow_power: the flow power</span>
+<span class=sd>        :param horizon: the maximal considered rank</span>
+<span class=sd>        :param tag_titles: the tag names</span>
+<span class=sd>        :param name: the optional name</span>
+<span class=sd>        :return: the ordering instance</span>
+
+<span class=sd>        >>> def _dist(a, b):</span>
+<span class=sd>        ...     return abs(a - b)</span>
+<span class=sd>        >>> def _tags(a):</span>
+<span class=sd>        ...     return f"x{a}", f"b{a}"</span>
+<span class=sd>        >>> res = Instance.from_sequence_and_distance(</span>
+<span class=sd>        ...     [1, 2, 5], _dist, 2, 100, ("a", "b"), _tags)</span>
+<span class=sd>        >>> print(res)</span>
+<span class=sd>        order1d_3_2</span>
+<span class=sd>        >>> print(res.flows)</span>
+<span class=sd>        [[0 4 1]</span>
+<span class=sd>         [4 0 1]</span>
+<span class=sd>         [1 4 0]]</span>
+<span class=sd>        >>> print(res.distances)</span>
+<span class=sd>        [[0 1 2]</span>
+<span class=sd>         [1 0 1]</span>
+<span class=sd>         [2 1 0]]</span>
+<span class=sd>        >>> res = Instance.from_sequence_and_distance(</span>
+<span class=sd>        ...     [1, 2, 35, 4], _dist, 2, 100, ("a", "b"), _tags)</span>
+<span class=sd>        >>> print(res)</span>
+<span class=sd>        order1d_4_2</span>
+<span class=sd>        >>> print(res.flows)</span>
+<span class=sd>        [[0 9 1 4]</span>
+<span class=sd>         [9 0 1 4]</span>
+<span class=sd>         [1 4 0 9]</span>
+<span class=sd>         [4 9 1 0]]</span>
+<span class=sd>        >>> print(res.distances)</span>
+<span class=sd>        [[0 1 2 3]</span>
+<span class=sd>         [1 0 1 2]</span>
+<span class=sd>         [2 1 0 1]</span>
+<span class=sd>         [3 2 1 0]]</span>
+<span class=sd>        >>> res = Instance.from_sequence_and_distance(</span>
+<span class=sd>        ...     [1, 2, 4, 4], _dist, 2, 100, ("a", "b"), _tags)</span>
+<span class=sd>        >>> print(res)</span>
+<span class=sd>        order1d_3_2</span>
+<span class=sd>        >>> print(res.flows)</span>
+<span class=sd>        [[0 4 1]</span>
+<span class=sd>         [4 0 1]</span>
+<span class=sd>         [1 4 0]]</span>
+<span class=sd>        >>> print(res.distances)</span>
+<span class=sd>        [[0 1 2]</span>
+<span class=sd>         [1 0 1]</span>
+<span class=sd>         [2 1 0]]</span>
+<span class=sd>        >>> print(res.tags)</span>
+<span class=sd>        ((('x1', 'b1'), 0), (('x2', 'b2'), 1), (('x4', 'b4'), 2), \</span>
+<span class=sd>(('x4', 'b4'), 2))</span>
+<span class=sd>        >>> def _dist2(a, b):</span>
+<span class=sd>        ...     return abs(abs(a) - abs(b)) + 1</span>
+<span class=sd>        >>> res = Instance.from_sequence_and_distance(</span>
+<span class=sd>        ...     [1, 2, -4, 4], _dist2, 2, 100, ("a", "b"), _tags)</span>
+<span class=sd>        >>> print(res)</span>
+<span class=sd>        order1d_4_2</span>
+<span class=sd>        >>> print(res.flows)</span>
+<span class=sd>        [[ 0 36  9  9]</span>
+<span class=sd>         [36  0  9  9]</span>
+<span class=sd>         [ 4 16  0 36]</span>
+<span class=sd>         [ 4 16 36  0]]</span>
+<span class=sd>        >>> print(res.distances)</span>
+<span class=sd>        [[0 1 2 3]</span>
+<span class=sd>         [1 0 1 2]</span>
+<span class=sd>         [2 1 0 1]</span>
+<span class=sd>         [3 2 1 0]]</span>
+<span class=sd>        >>> res = Instance.from_sequence_and_distance(</span>
+<span class=sd>        ...     [1, 2, -4, 4], _dist2, 3, 100, ("a", "b"), _tags)</span>
+<span class=sd>        >>> print(res)</span>
+<span class=sd>        order1d_4_3</span>
+<span class=sd>        >>> print(res.flows)</span>
+<span class=sd>        [[  0 216  27  27]</span>
+<span class=sd>         [216   0  27  27]</span>
+<span class=sd>         [  8  64   0 216]</span>
+<span class=sd>         [  8  64 216   0]]</span>
+<span class=sd>        >>> print(res.distances)</span>
+<span class=sd>        [[0 1 2 3]</span>
+<span class=sd>         [1 0 1 2]</span>
+<span class=sd>         [2 1 0 1]</span>
+<span class=sd>         [3 2 1 0]]</span>
+<span class=sd>        >>> print(res.tags)</span>
+<span class=sd>        ((('x1', 'b1'), 0), (('x2', 'b2'), 1), (('x-4', 'b-4'), 2), \</span>
+<span class=sd>(('x4', 'b4'), 3))</span>
+<span class=sd>        >>> res = Instance.from_sequence_and_distance(</span>
+<span class=sd>        ...     [1, 2, -4, 4], _dist2, 3, 2, ("a", "b"), _tags)</span>
+<span class=sd>        >>> print(res)</span>
+<span class=sd>        order1d_4_3_2</span>
+<span class=sd>        >>> print(res.flows)</span>
+<span class=sd>        [[0 8 0 0]</span>
+<span class=sd>         [8 0 0 0]</span>
+<span class=sd>         [0 1 0 8]</span>
+<span class=sd>         [0 1 8 0]]</span>
+<span class=sd>        >>> print(res.distances)</span>
+<span class=sd>        [[0 1 2 3]</span>
+<span class=sd>         [1 0 1 2]</span>
+<span class=sd>         [2 1 0 1]</span>
+<span class=sd>         [3 2 1 0]]</span>
+<span class=sd>        >>> print(res.tags)</span>
+<span class=sd>        ((('x1', 'b1'), 0), (('x2', 'b2'), 1), (('x-4', 'b-4'), 2), \</span>
+<span class=sd>(('x4', 'b4'), 3))</span>
+<span class=sd>        >>> res = Instance.from_sequence_and_distance(</span>
+<span class=sd>        ...     [1, 2, -4, 4], _dist2, 2, 2, ("a", "b"), _tags)</span>
+<span class=sd>        >>> print(res)</span>
+<span class=sd>        order1d_4_2_2</span>
+<span class=sd>        >>> print(res.flows)</span>
+<span class=sd>        [[0 4 0 0]</span>
+<span class=sd>         [4 0 0 0]</span>
+<span class=sd>         [0 1 0 4]</span>
+<span class=sd>         [0 1 4 0]]</span>
+<span class=sd>        >>> print(res.distances)</span>
+<span class=sd>        [[0 1 2 3]</span>
+<span class=sd>         [1 0 1 2]</span>
+<span class=sd>         [2 1 0 1]</span>
+<span class=sd>         [3 2 1 0]]</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>data</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>data</span><span class=p>,</span> <span class=s2>"data"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>get_tags</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>get_tags</span><span class=p>,</span> <span class=s2>"get_tags"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>get_distance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>get_distance</span><span class=p>,</span> <span class=s2>"get_distance"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>tag_titles</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>tag_titles</span><span class=p>,</span> <span class=s2>"tag_titles"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+
+        <span class=c1># build a distance matrix and purge all zero-distance elements</span>
+        <span class=n>datal</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>T</span><span class=p>]</span> <span class=o>=</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"list[T]"</span><span class=p>,</span> <span class=n>data</span><span class=p>)</span> \
+            <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>data</span><span class=p>,</span> <span class=nb>list</span><span class=p>)</span> <span class=k>else</span> <span class=nb>list</span><span class=p>(</span><span class=n>data</span><span class=p>)</span>
+        <span class=n>mappings</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>T</span><span class=p>,</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>distances</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>i</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>while</span> <span class=n>i</span> <span class=o><</span> <span class=nb>len</span><span class=p>(</span><span class=n>datal</span><span class=p>):</span>
+            <span class=n>o1</span><span class=p>:</span> <span class=n>T</span> <span class=o>=</span> <span class=n>datal</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+            <span class=n>j</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>i</span> <span class=o>+</span> <span class=mi>1</span>
+            <span class=n>current_dists</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=n>d</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=n>distances</span><span class=p>]</span>
+            <span class=n>current_dists</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>
+            <span class=k>while</span> <span class=n>j</span> <span class=o><</span> <span class=nb>len</span><span class=p>(</span><span class=n>datal</span><span class=p>):</span>
+                <span class=n>o2</span><span class=p>:</span> <span class=n>T</span> <span class=o>=</span> <span class=n>datal</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>
+                <span class=n>dist</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>get_distance</span><span class=p>(</span><span class=n>o1</span><span class=p>,</span> <span class=n>o2</span><span class=p>)</span>
+                <span class=k>if</span> <span class=ow>not</span> <span class=p>(</span><span class=n>isfinite</span><span class=p>(</span><span class=n>dist</span><span class=p>)</span> <span class=ow>and</span> <span class=p>(</span><span class=mi>0</span> <span class=o><=</span> <span class=n>dist</span> <span class=o><=</span> <span class=mf>1e100</span><span class=p>)):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                        <span class=sa>f</span><span class=s2>"invalid distance </span><span class=si>{</span><span class=n>dist</span><span class=si>}</span><span class=s2> for objects </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=n>j</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>dist</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># distance == 0, must purge</span>
+                    <span class=n>mappings</span><span class=o>.</span><span class=n>append</span><span class=p>((</span><span class=n>o2</span><span class=p>,</span> <span class=n>i</span><span class=p>))</span>
+                    <span class=k>del</span> <span class=n>datal</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>
+                    <span class=k>for</span> <span class=n>ds</span> <span class=ow>in</span> <span class=n>distances</span><span class=p>:</span>
+                        <span class=k>del</span> <span class=n>ds</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>
+                    <span class=k>continue</span>
+                <span class=n>current_dists</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>dist</span><span class=p>)</span>
+                <span class=n>j</span> <span class=o>+=</span> <span class=mi>1</span>
+            <span class=n>mappings</span><span class=o>.</span><span class=n>append</span><span class=p>((</span><span class=n>o1</span><span class=p>,</span> <span class=n>i</span><span class=p>))</span>
+            <span class=n>distances</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>current_dists</span><span class=p>)</span>
+            <span class=n>i</span> <span class=o>+=</span> <span class=mi>1</span>
+
+        <span class=c1># we now got a full distance matrix, let's turn it into a rank matrix</span>
+        <span class=k>return</span> <span class=n>Instance</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span><span class=n>distances</span><span class=p>),</span>
+                        <span class=n>flow_power</span><span class=p>,</span> <span class=n>horizon</span><span class=p>,</span> <span class=n>tag_titles</span><span class=p>,</span>
+                        <span class=p>((</span><span class=n>get_tags</span><span class=p>(</span><span class=n>obj</span><span class=p>),</span> <span class=n>idx</span><span class=p>)</span> <span class=k>for</span> <span class=n>obj</span><span class=p>,</span> <span class=n>idx</span> <span class=ow>in</span> <span class=n>mappings</span><span class=p>),</span>
+                        <span class=n>name</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.order1d.html#moptipyapps.order1d.instance.Instance.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"flowPower"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>flow_power</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"horizon"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>horizon</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"nOrig"</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>tags</span><span class=p>))</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.order1d.instance</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

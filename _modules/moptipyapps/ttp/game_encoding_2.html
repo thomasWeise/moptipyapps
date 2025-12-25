@@ -1,0 +1,414 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.ttp.game_encoding_2 — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/ttp/game_encoding_2.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.game_encoding_2</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.ttp.game_encoding_2</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A permutation-with-repetition-based encoding based on games with rescheduling.</span>
+
+<span class=sd>This game-based encoding method is an extension of the method presented in</span>
+<span class=sd>:mod:`~moptipyapps.ttp.game_encoding`. The method presented in</span>
+<span class=sd>:mod:`~moptipyapps.ttp.game_encoding` takes a permutation of games and fills</span>
+<span class=sd>these games into a game plan one-by-one. For each game it tries to find the</span>
+<span class=sd>earliest possible slot where it can be scheduled, i.e., the earliest slot</span>
+<span class=sd>where both involved teams do not yet have a game scheduled.</span>
+
+<span class=sd>During this process, it can happen that a game cannot be added to the game</span>
+<span class=sd>plan, because on each day, at least one of the two teams has already a game</span>
+<span class=sd>scheduled. In such a case, the original encoding will simply drop the game.</span>
+<span class=sd>This results in "byes" in the game plan.</span>
+
+<span class=sd>This new encoding tries to reduce the number of such byes. It does this as</span>
+<span class=sd>follows: It still processes the game permutations from front to end and</span>
+<span class=sd>adds the games to the schedule. If one game cannot be added to the schedule</span>
+<span class=sd>due to the above reason, it will go through game plan again from beginning</span>
+<span class=sd>to end. This time, it will look for a day on which only *one* of the two teams</span>
+<span class=sd>has a game scheduled already. It will then take this already-scheduled game</span>
+<span class=sd>and try to schedule it on a *later* day. This is a recursive process: If no</span>
+<span class=sd>later slot is found where both teams involved have no game scheduled, we will</span>
+<span class=sd>again look for a day on which only one of the teams have scheduled a game and</span>
+<span class=sd>try to move that to a later slot. Since this will be an even later slot, the</span>
+<span class=sd>recursion will never go too deep. Either way, if a later slot is found, the</span>
+<span class=sd>game can be moved, meaning that the original game blocking our "current" game</span>
+<span class=sd>can be moved as well. Then the new game can be inserted.</span>
+
+<span class=sd>If no such slot can be found, then we try to insert the game by searching</span>
+<span class=sd>from the back end and moving other games forward in the same recursive</span>
+<span class=sd>fashion. The hope is that, this way, the number of "byes" in the schedule can</span>
+<span class=sd>be reduced. If the number of "byes" is reduced, then there will automatically</span>
+<span class=sd>fewer constraint violations. This makes it more likely that we discover a</span>
+<span class=sd>feasible schedule earlier in the search.</span>
+
+<span class=sd>Furthermore, the process might even make it easier for a search to move from</span>
+<span class=sd>one feasible schedule to another one. There would hopefully be fewer</span>
+<span class=sd>permutations leading to infeasible schedules and fewer infeasible schedules</span>
+<span class=sd>between two feasible ones.</span>
+
+<span class=sd>Of course, all of that comes at the cost of increased runtime.</span>
+<span class=sd>"""</span>
+
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.game_encoding</span><span class=w> </span><span class=kn>import</span> <span class=n>GameEncoding</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.game_plan_space</span><span class=w> </span><span class=kn>import</span> <span class=n>GamePlanSpace</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+
+
+<span class=c1># Due to the recursion, caching must be disabled or we get a segfault.</span>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>nogil</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>_re_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>index</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                 <span class=n>day</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>end</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>direction</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Try to re-schedule a game at the given index.</span>
+
+<span class=sd>    This function tries to take the game at the given index and given day and</span>
+<span class=sd>    attempts to move it to a later day. If it succeeds, it returns `True`, if</span>
+<span class=sd>    rescheduling was not possible, it returns `False`.</span>
+
+<span class=sd>    :param y: the schedule</span>
+<span class=sd>    :param index: the index</span>
+<span class=sd>    :param day: the day</span>
+<span class=sd>    :param end: the end day</span>
+<span class=sd>    :return: `True` if the game was successfully re-scheduled, `False`</span>
+<span class=sd>        otherwise</span>
+
+<span class=sd>    >>> dest = np.array([</span>
+<span class=sd>    ...     [ 2, -1,  4, -3],</span>
+<span class=sd>    ...     [ 3,  4, -1, -2],</span>
+<span class=sd>    ...     [ 4,  3, -2, -1],</span>
+<span class=sd>    ...     [-2,  1, -4,  3],</span>
+<span class=sd>    ...     [-3, -4,  1,  2],</span>
+<span class=sd>    ...     [-4, -3,  2,  1]])</span>
+<span class=sd>    >>> _re_schedule(dest, 0, 2, 6, 1)</span>
+<span class=sd>    False</span>
+<span class=sd>    >>> dest = np.array([</span>
+<span class=sd>    ...     [ 2, -1,  4, -3],</span>
+<span class=sd>    ...     [ 3,  4, -1, -2],</span>
+<span class=sd>    ...     [ 4,  3, -2, -1],</span>
+<span class=sd>    ...     [ 0,  1, -4,  0],</span>
+<span class=sd>    ...     [-3, -4,  1,  2],</span>
+<span class=sd>    ...     [-4, -3,  2,  1]])</span>
+<span class=sd>    >>> _re_schedule(dest, 0, 2, 6, 1)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ 2 -1  4 -3]</span>
+<span class=sd>     [ 3  4 -1 -2]</span>
+<span class=sd>     [ 0  3 -2  0]</span>
+<span class=sd>     [ 4  1 -4 -1]</span>
+<span class=sd>     [-3 -4  1  2]</span>
+<span class=sd>     [-4 -3  2  1]]</span>
+<span class=sd>    >>> dest = np.array([</span>
+<span class=sd>    ...     [ 2, -1,  4, -3],</span>
+<span class=sd>    ...     [ 3,  4, -1, -2],</span>
+<span class=sd>    ...     [ 0,  3, -2, -1],</span>
+<span class=sd>    ...     [-2,  0,  0,  3],</span>
+<span class=sd>    ...     [-3, -4,  1,  2],</span>
+<span class=sd>    ...     [-4, -3,  2,  1]])</span>
+<span class=sd>    >>> _re_schedule(dest, 2, 1, 6, 1)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ 2 -1  4 -3]</span>
+<span class=sd>     [ 0  4  0 -2]</span>
+<span class=sd>     [ 3  0 -1 -1]</span>
+<span class=sd>     [-2  3 -2  3]</span>
+<span class=sd>     [-3 -4  1  2]</span>
+<span class=sd>     [-4 -3  2  1]]</span>
+<span class=sd>    """</span>
+    <span class=n>home_idx</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>index</span><span class=p>)</span>  <span class=c1># We first guess that this is the home team</span>
+    <span class=n>away_idx</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>index</span><span class=p>])</span>  <span class=c1># and that this is the away team.</span>
+    <span class=k>if</span> <span class=n>away_idx</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># The home team actually plays away.</span>
+        <span class=n>away_idx</span><span class=p>,</span> <span class=n>home_idx</span> <span class=o>=</span> <span class=n>home_idx</span><span class=p>,</span> <span class=p>(</span><span class=o>-</span><span class=n>away_idx</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span>  <span class=c1># Swap.</span>
+    <span class=k>else</span><span class=p>:</span>  <span class=c1># We were right.</span>
+        <span class=n>away_idx</span> <span class=o>-=</span> <span class=mi>1</span>  <span class=c1># So the ID of the away team -1 is its index.</span>
+    <span class=k>if</span> <span class=n>_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=n>home_idx</span><span class=p>,</span> <span class=n>away_idx</span><span class=p>,</span> <span class=n>day</span> <span class=o>+</span> <span class=n>direction</span><span class=p>,</span>
+                 <span class=n>end</span><span class=p>,</span> <span class=n>direction</span><span class=p>,</span> <span class=kc>True</span><span class=p>):</span>  <span class=c1># Try to re-schedule the game.</span>
+        <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>home_idx</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># Set first slot to empty.</span>
+        <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>away_idx</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># Set last slot to empty.</span>
+        <span class=k>return</span> <span class=kc>True</span>  <span class=c1># We successfully rescheduled the game.</span>
+    <span class=k>return</span> <span class=kc>False</span>  <span class=c1># We failed to recursively reschedule.</span>
+
+
+<span class=c1># Due to the recursion, caching must be disabled or we get a segfault.</span>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>nogil</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>home_idx</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>away_idx</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>start</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+              <span class=n>end</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>direction</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>is_recursive</span><span class=p>:</span> <span class=nb>bool</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Try to find a slot in the day range where the given game can be placed.</span>
+
+<span class=sd>    :param y: the destination array</span>
+<span class=sd>    :param home_idx: the home index</span>
+<span class=sd>    :param away_idx: the away index</span>
+<span class=sd>    :param start: the starting day</span>
+<span class=sd>    :param end: the ending day</span>
+<span class=sd>    :return: `True` if the game could be placed, `False` otherwise.</span>
+
+<span class=sd>    >>> dest = np.array([</span>
+<span class=sd>    ...     [ 2, -1,  4, -3],</span>
+<span class=sd>    ...     [ 3,  4, -1, -2],</span>
+<span class=sd>    ...     [ 4,  3, -2, -1],</span>
+<span class=sd>    ...     [-2,  1, -4,  3],</span>
+<span class=sd>    ...     [-3, -4,  1,  2],</span>
+<span class=sd>    ...     [-4, -3,  2,  1]])</span>
+<span class=sd>    >>> _schedule(dest, 1, 2, 0, 6, 1, True)</span>
+<span class=sd>    False</span>
+<span class=sd>    >>> dest = np.array([</span>
+<span class=sd>    ...     [ 2, -1,  4, -3],</span>
+<span class=sd>    ...     [ 3,  4, -1, -2],</span>
+<span class=sd>    ...     [ 4,  0,  0, -1],</span>
+<span class=sd>    ...     [-2,  1, -4,  3],</span>
+<span class=sd>    ...     [-3, -4,  1,  2],</span>
+<span class=sd>    ...     [-4, -3,  2,  1]])</span>
+<span class=sd>    >>> _schedule(dest, 1, 2, 0, 6, 1, True)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ 2 -1  4 -3]</span>
+<span class=sd>     [ 3  4 -1 -2]</span>
+<span class=sd>     [ 4  3 -2 -1]</span>
+<span class=sd>     [-2  1 -4  3]</span>
+<span class=sd>     [-3 -4  1  2]</span>
+<span class=sd>     [-4 -3  2  1]]</span>
+<span class=sd>    >>> dest = np.array([</span>
+<span class=sd>    ...     [ 2, -1,  4, -3],</span>
+<span class=sd>    ...     [ 3,  4, -1, -2],</span>
+<span class=sd>    ...     [ 0,  3, -2, -1],</span>
+<span class=sd>    ...     [-2,  0,  0,  3],</span>
+<span class=sd>    ...     [-3, -4,  1,  2],</span>
+<span class=sd>    ...     [-4, -3,  2,  1]])</span>
+<span class=sd>    >>> _schedule(dest, 0, 2, 0, 6, 1, True)</span>
+<span class=sd>    True</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ 2 -1  4 -3]</span>
+<span class=sd>     [ 3  4 -1 -2]</span>
+<span class=sd>     [ 3  0 -1 -1]</span>
+<span class=sd>     [-2  3 -2  3]</span>
+<span class=sd>     [-3 -4  1  2]</span>
+<span class=sd>     [-4 -3  2  1]]</span>
+<span class=sd>    """</span>
+    <span class=n>empty_slots_needed</span> <span class=o>=</span> <span class=mi>2</span>  <span class=c1># Number of required open slots for a game.</span>
+    <span class=k>while</span> <span class=kc>True</span><span class=p>:</span>
+        <span class=k>for</span> <span class=n>day</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>start</span><span class=p>,</span> <span class=n>end</span><span class=p>,</span> <span class=n>direction</span><span class=p>):</span>  <span class=c1># iterate over all days</span>
+            <span class=n>can_use_home</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>home_idx</span><span class=p>]</span> <span class=o>==</span> <span class=mi>0</span>  <span class=c1># Check for empty slot</span>
+            <span class=n>can_use_away</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>away_idx</span><span class=p>]</span> <span class=o>==</span> <span class=mi>0</span>  <span class=c1># Check for empty slot</span>
+            <span class=k>if</span> <span class=n>can_use_home</span> <span class=o>+</span> <span class=n>can_use_away</span> <span class=o><</span> <span class=n>empty_slots_needed</span><span class=p>:</span>
+                <span class=k>continue</span>  <span class=c1># Too few empty slots: Try with next day.</span>
+            <span class=k>if</span> <span class=p>((</span><span class=n>can_use_home</span> <span class=ow>or</span> <span class=n>_re_schedule</span><span class=p>(</span>  <span class=c1># At least one empty slot?</span>
+                    <span class=n>y</span><span class=p>,</span> <span class=n>home_idx</span><span class=p>,</span> <span class=n>day</span><span class=p>,</span> <span class=n>end</span><span class=p>,</span> <span class=n>direction</span><span class=p>))</span> <span class=ow>and</span> <span class=p>(</span>
+                    <span class=n>can_use_away</span> <span class=ow>or</span> <span class=n>_re_schedule</span><span class=p>(</span>
+                    <span class=n>y</span><span class=p>,</span> <span class=n>away_idx</span><span class=p>,</span> <span class=n>day</span><span class=p>,</span> <span class=n>end</span><span class=p>,</span> <span class=n>direction</span><span class=p>))):</span>
+                <span class=c1># There either were two empty slots, or one and the other game</span>
+                <span class=c1># was rescheduled. So we can schedule the game.</span>
+                <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>home_idx</span><span class=p>]</span> <span class=o>=</span> <span class=n>away_idx</span> <span class=o>+</span> <span class=mi>1</span>
+                <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>away_idx</span><span class=p>]</span> <span class=o>=</span> <span class=o>-</span><span class=p>(</span><span class=n>home_idx</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span>
+                <span class=k>return</span> <span class=kc>True</span>  <span class=c1># Success!</span>
+
+        <span class=c1># After we tried finding a perfect slot, we now try with just one slot.</span>
+        <span class=k>if</span> <span class=n>empty_slots_needed</span> <span class=o>>=</span> <span class=mi>2</span><span class=p>:</span>
+            <span class=n>empty_slots_needed</span> <span class=o>=</span> <span class=mi>1</span>  <span class=c1># Try requiring just one slot.</span>
+            <span class=k>continue</span>  <span class=c1># And execute scheduling loop again.</span>
+        <span class=k>if</span> <span class=n>is_recursive</span><span class=p>:</span>  <span class=c1># Only if this is the root call, we can go one</span>
+            <span class=k>return</span> <span class=kc>False</span>  <span class=c1># after the attempt requiring 1 slot failed.</span>
+        <span class=n>is_recursive</span> <span class=o>=</span> <span class=kc>True</span>  <span class=c1># But we can only do this once.</span>
+        <span class=c1># If we got here, we are in the root call.</span>
+        <span class=c1># We first tried to find two open slots and failed.</span>
+        <span class=c1># Then we tried to find a single open slot and tried to re-schedule</span>
+        <span class=c1># the other game to a later point in time ... an failed.</span>
+        <span class=c1># Now we try rescheduling games towards an early time.</span>
+        <span class=n>start</span> <span class=o>=</span> <span class=n>end</span> <span class=o>-</span> <span class=mi>1</span>
+        <span class=n>end</span> <span class=o>=</span> <span class=n>direction</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+
+
+<span class=c1># Due to the recursion, caching must be disabled or we get a segfault.</span>
+<div class=viewcode-block id=map_games_2>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_encoding_2.map_games_2>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>map_games_2</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Translate a permutation of games to a game plan.</span>
+
+<span class=sd>    This is a straightforward decoding that places the games into the map one</span>
+<span class=sd>    by one. Each game is placed at the earliest slot in which it can be</span>
+<span class=sd>    placed. If a game cannot be placed, it is ignored. This will lead to many</span>
+<span class=sd>    errors, which can be counted via the :mod:`~moptipyapps.ttp.errors`</span>
+<span class=sd>    objective.</span>
+
+<span class=sd>    :param x: the source permutation</span>
+<span class=sd>    :param y: the destination game plan</span>
+
+<span class=sd>    >>> from moptipy.utils.nputils import int_range_to_dtype</span>
+<span class=sd>    >>> from moptipyapps.ttp.game_encoding import (</span>
+<span class=sd>    ...     search_space_for_n_and_rounds)</span>
+<span class=sd>    >>> teams = 2</span>
+<span class=sd>    >>> rounds = 2</span>
+<span class=sd>    >>> perm = search_space_for_n_and_rounds(teams, rounds).blueprint</span>
+<span class=sd>    >>> dest = np.empty((rounds * (teams - 1), teams),</span>
+<span class=sd>    ...                 int_range_to_dtype(-teams, teams))</span>
+<span class=sd>    >>> map_games_2(perm, dest)</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ 2 -1]</span>
+<span class=sd>     [-2  1]]</span>
+<span class=sd>    >>> teams = 4</span>
+<span class=sd>    >>> rounds = 2</span>
+<span class=sd>    >>> perm = search_space_for_n_and_rounds(teams, rounds).blueprint</span>
+<span class=sd>    >>> dest = np.empty((rounds * (teams - 1), teams),</span>
+<span class=sd>    ...                 int_range_to_dtype(-teams, teams))</span>
+<span class=sd>    >>> map_games_2(perm, dest)</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ 2 -1  4 -3]</span>
+<span class=sd>     [ 3  4 -1 -2]</span>
+<span class=sd>     [ 4  3 -2 -1]</span>
+<span class=sd>     [-2  1 -4  3]</span>
+<span class=sd>     [-3 -4  1  2]</span>
+<span class=sd>     [-4 -3  2  1]]</span>
+<span class=sd>     >>> from moptipyapps.ttp.instance import Instance</span>
+<span class=sd>     >>> inst = Instance.from_resource("circ10")</span>
+<span class=sd>     >>> perm = np.array([73,77,55,74,21,20,3,11,63,19,38,8,27,47,88,16,75,</span>
+<span class=sd>     ...     45,89,36,24,80,17,40,0,32,53,82,31,13,12,66,71,6,87,84,2,60,61,</span>
+<span class=sd>     ...     10,30,58,49,57,54,23,26,46,59,42,29,62,22,18,50,78,37,34,65,43,</span>
+<span class=sd>     ...     48,85,86,83,56,41,5,81,52,15,51,9,4,76,7,69,67,33,79,72,35,25,</span>
+<span class=sd>     ...     1,14,70,44,68,64,28,39])</span>
+<span class=sd>    >>> teams = 10</span>
+<span class=sd>    >>> rounds = 2</span>
+<span class=sd>    >>> dest = np.empty((rounds * (teams - 1), teams),</span>
+<span class=sd>    ...                 int_range_to_dtype(-teams, teams))</span>
+<span class=sd>    >>> map_games_2(perm, dest)</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ -8  -9   5   7  -3  10  -4   1   2  -6]</span>
+<span class=sd>     [  5  -7   4  -3  -1  -9   2 -10   6   8]</span>
+<span class=sd>     [ 10   4  -9  -2   6  -5   8  -7   3  -1]</span>
+<span class=sd>     [ -4  -3   2   1  -7   8   5  -6 -10   9]</span>
+<span class=sd>     [ -6   9  -5  -8   3   1 -10   4  -2   7]</span>
+<span class=sd>     [ -5  10  -6  -9   1   3  -8   7   4  -2]</span>
+<span class=sd>     [  2  -1   8   6   7  -4  -5  -3  10  -9]</span>
+<span class=sd>     [  8 -10   6   5  -4  -3   9  -1  -7   2]</span>
+<span class=sd>     [  4   6   7  -1   9  -2  -3  10  -5  -8]</span>
+<span class=sd>     [ -7   5  -8 -10  -2   9   1   3  -6   4]</span>
+<span class=sd>     [-10   3  -2  -7  -6   5   4  -9   8   1]</span>
+<span class=sd>     [  3  -4  -1   2  10  -8  -9   6   7  -5]</span>
+<span class=sd>     [  9  -8  10  -5   4  -7   6   2  -1  -3]</span>
+<span class=sd>     [ -3  -6   1   9   8   2  10  -5  -4  -7]</span>
+<span class=sd>     [ -2   1   9   8 -10   7  -6  -4  -3   5]</span>
+<span class=sd>     [  7   8 -10  -6  -9   4  -1  -2   5   3]</span>
+<span class=sd>     [ -9   7  -4   3  -8 -10  -2   5   1   6]</span>
+<span class=sd>     [  6  -5  -7  10   2  -1   3   9  -8  -4]]</span>
+<span class=sd>    >>> int(dest.shape[0] * dest.shape[1] - np.count_nonzero(dest))</span>
+<span class=sd>    0</span>
+<span class=sd>    >>> from moptipyapps.ttp.game_encoding import re_encode</span>
+<span class=sd>    >>> re_encode(perm, dest)</span>
+<span class=sd>    >>> print(perm)</span>
+<span class=sd>    [21 32 53 63 73  3 20 55 77 88  8 11 40 60 74 19 27 51 58 89 16 38 45 66</span>
+<span class=sd>     87 17 36 47 69 75  0 24 31 41 80  6 22 30 61 82  2 13 23 43 71 12 52 54</span>
+<span class=sd>     65 84 10 49 57 79 81  1 28 44 68 78  7 26 39 59 64 18 34 42 46 62  9 25</span>
+<span class=sd>     33 50 85  5 15 48 76 83 14 29 67 72 86  4 35 37 56 70]</span>
+<span class=sd>    >>> map_games_2(perm, dest)</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ -8  -9   5   7  -3  10  -4   1   2  -6]</span>
+<span class=sd>     [  5  -7   4  -3  -1  -9   2 -10   6   8]</span>
+<span class=sd>     [ 10   4  -9  -2   6  -5   8  -7   3  -1]</span>
+<span class=sd>     [ -4  -3   2   1  -7   8   5  -6 -10   9]</span>
+<span class=sd>     [ -6   9  -5  -8   3   1 -10   4  -2   7]</span>
+<span class=sd>     [ -5  10  -6  -9   1   3  -8   7   4  -2]</span>
+<span class=sd>     [  2  -1   8   6   7  -4  -5  -3  10  -9]</span>
+<span class=sd>     [  8 -10   6   5  -4  -3   9  -1  -7   2]</span>
+<span class=sd>     [  4   6   7  -1   9  -2  -3  10  -5  -8]</span>
+<span class=sd>     [ -7   5  -8 -10  -2   9   1   3  -6   4]</span>
+<span class=sd>     [-10   3  -2  -7  -6   5   4  -9   8   1]</span>
+<span class=sd>     [  3  -4  -1   2  10  -8  -9   6   7  -5]</span>
+<span class=sd>     [  9  -8  10  -5   4  -7   6   2  -1  -3]</span>
+<span class=sd>     [ -3  -6   1   9   8   2  10  -5  -4  -7]</span>
+<span class=sd>     [ -2   1   9   8 -10   7  -6  -4  -3   5]</span>
+<span class=sd>     [  7   8 -10  -6  -9   4  -1  -2   5   3]</span>
+<span class=sd>     [ -9   7  -4   3  -8 -10  -2   5   1   6]</span>
+<span class=sd>     [  6  -5  -7  10   2  -1   3   9  -8  -4]]</span>
+<span class=sd>     >>> inst = Instance.from_resource("con14")</span>
+<span class=sd>     >>> perm = np.array([70,114,54,51,98,31,49,46,148,169,174,151,155,110,</span>
+<span class=sd>     ...     75,118,128,81,171,19,133,93,5,91,47,1,84,109,142,121,7,40,163,</span>
+<span class=sd>     ...     61,20,96,165,177,160,39,73,37,101,108,119,65,2,117,164,106,60,</span>
+<span class=sd>     ...     145,105,90,170,74,8,26,94,10,22,86,120,154,89,66,77,178,140,48,</span>
+<span class=sd>     ...     0,52,159,25,176,135,63,57,76,161,68,124,162,29,55,80,24,45,85,</span>
+<span class=sd>     ...     115,131,100,17,53,27,38,95,158,104,175,87,123,167,97,79,112,</span>
+<span class=sd>     ...     172,127,136,12,44,50,102,69,144,143,113,4,181,88,166,150,59,</span>
+<span class=sd>     ...     141,72,125,116,132,14,147,153,129,111,92,62,6,32,82,16,179,21,</span>
+<span class=sd>     ...     3,126,134,122,149,146,36,107,34,103,42,41,18,35,78,28,137,43,</span>
+<span class=sd>     ...     33,71,99,139,56,23,138,67,168,130,30,180,152,83,9,13,173,11,</span>
+<span class=sd>     ...     157,156,64,15,58])</span>
+<span class=sd>    >>> teams = 14</span>
+<span class=sd>    >>> rounds = 2</span>
+<span class=sd>    >>> from moptipy.utils.nputils import int_range_to_dtype</span>
+<span class=sd>    >>> dest = np.empty((rounds * (teams - 1), teams),</span>
+<span class=sd>    ...                 int_range_to_dtype(-teams, teams))</span>
+<span class=sd>    >>> from moptipyapps.ttp.game_encoding_2 import map_games_2</span>
+<span class=sd>    >>> map_games_2(perm, dest)</span>
+<span class=sd>    >>> print(dest)</span>
+<span class=sd>    [[ -8 -10  -5  14   3   7  -6   1  12   2 -13  -9  11  -4]</span>
+<span class=sd>     [-14  -6   7  12  11   2  -3   9  -8  13  -5  -4 -10   1]</span>
+<span class=sd>     [  7   8 -14   9 -10 -12  -1  -2  -4   5  13   6 -11   3]</span>
+<span class=sd>     [ -5  11  -8  -7   1 -14   4   3 -12 -13  -2   9  10   6]</span>
+<span class=sd>     [  3  -5  -1 -11   2  10  -9 -13   7  -6   4  14   8 -12]</span>
+<span class=sd>     [  9  -3   2  10 -13  12   8  -7  -1  -4  14  -6   5 -11]</span>
+<span class=sd>     [-10  -4  13   2 -11  -9  14  12   6   1   5  -8  -3  -7]</span>
+<span class=sd>     [ -4   9 -10   1   7  -8  -5   6  -2   3 -14  13 -12  11]</span>
+<span class=sd>     [ -6 -11 -12  -8  10   1  13   4 -14  -5   2   3  -7   9]</span>
+<span class=sd>     [  4 -14 -13  -1  -9  11  10 -12   5  -7  -6   8   3   2]</span>
+<span class=sd>     [ 10  -7   5   8  -3  14   2  -4 -13  -1  12 -11   9  -6]</span>
+<span class=sd>     [ 12  14  -9 -10  13 -11  -8   7   3   4   6  -1  -5  -2]</span>
+<span class=sd>     [ -3  -9   1  11  -8  13  12   5   2 -14  -4  -7  -6  10]</span>
+<span class=sd>     [  2  -1  -7 -13  -6   5   3 -14  10  -9 -12  11   4   8]</span>
+<span class=sd>     [-11 -12  14  -5   4 -13   9 -10  -7   8   1   2   6  -3]</span>
+<span class=sd>     [ -9   3  -2  -6 -14   4 -13  11   1  12  -8 -10   7   5]</span>
+<span class=sd>     [-12  13   8   5  -4 -10 -14  -3  11   6  -9   1  -2   7]</span>
+<span class=sd>     [  8   6  10 -14 -12  -2  11  -1  13  -3  -7   5  -9   4]</span>
+<span class=sd>     [ 14  -8 -11   6   9  -4 -10   2  -5   7   3 -13  12  -1]</span>
+<span class=sd>     [ -2   1  -6  13  12   3 -11  14 -10   9   7  -5  -4  -8]</span>
+<span class=sd>     [ 11   5  12   7  -2   9  -4  13  -6  14  -1  -3  -8 -10]</span>
+<span class=sd>     [  6  10  11 -12  -7  -1   5  -9   8  -2  -3   4 -14  13]</span>
+<span class=sd>     [  5 -13  -4   3  -1   8 -12  -6  14  11 -10   7   2  -9]</span>
+<span class=sd>     [-13   7   6  -9  14  -3  -2 -11   4 -12   8  10   1  -5]</span>
+<span class=sd>     [ -7  12   4  -3   6  -5   1  10 -11  -8   9  -2  14 -13]</span>
+<span class=sd>     [ 13   4   9  -2   8  -7   6  -5  -3 -11  10 -14  -1  12]]</span>
+<span class=sd>    """</span>
+    <span class=n>y</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>  <span class=c1># first zero the output matrix</span>
+    <span class=n>days</span><span class=p>,</span> <span class=n>n</span> <span class=o>=</span> <span class=n>y</span><span class=o>.</span><span class=n>shape</span>  <span class=c1># the number of days and teams to be scheduled</span>
+    <span class=n>div</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>n</span> <span class=o>-</span> <span class=mi>1</span>  <span class=c1># the divisor for permutation values -> teams</span>
+
+    <span class=k>for</span> <span class=n>game</span> <span class=ow>in</span> <span class=n>x</span><span class=p>:</span>
+        <span class=n>g</span> <span class=o>=</span> <span class=nb>int</span><span class=p>(</span><span class=n>game</span><span class=p>)</span>  <span class=c1># make sure that the indices are Python integers</span>
+        <span class=n>home_idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=p>(</span><span class=n>g</span> <span class=o>//</span> <span class=n>div</span><span class=p>)</span> <span class=o>%</span> <span class=n>n</span>  <span class=c1># home idx is in 0..n-1</span>
+        <span class=n>away_idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>g</span> <span class=o>%</span> <span class=n>div</span>  <span class=c1># away index in 0..n-2</span>
+        <span class=k>if</span> <span class=n>away_idx</span> <span class=o>>=</span> <span class=n>home_idx</span><span class=p>:</span>  <span class=c1># "A vs. A" games impossible</span>
+            <span class=n>away_idx</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># away index in 0..n-1, but != home_idx</span>
+        <span class=n>_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=n>home_idx</span><span class=p>,</span> <span class=n>away_idx</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>days</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=kc>False</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=GameEncoding2>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_encoding_2.GameEncoding2>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>GameEncoding2</span><span class=p>(</span><span class=n>GameEncoding</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A second encoding that transforms strings of games to game plans."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the game-based encoding that can reschedule games.</span>
+
+<span class=sd>        :param instance: the instance</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>decode</span> <span class=o>=</span> <span class=n>map_games_2</span>  <span class=c1># type: ignore</span>
+
+        <span class=c1># We invoke all the functions in order to enforce proper compilation.</span>
+        <span class=c1># Numba has some problems with recursive functions.</span>
+        <span class=c1># Therefore, we try to enforce that all functions used here are</span>
+        <span class=c1># invoked in an order where their parameters can be fully inferred.</span>
+        <span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>GamePlanSpace</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>
+        <span class=n>y</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mi>1</span><span class=p>)</span>
+        <span class=n>_re_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1</span><span class=p>)</span>
+        <span class=n>_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=kc>False</span><span class=p>)</span>
+        <span class=n>y</span><span class=p>[</span><span class=mi>0</span><span class=p>,</span> <span class=mi>0</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=n>_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+        <span class=n>y</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>
+        <span class=n>_re_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1</span><span class=p>)</span>
+        <span class=n>_schedule</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=kc>False</span><span class=p>)</span>
+        <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>search_space</span><span class=p>()</span><span class=o>.</span><span class=n>blueprint</span>
+        <span class=n>x</span><span class=o>.</span><span class=n>sort</span><span class=p>()</span>
+        <span class=n>map_games_2</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>y</span><span class=p>)</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.game_encoding_2</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

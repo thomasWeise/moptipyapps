@@ -1,0 +1,388 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.ttp.errors — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/ttp/errors.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.errors</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.ttp.errors</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An objective that counts constraint violations.</span>
+
+<span class=sd>The idea is that we will probably not be able to always produce game plans</span>
+<span class=sd>that adhere to all the constraints imposed by a Traveling Tournament Problem</span>
+<span class=sd>:mod:`~moptipyapps.ttp` :mod:`~moptipyapps.ttp.instance`, so we will instead</span>
+<span class=sd>probably usually generate game plans that may contain errors.</span>
+
+<span class=sd>We will hope that optimization can take care of this by applying this</span>
+<span class=sd>objective function here to get rid of them. In the documentation of function</span>
+<span class=sd>:func:`~moptipyapps.ttp.errors.count_errors`, we explain the different types</span>
+<span class=sd>of errors that may occur and that are counted.</span>
+
+<span class=sd>This objective function plays thus well with encodings that produce infeasible</span>
+<span class=sd>schedules, such as the very simple :mod:`~moptipyapps.ttp.game_encoding`.</span>
+<span class=sd>"""</span>
+
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>int_range_to_dtype</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.game_plan</span><span class=w> </span><span class=kn>import</span> <span class=n>GamePlan</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+
+
+<div class=viewcode-block id=count_errors>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.errors.count_errors>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>count_errors</span><span class=p>(</span><span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>home_streak_min</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>home_streak_max</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>away_streak_min</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>away_streak_max</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>separation_min</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                 <span class=n>separation_max</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>temp_1</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span>
+                 <span class=n>temp_2</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the number of errors in a game plan.</span>
+
+<span class=sd>    This method counts the total number of the violations of any of the</span>
+<span class=sd>    following constraints over `D = (n - 1) * rounds` days for `n`-team</span>
+<span class=sd>    tournaments, where `rounds == 2` for double-round robin. The following</span>
+<span class=sd>    kinds of errors are counted:</span>
+
+<span class=sd>    1.  If a team `A` plays a team `B` on a given day, then `B` must play</span>
+<span class=sd>        against `A` on that day and if `A` plays at home, then `B` must play</span>
+<span class=sd>        away. If not, then that's an error. This can result in at most</span>
+<span class=sd>        `D * n` errors, because each of the `n` teams has (at most) one game</span>
+<span class=sd>        on each of the `D` days and if the *other* team could play against</span>
+<span class=sd>        the wrong team (or does not play at all), then that's one error.</span>
+<span class=sd>    2.  If a team has no other team assigned to play with, this is designated</span>
+<span class=sd>        by value `0` and causes 1 error. This error also ends all ongoing</span>
+<span class=sd>        streaks, i.e., may additionally lead to a streak violation of at</span>
+<span class=sd>        most `max(home_streak_min, away_streak_min) - 1`. However, this</span>
+<span class=sd>        cannot be more then two errors in sum per day (minus 1, for the</span>
+<span class=sd>        first day). Also, this error is mutually exclusive with error 1.</span>
+<span class=sd>        This can result in at most `D * n + (D - 1) * n = (2*D - 1) * n`</span>
+<span class=sd>        errors. Since this error is also mutually exclusive with the errors</span>
+<span class=sd>        from constraints 3 to 8 below, this gives us an upper bound of</span>
+<span class=sd>        `(2*D - 1) * n` errors for all of the constraints (1-8) together.</span>
+<span class=sd>    3.  A team has a home streak shorter than `home_streak_min`. No such error</span>
+<span class=sd>        can occur on the first day. This error is mutually exclusive with</span>
+<span class=sd>        error 2, as the streak violation is already counted there.</span>
+<span class=sd>        This can result in at most `(D - 1) * n` errors, but this number is</span>
+<span class=sd>        shared with the following constraints (4-6), because a streak can only</span>
+<span class=sd>        either be a home streak or an away streak but not both and it can</span>
+<span class=sd>        either be too short or too long, but not both.</span>
+<span class=sd>    4.  A team has a home streak longer than `home_streak_max`. No such error</span>
+<span class=sd>        can occur on the first day. This error is mutually exclusive with</span>
+<span class=sd>        error 2.</span>
+<span class=sd>    5.  A team has an away streak shorter than `away_streak_min`. No such</span>
+<span class=sd>        error can occur on the first day. This error is mutually exclusive</span>
+<span class=sd>        with error 2, as the streak violation is already counted there.</span>
+<span class=sd>    6.  A team has an away streak longer than `away_streak_max`. No such</span>
+<span class=sd>        error can occur on the first day. This error is mutually exclusive</span>
+<span class=sd>        with error 2.</span>
+<span class=sd>    7.  Team `A` plays team `B` *again* before the team has played at least</span>
+<span class=sd>        `separation_min` games against other teams. This error cannot occur</span>
+<span class=sd>        on the first day and is mutually exclusive with error 2.</span>
+<span class=sd>        There can be most 1 such error per day for any pairing of teams and</span>
+<span class=sd>        there are `n//2` pairings per day, giving us an upper bound of</span>
+<span class=sd>        `D * n//2` errors in total. This error is mutually exclusive with</span>
+<span class=sd>        the next constraint 8 (and constraint 2).</span>
+<span class=sd>    8.  Team `A` plays team `B` *again* after the team has played more than</span>
+<span class=sd>        `separation_max` games against other teams. This error cannot occur</span>
+<span class=sd>        on the first day and is mutually exclusive with error 2.</span>
+<span class=sd>        There can be most 1 such error per day for any pairing of teams and</span>
+<span class=sd>        there are `n//2` pairings per day, giving us an upper bound of</span>
+<span class=sd>        `D * n//2` errors in total. This error is mutually exclusive with</span>
+<span class=sd>        the previous constraint 7 (and constraint 2).</span>
+<span class=sd>    9.  If team `A` plays team `B` at home `a` times, then team `B` must play</span>
+<span class=sd>        team `A` at home at least `a-1` and at most `a+1` times.</span>
+<span class=sd>        In total, we have `D*n` games. There cannot be more than `(D*n) - 1`</span>
+<span class=sd>        such errors. Notice that this kind of error can never occur if we use</span>
+<span class=sd>        our :mod:`~moptipyapps.ttp.game_encoding` as representation.</span>
+<span class=sd>    10. Each pairing of teams occurs as same as often, namely `rounds` times,</span>
+<span class=sd>        with `rounds = 2` for double-round robin.</span>
+<span class=sd>        In total, we have `D*n` games. There cannot be more than `D*n` such</span>
+<span class=sd>        errors. Notice that this kind of error can never occur if we use</span>
+<span class=sd>        our :mod:`~moptipyapps.ttp.game_encoding` as representation.</span>
+
+<span class=sd>    The violations are counted on a per-day basis. For example, if</span>
+<span class=sd>    `home_streak_max` is `3` and a team has a home streak of length `5`, then</span>
+<span class=sd>    this counts as `2` errors. However, the errors are also counted in a</span>
+<span class=sd>    non-redundant fashion: If a team `A` violates `separation_min` by, say,</span>
+<span class=sd>    two days, then this counts as two errors. However, in this case, its</span>
+<span class=sd>    opposing team `B` would have necessarily incured the exactly same</span>
+<span class=sd>    violations. These are then not counted.</span>
+
+<span class=sd>    As upper bound for the number of errors, we therefore have to add those of</span>
+<span class=sd>    constraints 2, 9, and 10 and get `(2*D - 1) * n + D*n - 1 + D*n`, which</span>
+<span class=sd>    gives us `(4*D - 1) * n - 1, where `D = (n - 1) * rounds`.</span>
+<span class=sd>    The lower bound is obviously `0`.</span>
+
+<span class=sd>    :param y: the game plan</span>
+<span class=sd>    :param home_streak_min: the minimum permitted home streak length</span>
+<span class=sd>    :param home_streak_max: the maximum permitted home streak length</span>
+<span class=sd>    :param away_streak_min: the minimum permitted away streak length</span>
+<span class=sd>    :param away_streak_max: the maximum permitted away streak length</span>
+<span class=sd>    :param separation_min: the minimum number of games between a repetition</span>
+<span class=sd>    :param separation_max: the maximum number games between a repetition</span>
+<span class=sd>    :param temp_1: a temporary `n*(n-1)/2` integer array, which is used to</span>
+<span class=sd>        hold, for each pairing, when the last game was played</span>
+<span class=sd>    :param temp_2: a temporary `n,n` integer array, which is used to hold,</span>
+<span class=sd>        how often each team played each other team</span>
+<span class=sd>    :returns: the total number of errors. `0` if the game plan is feasible</span>
+
+<span class=sd>    >>> count_errors(np.array([[-2, 1], [2, -1]], int),</span>
+<span class=sd>    ...              1, 3, 1, 3, 1, 2, np.empty(1, int),</span>
+<span class=sd>    ...              np.empty((2, 2), int))</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> count_errors(np.array([[2, -1], [-2, 1]], int),</span>
+<span class=sd>    ...              1, 3, 1, 3, 1, 2, np.empty(1, int),</span>
+<span class=sd>    ...              np.empty((2, 2), int))</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> count_errors(np.array([[ 2, -1,  4, -3],</span>
+<span class=sd>    ...                        [ 4,  3, -2, -1],</span>
+<span class=sd>    ...                        [-2,  1, -4,  3],</span>
+<span class=sd>    ...                        [-4, -3,  2,  1],</span>
+<span class=sd>    ...                        [ 3,  4, -1, -2],</span>
+<span class=sd>    ...                        [-3, -4,  1,  2]], int),</span>
+<span class=sd>    ...              1, 3, 1, 3, 1, 2, np.empty(6, int),</span>
+<span class=sd>    ...              np.empty((4, 4), int))</span>
+<span class=sd>    2</span>
+<span class=sd>    >>> count_errors(np.array([[ 2, -1,  4, -3],</span>
+<span class=sd>    ...                        [ 4,  3, -2, -1],</span>
+<span class=sd>    ...                        [-2,  1, -4,  3],</span>
+<span class=sd>    ...                        [ 3,  4, -1, -2],</span>
+<span class=sd>    ...                        [-4, -3,  2,  1],</span>
+<span class=sd>    ...                        [-3, -4,  1,  2]], int),</span>
+<span class=sd>    ...              1, 3, 1, 3, 1, 2, np.empty(6, int),</span>
+<span class=sd>    ...              np.empty((4, 4), int))</span>
+<span class=sd>    0</span>
+<span class=sd>    >>> count_errors(np.array([[ 2, -1,  4, -3],</span>
+<span class=sd>    ...                        [ 4,  3, -2, -1],</span>
+<span class=sd>    ...                        [ 3,  4, -1, -2],</span>
+<span class=sd>    ...                        [-2,  1, -4,  3],</span>
+<span class=sd>    ...                        [-4, -3,  2,  1],</span>
+<span class=sd>    ...                        [-3, -4,  1,  2]], int),</span>
+<span class=sd>    ...              1, 3, 1, 3, 1, 2, np.empty(6, int),</span>
+<span class=sd>    ...              np.empty((4, 4), int))</span>
+<span class=sd>    0</span>
+<span class=sd>    >>> count_errors(np.array([[ 2, -1,  4, -3],</span>
+<span class=sd>    ...                        [ 4,  3, -2, -1],</span>
+<span class=sd>    ...                        [ 3,  4, -1, -2],</span>
+<span class=sd>    ...                        [-2,  1, -4,  3],</span>
+<span class=sd>    ...                        [-4, -3,  2,  1],</span>
+<span class=sd>    ...                        [-3, -4,  1,  2]], int),</span>
+<span class=sd>    ...              1, 2, 1, 3, 1, 2, np.empty(6, int),</span>
+<span class=sd>    ...              np.empty((4, 4), int))</span>
+<span class=sd>    3</span>
+<span class=sd>    >>> count_errors(np.array([[ 2, -1,  4, -3],</span>
+<span class=sd>    ...                        [ 4,  3, -2, -1],</span>
+<span class=sd>    ...                        [ 3,  4, -1, -2],</span>
+<span class=sd>    ...                        [-2,  1, -4,  3],</span>
+<span class=sd>    ...                        [-4, -3,  2,  1],</span>
+<span class=sd>    ...                        [-3, -4,  1,  2]], int),</span>
+<span class=sd>    ...              1, 2, 1, 2, 1, 2, np.empty(6, int),</span>
+<span class=sd>    ...              np.empty((4, 4), int))</span>
+<span class=sd>    6</span>
+<span class=sd>    >>> count_errors(np.array([[ 2, -1,  4, -3],</span>
+<span class=sd>    ...                        [ 4,  3, -2, -1],</span>
+<span class=sd>    ...                        [ 3,  4, -1, -2],</span>
+<span class=sd>    ...                        [-2,  1, -4,  3],</span>
+<span class=sd>    ...                        [-4, -3,  2,  1],</span>
+<span class=sd>    ...                        [-3, -4,  1,  2]], int),</span>
+<span class=sd>    ...              1, 3, 1, 3, 1, 1, np.empty(6, int),</span>
+<span class=sd>    ...              np.empty((4, 4), int))</span>
+<span class=sd>    6</span>
+<span class=sd>    """</span>
+    <span class=n>days</span><span class=p>,</span> <span class=n>teams</span> <span class=o>=</span> <span class=n>y</span><span class=o>.</span><span class=n>shape</span>  <span class=c1># get the number of days and teams</span>
+    <span class=n>errors</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># the error counter</span>
+    <span class=n>temp_1</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=o>-</span><span class=mi>1</span><span class=p>)</span>  <span class=c1># last time the teams played each other</span>
+    <span class=n>temp_2</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>team_1</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>teams</span><span class=p>):</span>
+        <span class=n>col</span> <span class=o>=</span> <span class=n>y</span><span class=p>[:,</span> <span class=n>team_1</span><span class=p>]</span>
+        <span class=n>team_1_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>team_1</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=n>is_in_home_streak</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=n>home_streak_len</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+        <span class=n>is_in_away_streak</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=n>away_streak_len</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+
+        <span class=k>for</span> <span class=n>day</span><span class=p>,</span> <span class=n>team_2_id</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>col</span><span class=p>):</span>
+            <span class=k>if</span> <span class=n>team_2_id</span> <span class=o>==</span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># is there no game on this day?</span>
+                <span class=n>errors</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># no game on this day == 1 error</span>
+
+                <span class=k>if</span> <span class=n>is_in_away_streak</span><span class=p>:</span>  <span class=c1># this ends away streaks</span>
+                    <span class=n>is_in_away_streak</span> <span class=o>=</span> <span class=kc>False</span>
+                    <span class=k>if</span> <span class=n>away_streak_len</span> <span class=o><</span> <span class=n>away_streak_min</span><span class=p>:</span>
+                        <span class=n>errors</span> <span class=o>+=</span> <span class=p>(</span><span class=n>away_streak_min</span> <span class=o>-</span> <span class=n>away_streak_len</span><span class=p>)</span>
+                    <span class=n>away_streak_len</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+                <span class=k>elif</span> <span class=n>is_in_home_streak</span><span class=p>:</span>  <span class=c1># this ends home streaks, too</span>
+                    <span class=n>is_in_home_streak</span> <span class=o>=</span> <span class=kc>False</span>
+                    <span class=k>if</span> <span class=n>home_streak_len</span> <span class=o><</span> <span class=n>home_streak_min</span><span class=p>:</span>
+                        <span class=n>errors</span> <span class=o>+=</span> <span class=p>(</span><span class=n>home_streak_min</span> <span class=o>-</span> <span class=n>home_streak_len</span><span class=p>)</span>
+                    <span class=n>home_streak_len</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+                <span class=k>continue</span>  <span class=c1># nothing more to do here</span>
+
+            <span class=k>if</span> <span class=n>team_2_id</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># our team plays a home game</span>
+
+                <span class=c1># If team_2 > 0, this is a home game. So the other team</span>
+                <span class=c1># must have the corresponding index.</span>
+                <span class=n>team_2</span> <span class=o>=</span> <span class=n>team_2_id</span> <span class=o>-</span> <span class=mi>1</span>
+                <span class=k>if</span> <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>team_2</span><span class=p>]</span> <span class=o>!=</span> <span class=o>-</span><span class=n>team_1_id</span><span class=p>:</span>
+                    <span class=n>errors</span> <span class=o>+=</span> <span class=mi>1</span>
+                <span class=c1># increase number of home games of team 1 against team 2</span>
+                <span class=n>temp_2</span><span class=p>[</span><span class=n>team_1</span><span class=p>,</span> <span class=n>team_2</span><span class=p>]</span> <span class=o>+=</span> <span class=mi>1</span>
+
+                <span class=k>if</span> <span class=n>is_in_home_streak</span><span class=p>:</span>  <span class=c1># if we are in a home streak...</span>
+                    <span class=n>home_streak_len</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># ...it continues</span>
+                    <span class=k>if</span> <span class=n>home_streak_len</span> <span class=o>></span> <span class=n>home_streak_max</span><span class=p>:</span>
+                        <span class=n>errors</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># too long? add to errors</span>
+                <span class=k>else</span><span class=p>:</span>  <span class=c1># if we are not in home streak, it begins</span>
+                    <span class=n>is_in_home_streak</span> <span class=o>=</span> <span class=kc>True</span>
+                    <span class=n>home_streak_len</span> <span class=o>=</span> <span class=mi>1</span>
+                    <span class=c1># if a home streak begins, any away streak ends</span>
+                    <span class=k>if</span> <span class=n>is_in_away_streak</span><span class=p>:</span>
+                        <span class=k>if</span> <span class=n>away_streak_len</span> <span class=o><</span> <span class=n>away_streak_min</span><span class=p>:</span>
+                            <span class=n>errors</span> <span class=o>+=</span> <span class=p>(</span><span class=n>away_streak_min</span> <span class=o>-</span> <span class=n>away_streak_len</span><span class=p>)</span>
+                        <span class=n>away_streak_len</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+                        <span class=n>is_in_away_streak</span> <span class=o>=</span> <span class=kc>False</span>
+            <span class=k>else</span><span class=p>:</span>  <span class=c1># else: team_2 < 0 --> team_2 at home, team_1 away</span>
+                <span class=n>team_2</span> <span class=o>=</span> <span class=p>(</span><span class=o>-</span><span class=n>team_2_id</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span>
+
+                <span class=c1># This is an away game, so the other team must have the</span>
+                <span class=c1># corresponding id</span>
+                <span class=k>if</span> <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>team_2</span><span class=p>]</span> <span class=o>!=</span> <span class=n>team_1_id</span><span class=p>:</span>
+                    <span class=n>errors</span> <span class=o>+=</span> <span class=mi>1</span>
+
+                <span class=k>if</span> <span class=n>is_in_away_streak</span><span class=p>:</span>  <span class=c1># if we are in an away streak...</span>
+                    <span class=n>away_streak_len</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># ...the streak continues</span>
+                    <span class=k>if</span> <span class=n>away_streak_len</span> <span class=o>></span> <span class=n>away_streak_max</span><span class=p>:</span>
+                        <span class=n>errors</span> <span class=o>+=</span> <span class=mi>1</span>  <span class=c1># away streak too long? add to error</span>
+                <span class=k>else</span><span class=p>:</span>  <span class=c1># team_1 away, but not in away streak</span>
+                    <span class=n>is_in_away_streak</span> <span class=o>=</span> <span class=kc>True</span>
+                    <span class=n>away_streak_len</span> <span class=o>=</span> <span class=mi>1</span>
+                    <span class=k>if</span> <span class=n>is_in_home_streak</span><span class=p>:</span>
+                        <span class=k>if</span> <span class=n>home_streak_len</span> <span class=o><</span> <span class=n>home_streak_min</span><span class=p>:</span>
+                            <span class=n>errors</span> <span class=o>+=</span> <span class=p>(</span><span class=n>home_streak_min</span> <span class=o>-</span> <span class=n>home_streak_len</span><span class=p>)</span>
+                        <span class=n>is_in_home_streak</span> <span class=o>=</span> <span class=kc>False</span>
+                        <span class=n>home_streak_len</span> <span class=o>=</span> <span class=mi>0</span>
+
+            <span class=c1># now we need to check for the game separation difference</span>
+            <span class=n>idx</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=p>((</span><span class=n>team_1</span> <span class=o>*</span> <span class=p>(</span><span class=n>team_1</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>//</span> <span class=mi>2</span><span class=p>)</span> <span class=o>+</span> <span class=n>team_2</span><span class=p>)</span> \
+                <span class=k>if</span> <span class=n>team_1</span> <span class=o>></span> <span class=n>team_2</span> \
+                <span class=k>else</span> <span class=p>((</span><span class=n>team_2</span> <span class=o>*</span> <span class=p>(</span><span class=n>team_2</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>//</span> <span class=mi>2</span><span class=p>)</span> <span class=o>+</span> <span class=n>team_1</span><span class=p>)</span>
+            <span class=n>last_time</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>temp_1</span><span class=p>[</span><span class=n>idx</span><span class=p>]</span>
+            <span class=k>if</span> <span class=n>last_time</span> <span class=o>>=</span> <span class=mi>0</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>last_time</span> <span class=o><</span> <span class=n>day</span><span class=p>:</span>
+                    <span class=n>difference</span> <span class=o>=</span> <span class=n>day</span> <span class=o>-</span> <span class=n>last_time</span> <span class=o>-</span> <span class=mi>1</span>
+                    <span class=k>if</span> <span class=n>difference</span> <span class=o><</span> <span class=n>separation_min</span><span class=p>:</span>
+                        <span class=n>errors</span> <span class=o>+=</span> <span class=p>(</span><span class=n>separation_min</span> <span class=o>-</span> <span class=n>difference</span><span class=p>)</span>
+                    <span class=k>elif</span> <span class=n>difference</span> <span class=o>></span> <span class=n>separation_max</span><span class=p>:</span>
+                        <span class=n>errors</span> <span class=o>+=</span> <span class=p>(</span><span class=n>difference</span> <span class=o>-</span> <span class=n>separation_max</span><span class=p>)</span>
+                <span class=k>else</span><span class=p>:</span>
+                    <span class=k>continue</span>
+            <span class=n>temp_1</span><span class=p>[</span><span class=n>idx</span><span class=p>]</span> <span class=o>=</span> <span class=n>day</span>
+
+    <span class=c1># sum up the team games</span>
+    <span class=n>games_per_combo</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>days</span> <span class=o>//</span> <span class=p>(</span><span class=n>teams</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>teams</span><span class=p>):</span>
+        <span class=k>for</span> <span class=n>j</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>i</span><span class=p>):</span>
+            <span class=n>ij</span> <span class=o>=</span> <span class=n>temp_2</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span>
+            <span class=n>ji</span> <span class=o>=</span> <span class=n>temp_2</span><span class=p>[</span><span class=n>j</span><span class=p>,</span> <span class=n>i</span><span class=p>]</span>
+            <span class=n>errors</span> <span class=o>+=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>ij</span> <span class=o>+</span> <span class=n>ji</span> <span class=o>-</span> <span class=n>games_per_combo</span><span class=p>)</span>
+            <span class=n>diff</span> <span class=o>=</span> <span class=nb>abs</span><span class=p>(</span><span class=n>ij</span> <span class=o>-</span> <span class=n>ji</span><span class=p>)</span>
+            <span class=k>if</span> <span class=n>diff</span> <span class=o>></span> <span class=mi>1</span><span class=p>:</span>
+                <span class=n>errors</span> <span class=o>+=</span> <span class=n>diff</span> <span class=o>-</span> <span class=mi>1</span>
+
+    <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=n>errors</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=Errors>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.errors.Errors>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Errors</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the errors in a game plan.</span>
+
+<span class=sd>    This objective function encompasses all the constraints imposed on</span>
+<span class=sd>    standard TTP instances in one summarizing number. See the documentation</span>
+<span class=sd>    of :func:`count_errors` for more information.</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the errors objective function.</span>
+
+<span class=sd>        :param instance: the TTP instance</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+
+        <span class=c1>#: the TTP instance</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>n_cities</span>
+        <span class=c1># the data type for the temporary arrays</span>
+        <span class=n>dtype</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>dtype</span><span class=p>]</span> <span class=o>=</span> <span class=n>int_range_to_dtype</span><span class=p>(</span>
+            <span class=o>-</span><span class=mi>1</span><span class=p>,</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>instance</span><span class=o>.</span><span class=n>rounds</span><span class=p>)</span>
+        <span class=c1>#: the internal temporary array 1</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__temp_1</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>(</span><span class=n>n</span> <span class=o>*</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>//</span> <span class=mi>2</span><span class=p>,</span> <span class=n>dtype</span><span class=p>)</span>
+        <span class=c1>#: the internal temporary array 2</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__temp_2</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>empty</span><span class=p>((</span><span class=n>n</span><span class=p>,</span> <span class=n>n</span><span class=p>),</span> <span class=n>dtype</span><span class=p>)</span>
+
+<div class=viewcode-block id=Errors.evaluate>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.errors.Errors.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>GamePlan</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Count the errors in a game plan as objective value.</span>
+
+<span class=sd>        :param x: the game plan</span>
+<span class=sd>        :return: the number of errors in the plan</span>
+<span class=sd>        """</span>
+        <span class=n>inst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>x</span><span class=o>.</span><span class=n>instance</span>
+        <span class=k>return</span> <span class=n>count_errors</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>inst</span><span class=o>.</span><span class=n>home_streak_min</span><span class=p>,</span> <span class=n>inst</span><span class=o>.</span><span class=n>home_streak_max</span><span class=p>,</span>
+                            <span class=n>inst</span><span class=o>.</span><span class=n>away_streak_min</span><span class=p>,</span> <span class=n>inst</span><span class=o>.</span><span class=n>away_streak_max</span><span class=p>,</span>
+                            <span class=n>inst</span><span class=o>.</span><span class=n>separation_min</span><span class=p>,</span> <span class=n>inst</span><span class=o>.</span><span class=n>separation_max</span><span class=p>,</span>
+                            <span class=bp>self</span><span class=o>.</span><span class=n>__temp_1</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__temp_2</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Errors.lower_bound>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.errors.Errors.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Obtain the lower bound for errors: `0`, which means error-free.</span>
+
+<span class=sd>        :return: `0`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mi>0</span></div>
+
+
+<div class=viewcode-block id=Errors.upper_bound>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.errors.Errors.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute upper bound for errors: `(4*D - 1) * n - 1`.</span>
+
+<span class=sd>        Here `D` is the number of days, `n` is the number of teams, and</span>
+<span class=sd>        `D = (n - 1) * rounds`. See the documentation of :func:`count_errors`.</span>
+
+<span class=sd>        :return: `(4*D - 1) * n - 1`</span>
+<span class=sd>        """</span>
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n_cities</span>
+        <span class=n>rounds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>rounds</span>
+        <span class=n>days</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>rounds</span>
+        <span class=k>return</span> <span class=p>(</span><span class=mi>4</span> <span class=o>*</span> <span class=n>days</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>n</span> <span class=o>-</span> <span class=mi>1</span></div>
+
+
+<div class=viewcode-block id=Errors.is_always_integer>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.errors.Errors.is_always_integer>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>is_always_integer</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        State that this objective function is always integer-valued.</span>
+
+<span class=sd>        :return: `True`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=kc>True</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Get the name of this objective function."""</span>
+        <span class=k>return</span> <span class=s2>"errors"</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.errors</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

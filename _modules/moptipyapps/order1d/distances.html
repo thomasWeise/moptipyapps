@@ -1,0 +1,70 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.order1d.distances — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/order1d/distances.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.order1d.distances</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.order1d.distances</h1><div class=highlight><pre>
+<span></span><span class=sd>"""Some examples for distance metrics."""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>DEFAULT_BOOL</span>
+
+
+<div class=viewcode-block id=swap_distance>
+<a class=viewcode-back href=../../../moptipyapps.order1d.html#moptipyapps.order1d.distances.swap_distance>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>swap_distance</span><span class=p>(</span><span class=n>p1</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>p2</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the swap distance between two permutations `p1` and `p1`.</span>
+
+<span class=sd>    This is the minimum number of swaps required to translate `p1` to `p2` and</span>
+<span class=sd>    vice versa. This function is symmatric.</span>
+
+<span class=sd>    An upper bound for the number of maximum number of swaps that could be</span>
+<span class=sd>    required is the length of the permutation. This upper bound can be derived</span>
+<span class=sd>    from Selection Sort. Imagine that I want to translate the array `p1` to</span>
+<span class=sd>    `p2`. I go through `p1` from beginning to end. If, at index `i`, I find</span>
+<span class=sd>    the right element (`p1[i] == p2[i]`), then I do nothing. If not, then the</span>
+<span class=sd>    right element must come at some index `j>i` (because all elements before I</span>
+<span class=sd>    already have fixed). So I swap `p1[i]` with `p1[j]`. Now `p1[i] == p2[i]`</span>
+<span class=sd>    and I increment `i`. Once I arrive at the end of `p1`, it must hold that</span>
+<span class=sd>    `all(p1[i] == p2[i])`. At the same time, I have performed at most one swap</span>
+<span class=sd>    at each index during the iteration. Hence, I can never need more swaps</span>
+<span class=sd>    than the arrays are long.</span>
+
+<span class=sd>    :param p1: the first permutation</span>
+<span class=sd>    :param p2: the second permutation</span>
+<span class=sd>    :return: the swap distance, always between `0` and `len(p1)`</span>
+
+<span class=sd>    >>> swap_distance(np.array([0, 1, 2, 3]), np.array([3, 1, 2, 0]))</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> swap_distance(np.array([0, 1, 2]), np.array([0, 1, 2]))</span>
+<span class=sd>    0</span>
+<span class=sd>    >>> swap_distance(np.array([1, 0, 2]), np.array([0, 1, 2]))</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> swap_distance(np.array([0, 1, 2]), np.array([1, 0, 2]))</span>
+<span class=sd>    1</span>
+<span class=sd>    >>> swap_distance(np.array([0, 1, 2]), np.array([2, 0, 1]))</span>
+<span class=sd>    2</span>
+<span class=sd>    >>> swap_distance(np.array([2, 0, 1]), np.array([0, 1, 2]))</span>
+<span class=sd>    2</span>
+<span class=sd>    >>> swap_distance(np.arange(10), np.array([4, 8, 1, 5, 9, 3, 6, 0, 7, 2]))</span>
+<span class=sd>    7</span>
+<span class=sd>    >>> swap_distance(np.array([4, 8, 1, 5, 9, 3, 6, 0, 7, 2]), np.arange(10))</span>
+<span class=sd>    7</span>
+<span class=sd>    """</span>
+    <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>len</span><span class=p>(</span><span class=n>p1</span><span class=p>)</span>
+    <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>p2</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>argsort</span><span class=p>(</span><span class=n>p1</span><span class=p>)]</span>
+    <span class=n>unchecked</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>ones</span><span class=p>(</span><span class=n>n</span><span class=p>,</span> <span class=n>DEFAULT_BOOL</span><span class=p>)</span>
+    <span class=n>result</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+
+    <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>n</span><span class=p>):</span>
+        <span class=k>if</span> <span class=n>unchecked</span><span class=p>[</span><span class=n>i</span><span class=p>]:</span>
+            <span class=n>result</span> <span class=o>+=</span> <span class=mi>1</span>
+            <span class=n>unchecked</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=kc>False</span>
+            <span class=n>j</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>]</span>
+            <span class=k>while</span> <span class=n>j</span> <span class=o>!=</span> <span class=n>i</span><span class=p>:</span>
+                <span class=n>unchecked</span><span class=p>[</span><span class=n>j</span><span class=p>]</span> <span class=o>=</span> <span class=kc>False</span>
+                <span class=n>j</span> <span class=o>=</span> <span class=n>x</span><span class=p>[</span><span class=n>j</span><span class=p>]</span>
+
+    <span class=k>return</span> <span class=n>n</span> <span class=o>-</span> <span class=n>result</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.order1d.distances</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

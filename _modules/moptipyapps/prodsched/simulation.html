@@ -1,0 +1,1199 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.simulation — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/simulation.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.simulation</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.simulation</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A simulator for production scheduling.</span>
+
+<span class=sd>For simulation a production system, we can build on the class</span>
+<span class=sd>:class:`~Simulation`. This base class offers the support to implement almost</span>
+<span class=sd>arbitrarily complex production system scheduling logic.</span>
+<span class=sd>The simulations here a fully deterministic and execute a given MFC scenario</span>
+<span class=sd>given as an :mod:`~moptipyapps.prodsched.instance`, i.e., an object of type</span>
+<span class=sd>:class:`~moptipyapps.prodsched.instance.Instance`.</span>
+
+<span class=sd>The :class:`~Simulation` class offers a core backbone of a priority-queue</span>
+<span class=sd>based discrete event simulation. These events are strictly related to the</span>
+<span class=sd>production scheduling task, which allows for an efficient implementation.</span>
+<span class=sd>The :class:`~Simulation` is driven by the data of an</span>
+<span class=sd>:mod:`~moptipyapps.prodsched.instance`. This instance prescribes when new</span>
+<span class=sd>demands (:class:`~moptipyapps.prodsched.instance.Demand`) enter the system,</span>
+<span class=sd>how long certain production steps take, and which route each product type</span>
+<span class=sd>takes through the system, i.e., by which work stations it is processed in</span>
+<span class=sd>which order.</span>
+<span class=sd>This is the core logic that drives the simulation.</span>
+
+<span class=sd>A simulation is executed by invoking the method :meth:`~Simulation.ctrl_run`.</span>
+<span class=sd>Then, the event loop begins and it invokes the `event_*` methods as need be.</span>
+<span class=sd>For example, when a customer demand for a certain product comes in or if some</span>
+<span class=sd>units of a given product become available, the method</span>
+<span class=sd>:meth:`~Simulation.event_product` is invoked.</span>
+<span class=sd>You can overwrite this method to decide what to do in such cases.</span>
+<span class=sd>For example, you could invoke :meth:`~Simulation.act_demand_satisfied` to mark</span>
+<span class=sd>a :class:`~moptipyapps.prodsched.instance.Demand` as satisfied, you could</span>
+<span class=sd>invoke :meth:`~Simulation.act_produce` to tell the factory to produce some</span>
+<span class=sd>units of a given product, you could invoke</span>
+<span class=sd>:meth:`~Simulation.act_store_in_warehouse` to store some units of a product in</span>
+<span class=sd>the warehouse or use :meth:`~Simulation.act_take_from_warehouse` to take some</span>
+<span class=sd>out.</span>
+<span class=sd>In other words, in the `event_*` methods, you implement the logic, the</span>
+<span class=sd>operating system for your factory.</span>
+<span class=sd>Their default implementations in this class just produce product units on</span>
+<span class=sd>demand and do not really perform predictive production.</span>
+
+<span class=sd>Each :class:`~Simulation` also needs an instance of :class:`~Listener`.</span>
+<span class=sd>The :class:`~Listener` is informed about what happens and sees all the</span>
+<span class=sd>production events. It is used to gather statistics and information --</span>
+<span class=sd>independently of how you implement the `event_*` methods. This allows us</span>
+<span class=sd>to compare factories that run on very different logic.</span>
+
+<span class=sd>Simulations have three groups of methods:</span>
+
+<span class=sd>- Methods starting with `ctrl_*` are for starting and resetting the</span>
+<span class=sd>  simulation so that it can be started again. You may override them if you</span>
+<span class=sd>  have additional need for initialization or clean-up.</span>
+<span class=sd>- Methods that start with `event_*` are methods that are invoked by the</span>
+<span class=sd>  simulator to notify you about an event in the simulation. You can overwrite</span>
+<span class=sd>  these methods to implement the logic of your production scheduling method.</span>
+<span class=sd>- Methods that start with `act_*` are actions that you can invoke inside the</span>
+<span class=sd>  `event_*` methods. The tell the simulator or stations what to do.</span>
+
+<span class=sd>An example of such specialized simulations is the</span>
+<span class=sd>:class:`~moptipyapps.prodsched.rop_simulation.ROPSimulation`,</span>
+<span class=sd>which simulates the behavior of a system that uses re-order points (ROPs) to</span>
+<span class=sd>decide what to produce and when.</span>
+<span class=sd>In such a simulation, the `event_*`-methods are overwritten to invoke the</span>
+<span class=sd>`act_*`-methods according to their needs.</span>
+<span class=sd>Here, in the base class :class:`~Simulation`, they are implemented such to</span>
+<span class=sd>order the production of product units directly upon the arrival of customer</span>
+<span class=sd>demands. In the :class:`~moptipyapps.prodsched.rop_simulation.ROPSimulation`</span>
+<span class=sd>on the other hand, products are produced base on re-order points.</span>
+
+
+<span class=sd>**`ctrl_*` Methods:**</span>
+
+<span class=sd>We have the following `ctrl_*` methods, which are invoked from outside to</span>
+<span class=sd>start, stop, or reset the simulation.</span>
+
+<span class=sd>- :meth:`~Simulation.ctrl_run` runs the simulation.</span>
+<span class=sd>- :meth:`~Simulation.ctrl_reset` resets the simulator so that we can start it</span>
+<span class=sd>  again. If you want to re-use a simulation, you need to first invoke</span>
+<span class=sd>  :meth:`~Simulation.ctrl_reset` to clear the internal state.</span>
+
+
+<span class=sd>**`event_*` Methods:**</span>
+
+<span class=sd>We have the following `event_*` methods, which implement the core logic of</span>
+<span class=sd>the factory. They can be overwritten to ralize different production</span>
+<span class=sd>scenarios.</span>
+
+<span class=sd>- :meth:`~Simulation.event_product` is invoked by the simulation if one of the</span>
+<span class=sd>  following three things happened:</span>
+
+<span class=sd>    1. An amount of a product has been produced (`amount > 0`).</span>
+<span class=sd>    2. An amount of a product has been made available at the start of the</span>
+<span class=sd>       simulation to form the initial amount in the warehouse</span>
+<span class=sd>       (`amount > 0`).</span>
+<span class=sd>    3. A customer demand for the product has appeared in the system.</span>
+
+<span class=sd>  In this method, you can store product into the warehouse, remove product</span>
+<span class=sd>  from the warehouse, and/or mark a demand as completed.</span>
+
+<span class=sd>- :meth:`~Simulation.event_station` is invoked by the simulation if a work</span>
+<span class=sd>  station became idle *and* at least one production :class:`~Job` is queued</span>
+<span class=sd>  at the station.</span>
+<span class=sd>  Now you can decide which of the queued to jobs to execute next by invoking</span>
+<span class=sd>  :meth:`~Simulation.act_exec_job`. The job you pass into this method will</span>
+<span class=sd>  then immediately begin production at the work station.</span>
+
+
+<span class=sd>**`act_*` Methods:**</span>
+
+<span class=sd>The `act_*` methods are invoked from inside the `event_*` methods.</span>
+<span class=sd>They cause the production system to perform certain actions.</span>
+<span class=sd>The following `act_*` methods exist:</span>
+
+<span class=sd>- :meth:`~Simulation.act_store_in_warehouse` can be invoked from inside</span>
+<span class=sd>  :meth:`~Simulation.event_product`. It tells the system to *add* a certain</span>
+<span class=sd>  amount of units of a given product to the warehouse.</span>
+<span class=sd>  Notice that these units of product must have come from somewhere.</span>
+<span class=sd>  They could be the result of a completed production job or could have</span>
+<span class=sd>  occurred at the simulation startup as initial warehouse contents.</span>
+<span class=sd>  You cannot just "make up" new product units without violating the integrity</span>
+<span class=sd>  of the simulation.</span>
+
+<span class=sd>- :meth:`~Simulation.act_take_from_warehouse` can be invoked from inside</span>
+<span class=sd>  :meth:`~Simulation.event_product`. It tells the system to take a certain</span>
+<span class=sd>  amount of units *out* of the warehouse. You cannot take out more units from</span>
+<span class=sd>  the warehouse than currently stored inside it nor can you take out a</span>
+<span class=sd>  negative amount of units.</span>
+
+<span class=sd>- :meth:`~Simulation.act_demand_satisfied` can be invoked from inside</span>
+<span class=sd>  :meth:`~Simulation.event_product`. It tells the system that a certain</span>
+<span class=sd>  :class:`~moptipyapps.prodsched.instance.Demand` has been fulfilled.</span>
+<span class=sd>  If you do that, you must make sure to remove the corresponding amount of</span>
+<span class=sd>  product units from the system. They could have just been produced or they</span>
+<span class=sd>  could have been taken from the warehouse. However, demands can only be</span>
+<span class=sd>  satisfied using actually existing units of product. If you just "make up"</span>
+<span class=sd>  product units, you will destroy the integrity of the simulation.</span>
+
+<span class=sd>- :meth:`~Simulation.act_produce` can be invoked from inside</span>
+<span class=sd>  :meth:`~Simulation.event_product`. This instructs the system to begin</span>
+<span class=sd>  producing a certain amount of a given product. This will lead to the</span>
+<span class=sd>  creation of a :class:`~Job` record. This record will enter the queue of</span>
+<span class=sd>  the first work station that the product should pass through. It will appear</span>
+<span class=sd>  in :meth:`~Simulation.event_station` once this work station gets idle (or</span>
+<span class=sd>  right away, if it currently is idle).</span>
+
+<span class=sd>- :meth:`~Simulation.act_exec_job` is invoked from inside</span>
+<span class=sd>  :meth:`~Simulation.event_station`. Basically,</span>
+<span class=sd>  :meth:`~Simulation.event_station` gets called if there are one or multiple</span>
+<span class=sd>  production :class:`~Job` records queued at a work station and the work</span>
+<span class=sd>  station is idle (or becomes idle). Then, you can decide which of the jobs to</span>
+<span class=sd>  begin working on next on that work station. You will pass the corresponding</span>
+<span class=sd>  :class:`~Job` record to :meth:`~Simulation.act_exec_job`.</span>
+<span class=sd>  Once that job is completed on the current work station, it will re-appear in</span>
+<span class=sd>  the :meth:`~Simulation.event_station` invocation for the *next* work station</span>
+<span class=sd>  it needs to pass through. Once it completes at its last work station, its</span>
+<span class=sd>  produced :attr:`~Job.amount` of product :attr:`~Job.product_id` will appear</span>
+<span class=sd>  in a :meth:`~Simulation.event_product` invocation for the corresponding</span>
+<span class=sd>  product.</span>
+
+<span class=sd>Through this simple interface, we can control a relatively complex material</span>
+<span class=sd>flow simulation.</span>
+<span class=sd>In :mod:`~moptipyapps.prodsched.rop_simulation`, we extend this simulation</span>
+<span class=sd>class by implementing a re-order point based approach.</span>
+<span class=sd>Matter of fact, we can extend this basic simulation using all kinds of</span>
+<span class=sd>production logic to drive our simulated factory.</span>
+
+<span class=sd>The question then is: If all these approaches overwrite the `event_*` methods</span>
+<span class=sd>in different ways, how can we get a clear picture of their performance?</span>
+<span class=sd>No problem:</span>
+<span class=sd>For this purpose, the class :class:`~Listener` exists.</span>
+<span class=sd>Its methods are automatically invoked by the simulation and allow us to track</span>
+<span class=sd>exactly what happens and when, independently of the actual simulation logic.</span>
+<span class=sd>The class :class:`~PrintingListener` implements these methods to print the</span>
+<span class=sd>events to the standard output.</span>
+<span class=sd>In :mod:`~moptipyapps.prodsched.statistics_collector`, we implement the class</span>
+<span class=sd>:class:`~moptipyapps.prodsched.statistics_collector.StatisticsCollector` which</span>
+<span class=sd>instead uses the events to fill a</span>
+<span class=sd>:class:`~moptipyapps.prodsched.statistics.Statistics` record (see module</span>
+<span class=sd>:mod:`~moptipyapps.prodsched.statistics`).</span>
+<span class=sd>This record collects all the performance data that is relevant for judging the</span>
+<span class=sd>efficiency of a production scheduling approach.</span>
+
+<span class=sd>**Examples:**</span>
+
+<span class=sd>Let's now look at some basic examples of the production scheduling / material</span>
+<span class=sd>flow control simulation.</span>
+
+<span class=sd>Here we have a very easy production scheduling instance.</span>
+<span class=sd>There is 1 product that passes through 2 stations.</span>
+<span class=sd>First it passes through station 0, then through station 1.</span>
+<span class=sd>The per-unit production time is always 10 time units on station 0 and 30 time</span>
+<span class=sd>units on station 2.</span>
+<span class=sd>There is one customer demand, for 10 units of this product, which enters the</span>
+<span class=sd>system at time unit 20.</span>
+<span class=sd>The warehouse is initially empty.</span>
+
+<span class=sd>>>> instance = Instance(</span>
+<span class=sd>...     name="test1", n_products=1, n_customers=1, n_stations=2, n_demands=1,</span>
+<span class=sd>...     time_end_warmup=10, time_end_measure=4000,</span>
+<span class=sd>...     routes=[[0, 1]],</span>
+<span class=sd>...     demands=[[0, 0, 0, 10, 20, 100]],</span>
+<span class=sd>...     warehous_at_t0=[0],</span>
+<span class=sd>...     station_product_unit_times=[[[10.0, 10000.0]],</span>
+<span class=sd>...                                 [[30.0, 10000.0]]])</span>
+
+<span class=sd>The simulation will see that the customer demand for 10 units of product 0</span>
+<span class=sd>appears at time unit 20.</span>
+<span class=sd>It will issue a production order for these 10 units at station 0.</span>
+<span class=sd>Since station 0 is not occupied, it can immediately begin with the production.</span>
+<span class=sd>It will finish the production after 10*10 time units, i.e., at time unit 120.</span>
+<span class=sd>The product is then routed to station 1, which is also idle and can</span>
+<span class=sd>immediately begin producing.</span>
+<span class=sd>It needs 10*30 time units, meaning that it finishes after 300 time units.</span>
+<span class=sd>The demanded product amount is completed after 420 time units and the demand 0</span>
+<span class=sd>can be fulfilled.</span>
+
+<span class=sd>>>> simulation = Simulation(instance, PrintingListener(print_time=False))</span>
+<span class=sd>>>> simulation.ctrl_run()</span>
+<span class=sd>start</span>
+<span class=sd>T=0.0: product=0, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=20.0! product=0, amount=0, in_warehouse=0, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=20.0! station=0, 1 jobs queued</span>
+<span class=sd>T=20.0! start j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=120.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=120.0! station=1, 1 jobs queued</span>
+<span class=sd>T=120.0! start j(id: 0, p: 0, am: 10, ar: 20, me: T, c: F, st: 120, sp: 1)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=420.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: T, st: 120, sp: 1)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=420.0! product=0, amount=10, in_warehouse=0, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=420.0! d(id: 0, p: 0, c: 0, am: 10, ar: 20, dl: 100, me: T) statisfied</span>
+<span class=sd>T=420.0 -- finished</span>
+
+<span class=sd>>>> instance = Instance(</span>
+<span class=sd>...     name="test2", n_products=2, n_customers=1, n_stations=2, n_demands=3,</span>
+<span class=sd>...     time_end_warmup=21, time_end_measure=10000,</span>
+<span class=sd>...     routes=[[0, 1], [1, 0]],</span>
+<span class=sd>...     demands=[[0, 0, 1, 10, 20, 90], [1, 0, 0, 5, 22, 200],</span>
+<span class=sd>...              [2, 0, 1, 7, 30, 200]],</span>
+<span class=sd>...     warehous_at_t0=[2, 1],</span>
+<span class=sd>...     station_product_unit_times=[[[10.0, 50.0, 15.0, 100.0],</span>
+<span class=sd>...                                  [ 5.0, 20.0,  7.0,  35.0, 4.0, 50.0]],</span>
+<span class=sd>...                                 [[ 5.0, 24.0,  7.0,  80.0],</span>
+<span class=sd>...                                  [ 3.0, 21.0,  6.0,  50.0,]]])</span>
+
+<span class=sd>>>> instance.name</span>
+<span class=sd>'test2'</span>
+
+<span class=sd>>>> simulation = Simulation(instance, PrintingListener(print_time=False))</span>
+<span class=sd>>>> simulation.ctrl_run()</span>
+<span class=sd>start</span>
+<span class=sd>T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: 2 units of product 0 in warehouse</span>
+<span class=sd>T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: 1 units of product 1 in warehouse</span>
+<span class=sd>T=20.0: product=1, amount=0, in_warehouse=1, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=20.0: station=1, 1 jobs queued</span>
+<span class=sd>T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=22.0! product=0, amount=0, in_warehouse=2, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=22.0! station=0, 1 jobs queued</span>
+<span class=sd>T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=30.0! product=1, amount=0, in_warehouse=1, in_production=9,\</span>
+<span class=sd> 2 pending demands</span>
+<span class=sd>T=52.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=62.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=62.0! station=1, 2 jobs queued</span>
+<span class=sd>T=62.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=62.0! station=0, 1 jobs queued</span>
+<span class=sd>T=62.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 62, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=95.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=95.0! station=1, 1 jobs queued</span>
+<span class=sd>T=95.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 52, sp: 1)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=107.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: T, st: 62, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=107.0! station=0, 1 jobs queued</span>
+<span class=sd>T=107.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 95, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=107.0! product=1, amount=9, in_warehouse=1, in_production=7,\</span>
+<span class=sd> 2 pending demands</span>
+<span class=sd>T=107.0: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) statisfied</span>
+<span class=sd>T=107.0! 0 units of product 1 in warehouse</span>
+<span class=sd>T=112.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, st: 52, sp: 1)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=112.0! product=0, amount=3, in_warehouse=2, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=112.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied</span>
+<span class=sd>T=112.0! 0 units of product 0 in warehouse</span>
+<span class=sd>T=144.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: T, st: 95, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=144.0! product=1, amount=7, in_warehouse=0, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=144.0! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) statisfied</span>
+<span class=sd>T=144.0 -- finished</span>
+
+
+<span class=sd>>>> simulation.ctrl_reset()</span>
+<span class=sd>>>> simulation.ctrl_run()</span>
+<span class=sd>start</span>
+<span class=sd>T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: 2 units of product 0 in warehouse</span>
+<span class=sd>T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: 1 units of product 1 in warehouse</span>
+<span class=sd>T=20.0: product=1, amount=0, in_warehouse=1, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=20.0: station=1, 1 jobs queued</span>
+<span class=sd>T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=22.0! product=0, amount=0, in_warehouse=2, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=22.0! station=0, 1 jobs queued</span>
+<span class=sd>T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=30.0! product=1, amount=0, in_warehouse=1, in_production=9,\</span>
+<span class=sd> 2 pending demands</span>
+<span class=sd>T=52.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=62.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=62.0! station=1, 2 jobs queued</span>
+<span class=sd>T=62.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=62.0! station=0, 1 jobs queued</span>
+<span class=sd>T=62.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 62, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=95.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=95.0! station=1, 1 jobs queued</span>
+<span class=sd>T=95.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 52, sp: 1)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=107.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: T, st: 62, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=107.0! station=0, 1 jobs queued</span>
+<span class=sd>T=107.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 95, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=107.0! product=1, amount=9, in_warehouse=1, in_production=7,\</span>
+<span class=sd> 2 pending demands</span>
+<span class=sd>T=107.0: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) statisfied</span>
+<span class=sd>T=107.0! 0 units of product 1 in warehouse</span>
+<span class=sd>T=112.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, st: 52, sp: 1)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=112.0! product=0, amount=3, in_warehouse=2, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=112.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied</span>
+<span class=sd>T=112.0! 0 units of product 0 in warehouse</span>
+<span class=sd>T=144.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: T, st: 95, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=144.0! product=1, amount=7, in_warehouse=0, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=144.0! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) statisfied</span>
+<span class=sd>T=144.0 -- finished</span>
+
+
+<span class=sd>Now we want to stop the simulation measurement period before the last</span>
+<span class=sd>job completes. Notice that the last production jobs after time unit</span>
+<span class=sd>81 are no longer performed, because their end falls outside of the</span>
+<span class=sd>measurement period.</span>
+
+<span class=sd>>>> instance = Instance(</span>
+<span class=sd>...     name="test3", n_products=2, n_customers=1, n_stations=2, n_demands=3,</span>
+<span class=sd>...     time_end_warmup=21, time_end_measure=100,</span>
+<span class=sd>...     routes=[[0, 1], [1, 0]],</span>
+<span class=sd>...     demands=[[0, 0, 1, 10, 20, 90], [1, 0, 0, 5, 22, 200],</span>
+<span class=sd>...              [2, 0, 1, 7, 30, 200]],</span>
+<span class=sd>...     warehous_at_t0=[2, 1],</span>
+<span class=sd>...     station_product_unit_times=[[[10.0, 50.0, 15.0, 100.0],</span>
+<span class=sd>...                                  [ 5.0, 20.0,  7.0,  35.0, 4.0, 50.0]],</span>
+<span class=sd>...                                 [[ 5.0, 24.0,  7.0,  80.0],</span>
+<span class=sd>...                                  [ 3.0, 21.0,  6.0,  50.0,]]])</span>
+
+<span class=sd>>>> instance.name</span>
+<span class=sd>'test3'</span>
+
+<span class=sd>>>> simulation = Simulation(instance, PrintingListener(print_time=False))</span>
+<span class=sd>>>> simulation.ctrl_run()</span>
+<span class=sd>start</span>
+<span class=sd>T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: 2 units of product 0 in warehouse</span>
+<span class=sd>T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: 1 units of product 1 in warehouse</span>
+<span class=sd>T=20.0: product=1, amount=0, in_warehouse=1, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=20.0: station=1, 1 jobs queued</span>
+<span class=sd>T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=22.0! product=0, amount=0, in_warehouse=2, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=22.0! station=0, 1 jobs queued</span>
+<span class=sd>T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=30.0! product=1, amount=0, in_warehouse=1, in_production=9,\</span>
+<span class=sd> 2 pending demands</span>
+<span class=sd>T=52.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=62.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=62.0! station=1, 2 jobs queued</span>
+<span class=sd>T=62.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=62.0! station=0, 1 jobs queued</span>
+<span class=sd>T=62.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 62, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=95.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=95.0! station=1, 1 jobs queued</span>
+<span class=sd>T=95.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 52, sp: 1)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=95.0 -- finished</span>
+
+<span class=sd>>>> simulation.ctrl_reset()</span>
+<span class=sd>>>> simulation.ctrl_run()</span>
+<span class=sd>start</span>
+<span class=sd>T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: 2 units of product 0 in warehouse</span>
+<span class=sd>T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: 1 units of product 1 in warehouse</span>
+<span class=sd>T=20.0: product=1, amount=0, in_warehouse=1, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=20.0: station=1, 1 jobs queued</span>
+<span class=sd>T=20.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=22.0! product=0, amount=0, in_warehouse=2, in_production=0,\</span>
+<span class=sd> 1 pending demands</span>
+<span class=sd>T=22.0! station=0, 1 jobs queued</span>
+<span class=sd>T=22.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=30.0! product=1, amount=0, in_warehouse=1, in_production=9,\</span>
+<span class=sd> 2 pending demands</span>
+<span class=sd>T=52.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 22, sp: 0)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=62.0: finished j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 20, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=62.0! station=1, 2 jobs queued</span>
+<span class=sd>T=62.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=62.0! station=0, 1 jobs queued</span>
+<span class=sd>T=62.0: start j(id: 0, p: 1, am: 9, ar: 20, me: F, c: F, st: 62, sp: 1)\</span>
+<span class=sd> at station 0</span>
+<span class=sd>T=95.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 30, sp: 0)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=95.0! station=1, 1 jobs queued</span>
+<span class=sd>T=95.0! start j(id: 1, p: 0, am: 3, ar: 22, me: T, c: F, st: 52, sp: 1)\</span>
+<span class=sd> at station 1</span>
+<span class=sd>T=95.0 -- finished</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>dataclasses</span><span class=w> </span><span class=kn>import</span> <span class=n>dataclass</span><span class=p>,</span> <span class=n>field</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>heapq</span><span class=w> </span><span class=kn>import</span> <span class=n>heappop</span><span class=p>,</span> <span class=n>heappush</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>time</span><span class=w> </span><span class=kn>import</span> <span class=n>time_ns</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.strings.string_conv</span><span class=w> </span><span class=kn>import</span> <span class=n>bool_to_str</span><span class=p>,</span> <span class=n>float_to_str</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Demand</span><span class=p>,</span>
+    <span class=n>Instance</span><span class=p>,</span>
+    <span class=n>compute_finish_time</span><span class=p>,</span>
+<span class=p>)</span>
+
+
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>_Event</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""The internal record for events in the simulation."""</span>
+
+    <span class=c1>#: When does the event happen?</span>
+    <span class=n>when</span><span class=p>:</span> <span class=nb>float</span>
+    <span class=c1>#: Which function to call?</span>
+    <span class=n>call</span><span class=p>:</span> <span class=n>Callable</span> <span class=o>=</span> <span class=n>field</span><span class=p>(</span><span class=n>compare</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+    <span class=c1>#: The arguments to pass to the function</span>
+    <span class=n>args</span><span class=p>:</span> <span class=nb>tuple</span> <span class=o>=</span> <span class=n>field</span><span class=p>(</span><span class=n>compare</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=Job>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Job>[docs]</a>
+<span class=nd>@dataclass</span><span class=p>(</span><span class=n>order</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>frozen</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+<span class=k>class</span><span class=w> </span><span class=nc>Job</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""The record for a production job."""</span>
+
+    <span class=c1>#: the unique job id</span>
+    <span class=n>job_id</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the ID of the product to be produced.</span>
+    <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the amount to produce</span>
+    <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the time when the job was issued</span>
+    <span class=n>arrival</span><span class=p>:</span> <span class=nb>float</span>
+    <span class=c1>#: should the job be considered during measurement?</span>
+    <span class=n>measure</span><span class=p>:</span> <span class=nb>bool</span>
+    <span class=c1>#: is the job completed?</span>
+    <span class=n>completed</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=c1>#: the time when the job arrived at the queue of the current station.</span>
+    <span class=n>station_time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=o>-</span><span class=mf>1.0</span>
+    <span class=c1>#: the current job step, starts at 0.</span>
+    <span class=n>step</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get a string representation of this job.</span>
+
+<span class=sd>        :return: the string representation</span>
+
+<span class=sd>        >>> str(Job(0, 1, 10, 0.5, True, False, 1.0, 0))</span>
+<span class=sd>        'j(id: 0, p: 1, am: 10, ar: 0.5, me: T, c: F, st: 1, sp: 0)'</span>
+<span class=sd>        """</span>
+        <span class=n>fts</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>]</span> <span class=o>=</span> <span class=n>float_to_str</span>
+        <span class=k>return</span> <span class=p>(</span><span class=sa>f</span><span class=s2>"j(id: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>job_id</span><span class=si>}</span><span class=s2>, p: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>product_id</span><span class=si>}</span><span class=s2>, "</span>
+                <span class=sa>f</span><span class=s2>"am: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>amount</span><span class=si>}</span><span class=s2>, ar: </span><span class=si>{</span><span class=n>fts</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>arrival</span><span class=p>)</span><span class=si>}</span><span class=s2>, "</span>
+                <span class=sa>f</span><span class=s2>"me: </span><span class=si>{</span><span class=n>bool_to_str</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>measure</span><span class=p>)</span><span class=si>}</span><span class=s2>, "</span>
+                <span class=sa>f</span><span class=s2>"c: </span><span class=si>{</span><span class=n>bool_to_str</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>completed</span><span class=p>)</span><span class=si>}</span><span class=s2>, "</span>
+                <span class=sa>f</span><span class=s2>"st: </span><span class=si>{</span><span class=n>fts</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>station_time</span><span class=p>)</span><span class=si>}</span><span class=s2>, sp: </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>step</span><span class=si>}</span><span class=s2>)"</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=Listener>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Listener</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""A listener for simulation events."""</span>
+
+<div class=viewcode-block id=Listener.start>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener.start>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>start</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Get notification that the simulation is starting."""</span></div>
+
+
+<div class=viewcode-block id=Listener.product_in_warehouse>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener.product_in_warehouse>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>product_in_warehouse</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+            <span class=n>is_in_measure_period</span><span class=p>:</span> <span class=nb>bool</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Report a change of the amount of products in the warehouse.</span>
+
+<span class=sd>        :param time: the current time</span>
+<span class=sd>        :param product_id: the product ID</span>
+<span class=sd>        :param amount: the new absolute total amount of that product in the</span>
+<span class=sd>            warehouse</span>
+<span class=sd>        :param is_in_measure_period: is this event inside the measurement</span>
+<span class=sd>            period?</span>
+<span class=sd>        """</span></div>
+
+
+<div class=viewcode-block id=Listener.produce_at_begin>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener.produce_at_begin>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>produce_at_begin</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>job</span><span class=p>:</span> <span class=n>Job</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Report the start of the production of a certain product at a station.</span>
+
+<span class=sd>        :param time: the current time</span>
+<span class=sd>        :param station_id: the station ID</span>
+<span class=sd>        :param job: the production job</span>
+<span class=sd>        """</span></div>
+
+
+<div class=viewcode-block id=Listener.produce_at_end>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener.produce_at_end>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>produce_at_end</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>job</span><span class=p>:</span> <span class=n>Job</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Report the completion of the production of a product at a station.</span>
+
+<span class=sd>        :param time: the current time</span>
+<span class=sd>        :param station_id: the station ID</span>
+<span class=sd>        :param job: the production job</span>
+<span class=sd>        """</span></div>
+
+
+<div class=viewcode-block id=Listener.demand_satisfied>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener.demand_satisfied>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>demand_satisfied</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>demand</span><span class=p>:</span> <span class=n>Demand</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Report that a given demand has been satisfied.</span>
+
+<span class=sd>        :param time: the time index when the demand was satisfied</span>
+<span class=sd>        :param demand: the demand that was satisfied</span>
+<span class=sd>        """</span></div>
+
+
+<div class=viewcode-block id=Listener.event_product>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener.event_product>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>event_product</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>  <span class=c1># pylint: disable=R0913,R0917</span>
+                      <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>in_warehouse</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>in_production</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>pending_demands</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span>
+                      <span class=n>is_in_measure_period</span><span class=p>:</span> <span class=nb>bool</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get notified right before :meth:`Simulation.event_product`.</span>
+
+<span class=sd>        :param time: the current system time</span>
+<span class=sd>        :param product_id: the id of the product</span>
+<span class=sd>        :param amount: the amount of the product that appears</span>
+<span class=sd>        :param in_warehouse: the amount of the product currently in the</span>
+<span class=sd>            warehouse</span>
+<span class=sd>        :param in_production: the amounf of product currently under production</span>
+<span class=sd>        :param pending_demands: the pending orders for the product</span>
+<span class=sd>        :param is_in_measure_period: is this event inside the measurement</span>
+<span class=sd>            period?</span>
+<span class=sd>        """</span></div>
+
+
+<div class=viewcode-block id=Listener.event_station>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener.event_station>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>event_station</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>queue</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Job</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span>
+                      <span class=n>is_in_measure_period</span><span class=p>:</span> <span class=nb>bool</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get notified right before :meth:`Simulation.event_station`.</span>
+
+<span class=sd>        If this event happens, the station is not busy. It could process a job</span>
+<span class=sd>        and there is at least one job that it could process. You can now</span>
+<span class=sd>        select the job to be executed from the `queue` and pass it to</span>
+<span class=sd>        :meth:`~Simulation.act_exec_job`.</span>
+
+<span class=sd>        :param time: the current time</span>
+<span class=sd>        :param station_id: the station ID</span>
+<span class=sd>        :param queue: the job queue for this station</span>
+<span class=sd>        :param is_in_measure_period: is this event inside the measurement</span>
+<span class=sd>            period?</span>
+<span class=sd>        """</span></div>
+
+
+<div class=viewcode-block id=Listener.finished>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Listener.finished>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>finished</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Be notified that the simulation has been finished.</span>
+
+<span class=sd>        :param time: the time when we are finished</span>
+<span class=sd>        """</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=Simulation>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Simulation</span><span class=p>:</span>  <span class=c1># pylint: disable=R0902</span>
+<span class=w>    </span><span class=sd>"""A simulator for production scheduling."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>,</span> <span class=n>listener</span><span class=p>:</span> <span class=n>Listener</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the simulator.</span>
+
+<span class=sd>        :param instance: the instance</span>
+<span class=sd>        :param listener: the listener</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>listener</span><span class=p>,</span> <span class=n>Listener</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>listener</span><span class=p>,</span> <span class=s2>"listener"</span><span class=p>,</span> <span class=n>Listener</span><span class=p>)</span>
+
+        <span class=c1>#: the instance whose data is simulated</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+        <span class=c1>#: the product routes</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>routes</span>
+        <span class=c1>#: the station-product-unit-times</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__mput</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+            <span class=n>instance</span><span class=o>.</span><span class=n>station_product_unit_times</span><span class=p>)</span>
+        <span class=c1>#: the end of the warmup period</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__warmup</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>time_end_warmup</span>
+        <span class=c1>#: the end of the measurement period</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__measure</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>time_end_measure</span>
+
+        <span class=c1>#: the start event function</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_start</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>listener</span><span class=o>.</span><span class=n>start</span>
+        <span class=c1>#: the product-level-in-warehouse-changed event function</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_product_in_warehouse</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=nb>float</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>bool</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>listener</span><span class=o>.</span><span class=n>product_in_warehouse</span>
+        <span class=c1>#: the demand satisfied event function</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_demand_satisfied</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=nb>float</span><span class=p>,</span> <span class=n>Demand</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> \
+            <span class=o>=</span> <span class=n>listener</span><span class=o>.</span><span class=n>demand_satisfied</span>
+        <span class=c1>#: the listener to be notified if the production of a certain</span>
+        <span class=c1>#: product begins at a certain station.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_produce_at_begin</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=nb>float</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=n>Job</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>listener</span><span class=o>.</span><span class=n>produce_at_begin</span>
+        <span class=c1>#: the listener to be notified if the production of a certain</span>
+        <span class=c1>#: product end at a certain station.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_produce_at_end</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=nb>float</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=n>Job</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>listener</span><span class=o>.</span><span class=n>produce_at_end</span>
+        <span class=c1>#: the listener to notify about simulation end</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_finished</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>float</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> <span class=n>listener</span><span class=o>.</span><span class=n>finished</span>
+        <span class=c1>#: the listener to notify about product events</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_event_product</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=nb>float</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=nb>bool</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> \
+            <span class=n>listener</span><span class=o>.</span><span class=n>event_product</span>
+        <span class=c1>#: the listener to notify about station events</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_event_station</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span>
+            <span class=nb>float</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Job</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span> <span class=nb>bool</span><span class=p>],</span> <span class=kc>None</span><span class=p>]]</span> <span class=o>=</span> \
+            <span class=n>listener</span><span class=o>.</span><span class=n>event_station</span>
+
+        <span class=c1>#: the current time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=mf>0.0</span>
+        <span class=c1>#: the internal event queue</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__queue</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>_Event</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=c1>#: the internal list of pending demands</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__pending_demands</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Demand</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>[</span>
+            <span class=p>[]</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>n_products</span><span class=p>)]</span>
+        <span class=c1>#: the internal list of the amount of product currently in production</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__in_production</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span>
+            <span class=mi>0</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>n_products</span><span class=p>)]</span>
+        <span class=c1>#: the internal warehouse</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>*</span> <span class=n>instance</span><span class=o>.</span><span class=n>n_products</span>
+        <span class=c1>#: the station queues.</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__mq</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Job</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>[</span>
+            <span class=p>[]</span> <span class=k>for</span> <span class=n>_</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>n_stations</span><span class=p>)]</span>
+        <span class=c1>#: whether the stations are busy</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__mbusy</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>bool</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=kc>False</span><span class=p>]</span> <span class=o>*</span> <span class=n>instance</span><span class=o>.</span><span class=n>n_stations</span>
+        <span class=c1>#: the job ID counter</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__job_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+
+<div class=viewcode-block id=Simulation.ctrl_reset>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.ctrl_reset>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>ctrl_reset</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Reset the simulation.</span>
+
+<span class=sd>        This function sets the time to 0, clears the event queue, clears</span>
+<span class=sd>        the pending orders list, clears the warehouse.</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__time</span> <span class=o>=</span> <span class=mf>0.0</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__queue</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n_products</span><span class=p>):</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__pending_demands</span><span class=p>[</span><span class=n>i</span><span class=p>]</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__in_production</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>for</span> <span class=n>mq</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>__mq</span><span class=p>:</span>
+            <span class=n>mq</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n_stations</span><span class=p>):</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__mbusy</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=kc>False</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__job_id</span> <span class=o>=</span> <span class=mi>0</span></div>
+
+
+<div class=viewcode-block id=Simulation.ctrl_run>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.ctrl_run>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>ctrl_run</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Run the simulation.</span>
+
+<span class=sd>        This function executes the main loop of the simulation. It runs the</span>
+<span class=sd>        central event pump, which is a priority queue. It processes the</span>
+<span class=sd>        simulation events one by one.</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_start</span><span class=p>()</span>
+        <span class=n>queue</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>_Event</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__queue</span>
+
+        <span class=c1>#: fill the warehouse at time index 0</span>
+        <span class=k>for</span> <span class=n>product_id</span><span class=p>,</span> <span class=n>amount</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>warehous_at_t0</span><span class=p>):</span>
+            <span class=n>heappush</span><span class=p>(</span><span class=n>queue</span><span class=p>,</span> <span class=n>_Event</span><span class=p>(</span><span class=mf>0.0</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__product_available</span><span class=p>,</span> <span class=p>(</span>
+                <span class=n>product_id</span><span class=p>,</span> <span class=n>amount</span><span class=p>)))</span>
+        <span class=c1>#: fill in the customer demands/orders</span>
+        <span class=k>for</span> <span class=n>demand</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>demands</span><span class=p>:</span>
+            <span class=n>heappush</span><span class=p>(</span><span class=n>queue</span><span class=p>,</span> <span class=n>_Event</span><span class=p>(</span>
+                <span class=n>demand</span><span class=o>.</span><span class=n>arrival</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__demand_issued</span><span class=p>,</span> <span class=p>(</span><span class=n>demand</span><span class=p>,</span> <span class=p>)))</span>
+
+        <span class=k>while</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>queue</span><span class=p>):</span>
+            <span class=n>event</span><span class=p>:</span> <span class=n>_Event</span> <span class=o>=</span> <span class=n>heappop</span><span class=p>(</span><span class=n>queue</span><span class=p>)</span>
+            <span class=n>time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>event</span><span class=o>.</span><span class=n>when</span>
+            <span class=k>if</span> <span class=n>time</span> <span class=o><</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Event for </span><span class=si>{</span><span class=n>time</span><span class=si>}</span><span class=s2> at time </span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>__time</span><span class=si>}</span><span class=s2>?"</span><span class=p>)</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__time</span> <span class=o>=</span> <span class=n>time</span>
+            <span class=n>event</span><span class=o>.</span><span class=n>call</span><span class=p>(</span><span class=o>*</span><span class=n>event</span><span class=o>.</span><span class=n>args</span><span class=p>)</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_finished</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__time</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Simulation.act_demand_satisfied>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.act_demand_satisfied>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>act_demand_satisfied</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>demand</span><span class=p>:</span> <span class=n>Demand</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Notify the system that a given demand has been satisfied.</span>
+
+<span class=sd>        :param demand: the demand that was satisfied</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__pending_demands</span><span class=p>[</span><span class=n>demand</span><span class=o>.</span><span class=n>product_id</span><span class=p>]</span><span class=o>.</span><span class=n>remove</span><span class=p>(</span><span class=n>demand</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_demand_satisfied</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__time</span><span class=p>,</span> <span class=n>demand</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Simulation.event_product>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.event_product>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>event_product</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>  <span class=c1># pylint: disable=W0613,R0913,R0917</span>
+                      <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>in_warehouse</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>in_production</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>  <span class=c1># pylint: disable=W0613</span>
+                      <span class=n>pending_demands</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Take actions when an event regarding a product or demand occurred.</span>
+
+<span class=sd>        The following events may have occurred:</span>
+
+<span class=sd>        1. An amount of a product has been produced (`amount > 0`).</span>
+<span class=sd>        2. An amount of a product has been made available at the start of the</span>
+<span class=sd>           simulation to form the initial amount in the warehouse</span>
+<span class=sd>           (`amount > 0`).</span>
+<span class=sd>        3. A customer demand for the product has appeared in the system. If</span>
+<span class=sd>           there is any demand to be fulfilled, then `pending_demands` is not</span>
+<span class=sd>           empty.</span>
+
+<span class=sd>        You can choose to execute one or multiple of the following actions:</span>
+
+<span class=sd>        1. :meth:`~Simulation.act_store_in_warehouse` to store a positive</span>
+<span class=sd>           amount of product in the warehouse.</span>
+<span class=sd>        2. :meth:`~Simulation.act_take_from_warehouse` to take a positive</span>
+<span class=sd>           amount of product out of the warehouse (must be `<= in_warehouse`.</span>
+<span class=sd>        3. :meth:`~Simulation.act_produce` to order the production of a</span>
+<span class=sd>           positive amount of the product.</span>
+<span class=sd>        4. :meth:`~Simulation.act_demand_satisfied` to mark one of the demands</span>
+<span class=sd>           from `queue` as satisfied. Notice that in this case, you must make</span>
+<span class=sd>           sure to remove the corresponding amount of product units from the</span>
+<span class=sd>           system. If sufficient units are in `amount`, you would simply not</span>
+<span class=sd>           store these in the warehouse. You could also simply take some units</span>
+<span class=sd>           out of the warehouse with :meth:`~act_take_from_warehouse`.</span>
+
+<span class=sd>        :param time: the current system time</span>
+<span class=sd>        :param product_id: the id of the product</span>
+<span class=sd>        :param amount: the amount of the product that appears</span>
+<span class=sd>        :param in_warehouse: the amount of the product currently in the</span>
+<span class=sd>            warehouse</span>
+<span class=sd>        :param in_production: the amounf of product currently under production</span>
+<span class=sd>        :param pending_demands: the pending orders for the product</span>
+<span class=sd>        """</span>
+        <span class=n>dem_len</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>pending_demands</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>dem_len</span> <span class=o><=</span> <span class=mi>0</span> <span class=o><</span> <span class=n>amount</span><span class=p>:</span>  <span class=c1># no demands + positive amount?</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>act_store_in_warehouse</span><span class=p>(</span><span class=n>product_id</span><span class=p>,</span> <span class=n>amount</span><span class=p>)</span>  <span class=c1># store</span>
+            <span class=k>return</span>  <span class=c1># ... and we are done</span>
+
+        <span class=c1># Go through the list of demands and satisfy them on a first-come-</span>
+        <span class=c1># first-serve basis.</span>
+        <span class=n>total</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>in_warehouse</span> <span class=o>+</span> <span class=n>amount</span>  <span class=c1># The available units.</span>
+        <span class=n>product_needed</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>  <span class=c1># The amount needed to satisfy the demands.</span>
+        <span class=k>for</span> <span class=n>demand</span> <span class=ow>in</span> <span class=n>pending_demands</span><span class=p>:</span>
+            <span class=n>demand_needed</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>amount</span>
+            <span class=k>if</span> <span class=n>demand_needed</span> <span class=o><=</span> <span class=n>total</span><span class=p>:</span>
+                <span class=n>total</span> <span class=o>-=</span> <span class=n>demand_needed</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>act_demand_satisfied</span><span class=p>(</span><span class=n>demand</span><span class=p>)</span>
+                <span class=k>continue</span>
+            <span class=n>product_needed</span> <span class=o>+=</span> <span class=n>demand_needed</span>
+
+        <span class=c1>#: Update the warehouse.</span>
+        <span class=k>if</span> <span class=n>total</span> <span class=o>></span> <span class=n>in_warehouse</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>act_store_in_warehouse</span><span class=p>(</span><span class=n>product_id</span><span class=p>,</span> <span class=n>total</span> <span class=o>-</span> <span class=n>in_warehouse</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>total</span> <span class=o><</span> <span class=n>in_warehouse</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>act_take_from_warehouse</span><span class=p>(</span><span class=n>product_id</span><span class=p>,</span> <span class=n>in_warehouse</span> <span class=o>-</span> <span class=n>total</span><span class=p>)</span>
+
+        <span class=c1># Order the production of the product units required to satisfy all</span>
+        <span class=c1># demands.</span>
+        <span class=n>product_needed</span> <span class=o>-=</span> <span class=n>total</span> <span class=o>+</span> <span class=n>in_production</span>
+        <span class=k>if</span> <span class=n>product_needed</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>act_produce</span><span class=p>(</span><span class=n>product_id</span><span class=p>,</span> <span class=n>product_needed</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Simulation.event_station>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.event_station>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>event_station</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span>
+                      <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>  <span class=c1># pylint: disable=W0613</span>
+                      <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>  <span class=c1># pylint: disable=W0613</span>
+                      <span class=n>queue</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Job</span><span class=p>,</span> <span class=o>...</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Process an event for a given station.</span>
+
+<span class=sd>        If this event happens, the station is not busy. It could process a job</span>
+<span class=sd>        and there is at least one job that it could process. You can now</span>
+<span class=sd>        select the job to be executed from the `queue` and pass it to</span>
+<span class=sd>        :meth:`~Simulation.act_exec_job`.</span>
+
+<span class=sd>        :param time: the current time</span>
+<span class=sd>        :param station_id: the station ID</span>
+<span class=sd>        :param queue: the job queue for this station</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>act_exec_job</span><span class=p>(</span><span class=n>queue</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span></div>
+
+
+<div class=viewcode-block id=Simulation.act_exec_job>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.act_exec_job>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>act_exec_job</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>job</span><span class=p>:</span> <span class=n>Job</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Execute the job on its current station.</span>
+
+<span class=sd>        :param job: the job to be executed</span>
+<span class=sd>        """</span>
+        <span class=n>product_id</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>job</span><span class=o>.</span><span class=n>product_id</span>
+        <span class=n>station_id</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span><span class=p>[</span><span class=n>product_id</span><span class=p>][</span><span class=n>job</span><span class=o>.</span><span class=n>step</span><span class=p>]</span>
+        <span class=n>time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__mq</span><span class=p>[</span><span class=n>station_id</span><span class=p>]</span><span class=o>.</span><span class=n>remove</span><span class=p>(</span><span class=n>job</span><span class=p>)</span>  <span class=c1># exception if job is not there</span>
+
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__mbusy</span><span class=p>[</span><span class=n>station_id</span><span class=p>]:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Cannot execute job on busy station."</span><span class=p>)</span>
+
+        <span class=bp>self</span><span class=o>.</span><span class=n>__mbusy</span><span class=p>[</span><span class=n>station_id</span><span class=p>]</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_produce_at_begin</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>station_id</span><span class=p>,</span> <span class=n>job</span><span class=p>)</span>
+
+        <span class=n>end_time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=n>compute_finish_time</span><span class=p>(</span>
+            <span class=n>time</span><span class=p>,</span> <span class=n>job</span><span class=o>.</span><span class=n>amount</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__mput</span><span class=p>[</span><span class=n>station_id</span><span class=p>][</span><span class=n>product_id</span><span class=p>])</span>
+        <span class=k>if</span> <span class=n>end_time</span> <span class=o><</span> <span class=bp>self</span><span class=o>.</span><span class=n>__measure</span><span class=p>:</span>  <span class=c1># only simulate if within time window</span>
+            <span class=n>heappush</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__queue</span><span class=p>,</span> <span class=n>_Event</span><span class=p>(</span><span class=n>end_time</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__job_step</span><span class=p>,</span> <span class=p>(</span><span class=n>job</span><span class=p>,</span> <span class=p>)))</span></div>
+
+
+<div class=viewcode-block id=Simulation.act_store_in_warehouse>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.act_store_in_warehouse>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>act_store_in_warehouse</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Add a certain amount of product to the warehouse.</span>
+
+<span class=sd>        :param product_id: the product ID</span>
+<span class=sd>        :param amount: the amount</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=n>amount</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Cannot add amount </span><span class=si>{</span><span class=n>amount</span><span class=si>}</span><span class=s2> of product </span><span class=si>{</span><span class=n>product_id</span><span class=si>}</span><span class=s2>!"</span><span class=p>)</span>
+        <span class=n>wh</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span> <span class=o>+</span> <span class=n>amount</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span> <span class=o>=</span> <span class=n>wh</span>
+        <span class=n>time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_product_in_warehouse</span><span class=p>(</span>
+            <span class=n>time</span><span class=p>,</span> <span class=n>product_id</span><span class=p>,</span> <span class=n>wh</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__warmup</span> <span class=o><=</span> <span class=n>time</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Simulation.act_take_from_warehouse>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.act_take_from_warehouse>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>act_take_from_warehouse</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Remove a certain amount of product to the warehouse.</span>
+
+<span class=sd>        :param product_id: the product ID</span>
+<span class=sd>        :param amount: the amount</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=n>amount</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Cannot remove amount </span><span class=si>{</span><span class=n>amount</span><span class=si>}</span><span class=s2> of product </span><span class=si>{</span><span class=n>product_id</span><span class=si>}</span><span class=s2>!"</span><span class=p>)</span>
+        <span class=n>wh</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span> <span class=o>-</span> <span class=n>amount</span>
+        <span class=k>if</span> <span class=n>wh</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Cannot remove </span><span class=si>{</span><span class=n>amount</span><span class=si>}</span><span class=s2> of product </span><span class=si>{</span><span class=n>product_id</span><span class=si>}</span><span class=s2> from "</span>
+                <span class=s2>"warehouse if there are only "</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span><span class=si>}</span><span class=s2> units in it."</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span> <span class=o>=</span> <span class=n>wh</span>
+        <span class=n>time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_product_in_warehouse</span><span class=p>(</span>
+            <span class=n>time</span><span class=p>,</span> <span class=n>product_id</span><span class=p>,</span> <span class=n>wh</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__warmup</span> <span class=o><=</span> <span class=n>time</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Simulation.act_produce>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.Simulation.act_produce>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>act_produce</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Order the production of `amount` units of product.</span>
+
+<span class=sd>        :param product_id: the product ID</span>
+<span class=sd>        :param amount: the amount that needs to be produced</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=n>amount</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Cannot produce </span><span class=si>{</span><span class=n>amount</span><span class=si>}</span><span class=s2> units of product </span><span class=si>{</span><span class=n>product_id</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span>
+        <span class=n>jid</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__job_id</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__job_id</span> <span class=o>=</span> <span class=n>jid</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__job_step</span><span class=p>(</span><span class=n>Job</span><span class=p>(</span><span class=n>jid</span><span class=p>,</span> <span class=n>product_id</span><span class=p>,</span> <span class=n>amount</span><span class=p>,</span> <span class=n>time</span><span class=p>,</span>
+                            <span class=bp>self</span><span class=o>.</span><span class=n>__warmup</span> <span class=o><=</span> <span class=n>time</span><span class=p>))</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__product_available</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Process that an amount of a product enters the warehouse.</span>
+
+<span class=sd>        :param time: the time when it enters the warehouse</span>
+<span class=sd>        :param product_id: the product ID</span>
+<span class=sd>        :param amount: the amount of the product that enters the warehouse</span>
+<span class=sd>        """</span>
+        <span class=n>lst</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Demand</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__pending_demands</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+        <span class=n>tp</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>lst</span><span class=p>)</span> <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>lst</span><span class=p>)</span> <span class=o>></span> <span class=mi>0</span> <span class=k>else</span> <span class=p>()</span>
+        <span class=n>wh</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+        <span class=n>ip</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__in_production</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+        <span class=n>time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_event_product</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>product_id</span><span class=p>,</span> <span class=n>amount</span><span class=p>,</span> <span class=n>wh</span><span class=p>,</span> <span class=n>ip</span><span class=p>,</span> <span class=n>tp</span><span class=p>,</span>
+                               <span class=bp>self</span><span class=o>.</span><span class=n>__warmup</span> <span class=o><=</span> <span class=n>time</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>event_product</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>product_id</span><span class=p>,</span> <span class=n>amount</span><span class=p>,</span> <span class=n>wh</span><span class=p>,</span> <span class=n>ip</span><span class=p>,</span> <span class=n>tp</span><span class=p>)</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__demand_issued</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>demand</span><span class=p>:</span> <span class=n>Demand</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Process that a demand was issued by a customer.</span>
+
+<span class=sd>        :param demand: the demand record</span>
+<span class=sd>        """</span>
+        <span class=n>time</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span>
+        <span class=k>if</span> <span class=n>demand</span><span class=o>.</span><span class=n>arrival</span> <span class=o>!=</span> <span class=n>time</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Demand time </span><span class=si>{</span><span class=n>demand</span><span class=o>.</span><span class=n>arrival</span><span class=si>}</span><span class=s2> != system time </span><span class=si>{</span><span class=n>time</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>product_id</span>
+        <span class=n>lst</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Demand</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__pending_demands</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+        <span class=n>lst</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>demand</span><span class=p>)</span>
+        <span class=n>tp</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>lst</span><span class=p>)</span>
+        <span class=n>ip</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__in_production</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+        <span class=n>iw</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__warehouse</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__l_event_product</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>product_id</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>iw</span><span class=p>,</span> <span class=n>ip</span><span class=p>,</span> <span class=n>tp</span><span class=p>,</span>
+                               <span class=bp>self</span><span class=o>.</span><span class=n>__warmup</span> <span class=o><=</span> <span class=n>time</span><span class=p>)</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>event_product</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>product_id</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=n>iw</span><span class=p>,</span> <span class=n>ip</span><span class=p>,</span> <span class=n>tp</span><span class=p>)</span>
+
+    <span class=k>def</span><span class=w> </span><span class=nf>__job_step</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>job</span><span class=p>:</span> <span class=n>Job</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Move a job a step forward.</span>
+
+<span class=sd>        If this job just enters the system, it gets enqueued at its first</span>
+<span class=sd>        station. If it was already running on a station, then that station</span>
+<span class=sd>        becomes idle and can process the next job. Our job now either moves to</span>
+<span class=sd>        the next station and enters the queue of that station OR, if it has</span>
+<span class=sd>        been completed, its produced product amount can enter the warehouse.</span>
+
+<span class=sd>        :param job: the job</span>
+<span class=sd>        """</span>
+        <span class=n>product_id</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>job</span><span class=o>.</span><span class=n>product_id</span>
+        <span class=n>routes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__routes</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+        <span class=n>time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__time</span>
+
+        <span class=c1># WARNING: We only track jobs with issue time within the measurement</span>
+        <span class=c1># period!</span>
+        <span class=n>warm</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__warmup</span>
+        <span class=n>time_in_meas</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>bool</span><span class=p>]</span> <span class=o>=</span> <span class=n>warm</span> <span class=o><=</span> <span class=n>time</span>
+
+        <span class=n>job_step</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>job</span><span class=o>.</span><span class=n>step</span>
+        <span class=n>next_step</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>job_step</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=n>completed</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>bool</span><span class=p>]</span> <span class=o>=</span> <span class=n>next_step</span> <span class=o>>=</span> <span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>routes</span><span class=p>)</span>
+
+        <span class=k>if</span> <span class=n>job_step</span> <span class=o>>=</span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># The job was running on a station.</span>
+            <span class=n>old_station_id</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>routes</span><span class=p>[</span><span class=n>job_step</span><span class=p>]</span>
+            <span class=k>if</span> <span class=n>completed</span><span class=p>:</span>
+                <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=n>job</span><span class=p>,</span> <span class=s2>"completed"</span><span class=p>,</span> <span class=kc>True</span><span class=p>)</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__l_produce_at_end</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>old_station_id</span><span class=p>,</span> <span class=n>job</span><span class=p>)</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__mbusy</span><span class=p>[</span><span class=n>old_station_id</span><span class=p>]</span> <span class=o>=</span> <span class=kc>False</span>
+            <span class=n>old_mq</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Job</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__mq</span><span class=p>[</span><span class=n>old_station_id</span><span class=p>]</span>
+            <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>old_mq</span><span class=p>)</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+                <span class=n>tupo</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Job</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>old_mq</span><span class=p>)</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>__l_event_station</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>old_station_id</span><span class=p>,</span> <span class=n>tupo</span><span class=p>,</span>
+                                       <span class=n>time_in_meas</span><span class=p>)</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>event_station</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>old_station_id</span><span class=p>,</span> <span class=n>tupo</span><span class=p>)</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__in_production</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span> <span class=o>+=</span> <span class=n>job</span><span class=o>.</span><span class=n>amount</span>
+
+        <span class=k>if</span> <span class=n>completed</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__in_production</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span> <span class=o>-=</span> <span class=n>job</span><span class=o>.</span><span class=n>amount</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__product_available</span><span class=p>(</span><span class=n>product_id</span><span class=p>,</span> <span class=n>job</span><span class=o>.</span><span class=n>amount</span><span class=p>)</span>
+            <span class=k>return</span>
+
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=n>job</span><span class=p>,</span> <span class=s2>"step"</span><span class=p>,</span> <span class=n>next_step</span><span class=p>)</span>
+        <span class=nb>object</span><span class=o>.</span><span class=fm>__setattr__</span><span class=p>(</span><span class=n>job</span><span class=p>,</span> <span class=s2>"station_time"</span><span class=p>,</span> <span class=n>time</span><span class=p>)</span>
+
+        <span class=n>new_station_id</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>routes</span><span class=p>[</span><span class=n>next_step</span><span class=p>]</span>
+        <span class=n>queue</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Job</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__mq</span><span class=p>[</span><span class=n>new_station_id</span><span class=p>]</span>
+        <span class=n>queue</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>job</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=bp>self</span><span class=o>.</span><span class=n>__mbusy</span><span class=p>[</span><span class=n>new_station_id</span><span class=p>]:</span>
+            <span class=n>tupq</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>Job</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>queue</span><span class=p>)</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__l_event_station</span><span class=p>(</span>
+                <span class=n>time</span><span class=p>,</span> <span class=n>new_station_id</span><span class=p>,</span> <span class=n>tupq</span><span class=p>,</span> <span class=n>time_in_meas</span><span class=p>)</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>event_station</span><span class=p>(</span><span class=n>time</span><span class=p>,</span> <span class=n>new_station_id</span><span class=p>,</span> <span class=n>tupq</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=PrintingListener>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>PrintingListener</span><span class=p>(</span><span class=n>Listener</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A listener that just prints simulation events."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>output</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=n>Any</span><span class=p>]</span> <span class=o>=</span> <span class=nb>print</span><span class=p>,</span>
+                 <span class=n>print_time</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the printing listener.</span>
+
+<span class=sd>        :param output: the output callable</span>
+<span class=sd>        :param print_time: shall we print the time?</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>output</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>output</span><span class=p>,</span> <span class=s2>"output"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>print_time</span><span class=p>,</span> <span class=nb>bool</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>print_time</span><span class=p>,</span> <span class=s2>"print_time"</span><span class=p>,</span> <span class=nb>bool</span><span class=p>)</span>
+        <span class=c1>#: the output callable</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=n>Any</span><span class=p>]]</span> <span class=o>=</span> <span class=n>output</span>
+        <span class=c1>#: shall we print the time at the end?</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__print_time</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>bool</span><span class=p>]</span> <span class=o>=</span> <span class=n>print_time</span>
+        <span class=c1>#: the internal start time</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__start_time_ns</span><span class=p>:</span> <span class=nb>int</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+
+<div class=viewcode-block id=PrintingListener.start>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener.start>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>start</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Print that the simulation begins."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__start_time_ns</span> <span class=o>=</span> <span class=n>time_ns</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span><span class=s2>"start"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PrintingListener.product_in_warehouse>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener.product_in_warehouse>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>product_in_warehouse</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+            <span class=n>is_in_measure_period</span><span class=p>:</span> <span class=nb>bool</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Print the product amount in the warehouse."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span><span class=sa>f</span><span class=s2>"T=</span><span class=si>{</span><span class=n>time</span><span class=si>}{</span><span class=s1>'!'</span><span class=w> </span><span class=k>if</span><span class=w> </span><span class=n>is_in_measure_period</span><span class=w> </span><span class=k>else</span><span class=w> </span><span class=s1>':'</span><span class=si>}</span><span class=s2> "</span>
+                      <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>amount</span><span class=si>}</span><span class=s2> units of product </span><span class=si>{</span><span class=n>product_id</span><span class=si>}</span><span class=s2> in warehouse"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PrintingListener.produce_at_begin>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener.produce_at_begin>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>produce_at_begin</span><span class=p>(</span>
+            <span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>job</span><span class=p>:</span> <span class=n>Job</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Print that the production at a given station begun."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span><span class=sa>f</span><span class=s2>"T=</span><span class=si>{</span><span class=n>time</span><span class=si>}{</span><span class=s1>'!'</span><span class=w> </span><span class=k>if</span><span class=w> </span><span class=n>job</span><span class=o>.</span><span class=n>measure</span><span class=w> </span><span class=k>else</span><span class=w> </span><span class=s1>':'</span><span class=si>}</span><span class=s2> "</span>
+                      <span class=sa>f</span><span class=s2>"start </span><span class=si>{</span><span class=n>job</span><span class=si>}</span><span class=s2> at station </span><span class=si>{</span><span class=n>station_id</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PrintingListener.produce_at_end>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener.produce_at_end>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>produce_at_end</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>job</span><span class=p>:</span> <span class=n>Job</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Print that the production at a given station ended."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span><span class=sa>f</span><span class=s2>"T=</span><span class=si>{</span><span class=n>time</span><span class=si>}{</span><span class=s1>'!'</span><span class=w> </span><span class=k>if</span><span class=w> </span><span class=n>job</span><span class=o>.</span><span class=n>measure</span><span class=w> </span><span class=k>else</span><span class=w> </span><span class=s1>':'</span><span class=si>}</span><span class=s2> "</span>
+                      <span class=sa>f</span><span class=s2>"finished </span><span class=si>{</span><span class=n>job</span><span class=si>}</span><span class=s2> at station </span><span class=si>{</span><span class=n>station_id</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PrintingListener.demand_satisfied>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener.demand_satisfied>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>demand_satisfied</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>demand</span><span class=p>:</span> <span class=n>Demand</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Print that a demand was satisfied."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span>
+            <span class=sa>f</span><span class=s2>"T=</span><span class=si>{</span><span class=n>time</span><span class=si>}{</span><span class=s1>'!'</span><span class=w> </span><span class=k>if</span><span class=w> </span><span class=n>demand</span><span class=o>.</span><span class=n>measure</span><span class=w> </span><span class=k>else</span><span class=w> </span><span class=s1>':'</span><span class=si>}</span><span class=s2> </span><span class=si>{</span><span class=n>demand</span><span class=si>}</span><span class=s2> statisfied"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PrintingListener.event_product>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener.event_product>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>event_product</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>  <span class=c1># pylint: disable=R0913,R0917</span>
+                      <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>in_warehouse</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>in_production</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>pending_demands</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span>
+                      <span class=n>is_in_measure_period</span><span class=p>:</span> <span class=nb>bool</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Print the prouct event."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span><span class=sa>f</span><span class=s2>"T=</span><span class=si>{</span><span class=n>time</span><span class=si>}{</span><span class=s1>'!'</span><span class=w> </span><span class=k>if</span><span class=w> </span><span class=n>is_in_measure_period</span><span class=w> </span><span class=k>else</span><span class=w> </span><span class=s1>':'</span><span class=si>}</span><span class=s2> "</span>
+                      <span class=sa>f</span><span class=s2>"product=</span><span class=si>{</span><span class=n>product_id</span><span class=si>}</span><span class=s2>, amount=</span><span class=si>{</span><span class=n>amount</span><span class=si>}</span><span class=s2>"</span>
+                      <span class=sa>f</span><span class=s2>", in_warehouse=</span><span class=si>{</span><span class=n>in_warehouse</span><span class=si>}</span><span class=s2>, in_production="</span>
+                      <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>in_production</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>pending_demands</span><span class=p>)</span><span class=si>}</span><span class=s2> "</span>
+                      <span class=s2>"pending demands"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PrintingListener.event_station>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener.event_station>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>event_station</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span> <span class=n>station_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>queue</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Job</span><span class=p>,</span> <span class=o>...</span><span class=p>],</span>
+                      <span class=n>is_in_measure_period</span><span class=p>:</span> <span class=nb>bool</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Print the station event."""</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span>
+            <span class=sa>f</span><span class=s2>"T=</span><span class=si>{</span><span class=n>time</span><span class=si>}{</span><span class=s1>'!'</span><span class=w> </span><span class=k>if</span><span class=w> </span><span class=n>is_in_measure_period</span><span class=w> </span><span class=k>else</span><span class=w> </span><span class=s1>':'</span><span class=si>}</span><span class=s2> "</span>
+            <span class=sa>f</span><span class=s2>"station=</span><span class=si>{</span><span class=n>station_id</span><span class=si>}</span><span class=s2>, </span><span class=si>{</span><span class=nb>tuple</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>queue</span><span class=p>)</span><span class=si>}</span><span class=s2> jobs queued"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=PrintingListener.finished>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.PrintingListener.finished>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>finished</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Print that the simulation has finished."""</span>
+        <span class=n>end</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>time_ns</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span><span class=sa>f</span><span class=s2>"T=</span><span class=si>{</span><span class=n>time</span><span class=si>}</span><span class=s2> -- finished"</span><span class=p>)</span>
+        <span class=k>if</span> <span class=bp>self</span><span class=o>.</span><span class=n>__print_time</span> <span class=ow>and</span> <span class=bp>self</span><span class=o>.</span><span class=n>__start_time_ns</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=n>required</span><span class=p>:</span> <span class=nb>float</span> <span class=o>=</span> <span class=p>(</span><span class=n>end</span> <span class=o>-</span> <span class=bp>self</span><span class=o>.</span><span class=n>__start_time_ns</span><span class=p>)</span> <span class=o>/</span> <span class=mi>1_000_000_000</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__output</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Simulation time: </span><span class=si>{</span><span class=n>required</span><span class=si>}</span><span class=s2>s"</span><span class=p>)</span></div>
+</div>
+
+
+
+<div class=viewcode-block id=warmup>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.simulation.warmup>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>warmup</span><span class=p>()</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Perform a warm-up for our simulator.</span>
+
+<span class=sd>    The simulator uses some code implemented in numba etc., which may need to</span>
+<span class=sd>    be jitted before the actual execution.</span>
+
+<span class=sd>    >>> warmup()</span>
+<span class=sd>    """</span>
+    <span class=n>instance</span> <span class=o>=</span> <span class=n>Instance</span><span class=p>(</span>
+        <span class=n>name</span><span class=o>=</span><span class=s2>"warmup"</span><span class=p>,</span> <span class=n>n_products</span><span class=o>=</span><span class=mi>2</span><span class=p>,</span> <span class=n>n_customers</span><span class=o>=</span><span class=mi>1</span><span class=p>,</span> <span class=n>n_stations</span><span class=o>=</span><span class=mi>2</span><span class=p>,</span> <span class=n>n_demands</span><span class=o>=</span><span class=mi>2</span><span class=p>,</span>
+        <span class=n>time_end_warmup</span><span class=o>=</span><span class=mi>10</span><span class=p>,</span> <span class=n>time_end_measure</span><span class=o>=</span><span class=mi>10000</span><span class=p>,</span>
+        <span class=n>routes</span><span class=o>=</span><span class=p>[[</span><span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>],</span> <span class=p>[</span><span class=mi>1</span><span class=p>,</span> <span class=mi>0</span><span class=p>]],</span>
+        <span class=n>demands</span><span class=o>=</span><span class=p>[[</span><span class=mi>0</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>10</span><span class=p>,</span> <span class=mi>20</span><span class=p>,</span> <span class=mi>90</span><span class=p>],</span> <span class=p>[</span><span class=mi>1</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>22</span><span class=p>,</span> <span class=mi>200</span><span class=p>]],</span>
+        <span class=n>warehous_at_t0</span><span class=o>=</span><span class=p>[</span><span class=mi>2</span><span class=p>,</span> <span class=mi>1</span><span class=p>],</span>
+        <span class=n>station_product_unit_times</span><span class=o>=</span><span class=p>[</span>
+            <span class=p>[[</span><span class=mf>10.0</span><span class=p>,</span> <span class=mf>50.0</span><span class=p>,</span> <span class=mf>15.0</span><span class=p>,</span> <span class=mf>100.0</span><span class=p>],</span> <span class=p>[</span><span class=mf>5.0</span><span class=p>,</span> <span class=mf>20.0</span><span class=p>,</span> <span class=mf>7.0</span><span class=p>,</span> <span class=mf>35.0</span><span class=p>,</span> <span class=mf>4.0</span><span class=p>,</span> <span class=mf>50.0</span><span class=p>]],</span>
+            <span class=p>[[</span><span class=mf>5.0</span><span class=p>,</span> <span class=mf>24.0</span><span class=p>,</span> <span class=mf>7.0</span><span class=p>,</span> <span class=mf>80.0</span><span class=p>],</span> <span class=p>[</span><span class=mf>3.0</span><span class=p>,</span> <span class=mf>21.0</span><span class=p>,</span> <span class=mf>6.0</span><span class=p>,</span> <span class=mf>50.0</span><span class=p>]]])</span>
+    <span class=n>Simulation</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Listener</span><span class=p>())</span><span class=o>.</span><span class=n>ctrl_run</span><span class=p>()</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.simulation</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

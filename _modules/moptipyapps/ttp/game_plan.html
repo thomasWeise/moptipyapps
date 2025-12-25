@@ -1,0 +1,125 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.ttp.game_plan — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/ttp/game_plan.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.game_plan</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.ttp.game_plan</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A game plan assigns teams to games.</span>
+
+<span class=sd>A game plan is a two-dimensional matrix `G`. The rows are the time slots.</span>
+<span class=sd>There is one column for each time. If `G` has value `v` at row `i` and</span>
+<span class=sd>column `j`, then this means:</span>
+
+<span class=sd>- at the time slot `i` ...</span>
+<span class=sd>- the team with name `j+1` plays</span>
+<span class=sd>    + no team if `v == 0`,</span>
+<span class=sd>    + *at home* against the team `v` if `v > 0`, i.e., team `v` travels</span>
+<span class=sd>      to the home stadium of team `j+1`</span>
+<span class=sd>    + *away* against the team `-v` if `v < 0`, i.e., team `j+1` travels</span>
+<span class=sd>      to the home stadium of team `-v` and plays against them there</span>
+
+<span class=sd>Indices in matrices are zero-based, i.e., the lowest index for a row `i` is</span>
+<span class=sd>`0` and the lowest index for a column `j` is also `0`. However, team names</span>
+<span class=sd>are one-based, i.e., that with `1`. Therefore, we need to translate the</span>
+<span class=sd>zero-based column index `j` to a team name by adding `1` to it.</span>
+
+<span class=sd>This is just a numerical variant of the game plan representation given at</span>
+<span class=sd>&LThttps://robinxval.ugent.be/RobinX/travelRepo.php>. Indeed, the `str(...)`</span>
+<span class=sd>representation of a game plan is exactly the table shown there.</span>
+
+<span class=sd>Of course, if `G[i, j] = v`, then `G[i, v - 1] = -(j + 1)` should hold if</span>
+<span class=sd>`v > 0`, for example. Vice versa, if `v < 0` and `G[i, j] = v`, then</span>
+<span class=sd>`G[i, (-v) - 1] = j + 1` should hold. Such constraints are checked by the</span>
+<span class=sd>:mod:`~moptipyapps.ttp.errors` objective function.</span>
+
+<span class=sd>The corresponding space implementation,</span>
+<span class=sd>:mod:`~moptipyapps.ttp.game_plan_space`, offers the functionality to convert</span>
+<span class=sd>strings to game plans as well as to instantiate them in a black-box algorithm.</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>io</span><span class=w> </span><span class=kn>import</span> <span class=n>StringIO</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.component</span><span class=w> </span><span class=kn>import</span> <span class=n>Component</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>CSV_SEPARATOR</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+
+
+<div class=viewcode-block id=GamePlan>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.game_plan.GamePlan>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>GamePlan</span><span class=p>(</span><span class=n>Component</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A game plan, i.e., a solution to the Traveling Tournament Problem."""</span>
+
+    <span class=c1>#: the TTP instance</span>
+    <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__new__</span><span class=p>(</span><span class=bp>cls</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"GamePlan"</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a solution record for the Traveling Tournament Problem.</span>
+
+<span class=sd>        :param cls: the class</span>
+<span class=sd>        :param instance: the solution record</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>n_cities</span>  <span class=c1># the number of teams</span>
+        <span class=c1># each team plays every other team 'rounds'  times</span>
+        <span class=n>n_days</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>instance</span><span class=o>.</span><span class=n>rounds</span>
+        <span class=n>obj</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>GamePlan</span><span class=p>]</span> <span class=o>=</span> <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__new__</span><span class=p>(</span>
+            <span class=bp>cls</span><span class=p>,</span> <span class=p>(</span><span class=n>n_days</span><span class=p>,</span> <span class=n>n</span><span class=p>),</span> <span class=n>instance</span><span class=o>.</span><span class=n>game_plan_dtype</span><span class=p>)</span>
+        <span class=c1>#: the TTP instance</span>
+        <span class=n>obj</span><span class=o>.</span><span class=n>instance</span> <span class=o>=</span> <span class=n>instance</span>
+        <span class=k>return</span> <span class=n>obj</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Convert the game plan to a compact string.</span>
+
+<span class=sd>        The first line of the output is a flattened version of this matrix</span>
+<span class=sd>        with the values being separated by `;`. Then we place an empty line.</span>
+
+<span class=sd>        We then put a more easy-to-read representation and follow the pattern</span>
+<span class=sd>        given at https://robinxval.ugent.be/RobinX/travelRepo.php, which is</span>
+<span class=sd>        based upon the notation by Easton et al. Here, first, a row with the</span>
+<span class=sd>        team names separated by spaces is generated. Then, each row contains</span>
+<span class=sd>        the opponents of these teams, again separated by spaces. If an</span>
+<span class=sd>        opponent plays at their home, this is denoted by an `@`.</span>
+<span class=sd>        If a team has no scheduled opponent, then this is denoted as `-`.</span>
+
+<span class=sd>        :return: the compact string</span>
+<span class=sd>        """</span>
+        <span class=n>csv</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>CSV_SEPARATOR</span>
+        <span class=n>sep</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>""</span>
+        <span class=n>teams</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>teams</span>
+        <span class=nb>len</span><span class=p>(</span><span class=n>teams</span><span class=p>)</span>
+
+        <span class=k>with</span> <span class=n>StringIO</span><span class=p>()</span> <span class=k>as</span> <span class=n>sio</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>k</span> <span class=ow>in</span> <span class=bp>self</span><span class=o>.</span><span class=n>flatten</span><span class=p>():</span>
+                <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>sep</span><span class=p>)</span>
+                <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=nb>str</span><span class=p>(</span><span class=n>k</span><span class=p>))</span>
+                <span class=n>sep</span> <span class=o>=</span> <span class=n>csv</span>
+
+            <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=s2>"</span><span class=se>\n\n</span><span class=s2>"</span><span class=p>)</span>
+
+            <span class=n>sep</span> <span class=o>=</span> <span class=s2>""</span>
+            <span class=k>for</span> <span class=n>t</span> <span class=ow>in</span> <span class=n>teams</span><span class=p>:</span>
+                <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>sep</span><span class=p>)</span>
+                <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>t</span><span class=p>)</span>
+                <span class=n>sep</span> <span class=o>=</span> <span class=s2>" "</span>
+
+            <span class=k>for</span> <span class=n>row</span> <span class=ow>in</span> <span class=bp>self</span><span class=p>:</span>
+                <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span>
+                <span class=n>sep</span> <span class=o>=</span> <span class=s2>""</span>
+                <span class=k>for</span> <span class=n>d</span> <span class=ow>in</span> <span class=n>row</span><span class=p>:</span>
+                    <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>sep</span><span class=p>)</span>
+                    <span class=k>if</span> <span class=n>d</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>
+                        <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=sa>f</span><span class=s2>"@</span><span class=si>{</span><span class=n>teams</span><span class=p>[</span><span class=o>-</span><span class=n>d</span><span class=w> </span><span class=o>-</span><span class=w> </span><span class=mi>1</span><span class=p>]</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>
+                    <span class=k>elif</span> <span class=n>d</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+                        <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>teams</span><span class=p>[</span><span class=n>d</span> <span class=o>-</span> <span class=mi>1</span><span class=p>])</span>
+                    <span class=k>else</span><span class=p>:</span>
+                        <span class=n>sio</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=s2>"-"</span><span class=p>)</span>
+                    <span class=n>sep</span> <span class=o>=</span> <span class=s2>" "</span>
+
+            <span class=k>return</span> <span class=n>sio</span><span class=o>.</span><span class=n>getvalue</span><span class=p>()</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.game_plan</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

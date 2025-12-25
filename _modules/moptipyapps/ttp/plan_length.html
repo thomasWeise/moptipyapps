@@ -1,0 +1,224 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.ttp.plan_length — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/ttp/plan_length.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.plan_length</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.ttp.plan_length</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>An objective computing the total travel length of all teams in a game plan.</span>
+
+<span class=sd>This objective function takes a game plan as argument and computes the total</span>
+<span class=sd>travel length for all teams.</span>
+<span class=sd>A :mod:`~moptipyapps.ttp.game_plan` is basically a matrix that, for each day</span>
+<span class=sd>(first dimension) stores against which each team (second dimension) plays.</span>
+<span class=sd>If a team plays at home (has a home game), its opponent is stored as a</span>
+<span class=sd>positive number.</span>
+<span class=sd>If the team has an away game, i.e., needs to visit the opponent, then this</span>
+<span class=sd>opponent is stored as a negative number.</span>
+<span class=sd>Team IDs go from `1` to `n`, i.e., a value in `1..n` indicates a home game</span>
+<span class=sd>and a value in `-n..-1` indicates an away game.</span>
+<span class=sd>The value `0` denotes a `bye`, i.e., that no game is scheduled for a team</span>
+<span class=sd>at the given day.</span>
+
+<span class=sd>The total game plan length is computed as follows:</span>
+
+<span class=sd>1. the total length = 0</span>
+<span class=sd>2. for each team,</span>
+<span class=sd>    1. start at the current location = home</span>
+<span class=sd>    2. for each day,</span>
+<span class=sd>        1. if the opponent number is negative, the next location is the</span>
+<span class=sd>           opponent's hometown;</span>
+<span class=sd>        2. else if the opponent number is positive, the next location is the</span>
+<span class=sd>           own hometown;</span>
+<span class=sd>        3. else (if the opponent number is 0): add the `bye penalty` to the</span>
+<span class=sd>           total length and jump to the next iteration</span>
+<span class=sd>        4. add the distance from the current to the next location to the total</span>
+<span class=sd>           length</span>
+<span class=sd>        5. set the current location = the next location</span>
+<span class=sd>    3. if the current location != own hometown, add the travel distance back</span>
+<span class=sd>       from the current location to the hometown to the total travel length.</span>
+
+<span class=sd>As penalty for the `bye` situation where no game is scheduled, we use twice</span>
+<span class=sd>the maximum distance between any two teams plus 1.</span>
+<span class=sd>The logic is that if a `bye` (i.e., a `0`) inserted into a game plan, it</span>
+<span class=sd>replaces one game. Since it replaces one game, it affects up to two travels,</span>
+<span class=sd>namely from the previous location to the game location and from the game</span>
+<span class=sd>location to the next location.</span>
+<span class=sd>So the optimization process could sneakily try to cut longer legs of the</span>
+<span class=sd>tournament by inserting a `bye`.</span>
+<span class=sd>The longest imaginable travel would be between the two cities that are</span>
+<span class=sd>farthest away from each other and back.</span>
+<span class=sd>By making the penalty for a `bye` exactly one distance unit longer than</span>
+<span class=sd>this longest imaginable distance, we ensure that the travel length can</span>
+<span class=sd>never be reduced by inserting a `bye`.</span>
+<span class=sd>Thus, having a `bye` is always more costly than any other travel it could</span>
+<span class=sd>replace.</span>
+<span class=sd>"""</span>
+
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.game_plan</span><span class=w> </span><span class=kn>import</span> <span class=n>GamePlan</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.ttp.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+
+
+<div class=viewcode-block id=game_plan_length>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.plan_length.game_plan_length>[docs]</a>
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>game_plan_length</span><span class=p>(</span>
+        <span class=n>y</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>distances</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>bye_penalty</span><span class=p>:</span> <span class=nb>int</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the total travel length of a game plan.</span>
+
+<span class=sd>    :param y: the game plan</span>
+<span class=sd>    :param distances: the distance matrix</span>
+<span class=sd>    :param bye_penalty: the penalty for `bye = 0` entries, i.e., days where</span>
+<span class=sd>        no game is scheduled</span>
+<span class=sd>    :returns: the total plan length</span>
+
+<span class=sd>    >>> yy = np.array([[ 2, -1,  4, -3],</span>
+<span class=sd>    ...                [-2,  1, -4,  3],</span>
+<span class=sd>    ...                [ 3,  4, -1, -2],</span>
+<span class=sd>    ...                [-3, -4,  1,  2],</span>
+<span class=sd>    ...                [ 4,  3, -2, -1],</span>
+<span class=sd>    ...                [-4, -3,  2,  1]], int)</span>
+<span class=sd>    >>> dd = np.array([[ 0,  1,  2,  3],</span>
+<span class=sd>    ...                [ 7,  0,  4,  5],</span>
+<span class=sd>    ...                [ 8, 10,  0,  6],</span>
+<span class=sd>    ...                [ 9, 11, 12,  0]], int)</span>
+<span class=sd>    >>> 0 + 1 + 7 + 2 + 8 + 3 + 9  # team 1</span>
+<span class=sd>    30</span>
+<span class=sd>    >>> 7 + 1 + 0 + 5 + 11 + 4 + 10  # team 2</span>
+<span class=sd>    38</span>
+<span class=sd>    >>> 0 + 6 + 9 + 2 + 10 + 4  # team 3</span>
+<span class=sd>    31</span>
+<span class=sd>    >>> 12 + 6 + 11 + 5 + 9 + 3  # team 4</span>
+<span class=sd>    46</span>
+<span class=sd>    >>> 30 + 38 + 31 + 46  # total sum</span>
+<span class=sd>    145</span>
+<span class=sd>    >>> game_plan_length(yy, dd, 0)</span>
+<span class=sd>    145</span>
+
+<span class=sd>    >>> yy[1, 0] = 0  # add a bye</span>
+<span class=sd>    >>> 0 + 25 + 0 + 2 + 8 + 3 + 9  # team 1</span>
+<span class=sd>    47</span>
+<span class=sd>    >>> game_plan_length(yy, dd, 2 * 12 + 1)</span>
+<span class=sd>    162</span>
+<span class=sd>    """</span>
+    <span class=n>days</span><span class=p>,</span> <span class=n>teams</span> <span class=o>=</span> <span class=n>y</span><span class=o>.</span><span class=n>shape</span>  <span class=c1># get the number of days and teams</span>
+    <span class=n>length</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+
+    <span class=k>for</span> <span class=n>team</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>teams</span><span class=p>):</span>  <span class=c1># for each team</span>
+        <span class=n>current_location</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>team</span>  <span class=c1># start at home</span>
+        <span class=k>for</span> <span class=n>day</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>days</span><span class=p>):</span>  <span class=c1># for each day</span>
+            <span class=n>next_location</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>y</span><span class=p>[</span><span class=n>day</span><span class=p>,</span> <span class=n>team</span><span class=p>]</span>
+            <span class=k>if</span> <span class=n>next_location</span> <span class=o><</span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># away game at other team</span>
+                <span class=n>next_location</span> <span class=o>=</span> <span class=p>(</span><span class=o>-</span><span class=n>next_location</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span>
+            <span class=k>elif</span> <span class=n>next_location</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>  <span class=c1># home game at home</span>
+                <span class=n>next_location</span> <span class=o>=</span> <span class=n>team</span>
+            <span class=k>else</span><span class=p>:</span>  <span class=c1># bye = no game = penalty</span>
+                <span class=n>length</span> <span class=o>+=</span> <span class=n>bye_penalty</span>
+                <span class=k>continue</span>  <span class=c1># team stays in current location</span>
+            <span class=k>if</span> <span class=n>current_location</span> <span class=o>==</span> <span class=n>next_location</span><span class=p>:</span>
+                <span class=k>continue</span>  <span class=c1># no move</span>
+            <span class=n>length</span> <span class=o>+=</span> <span class=n>distances</span><span class=p>[</span><span class=n>current_location</span><span class=p>,</span> <span class=n>next_location</span><span class=p>]</span>
+            <span class=n>current_location</span> <span class=o>=</span> <span class=n>next_location</span>
+
+        <span class=k>if</span> <span class=n>current_location</span> <span class=o>!=</span> <span class=n>team</span><span class=p>:</span>  <span class=c1># go back home</span>
+            <span class=n>length</span> <span class=o>+=</span> <span class=n>distances</span><span class=p>[</span><span class=n>current_location</span><span class=p>,</span> <span class=n>team</span><span class=p>]</span>
+
+    <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=n>length</span><span class=p>)</span></div>
+
+
+
+<div class=viewcode-block id=GamePlanLength>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.plan_length.GamePlanLength>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>GamePlanLength</span><span class=p>(</span><span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the total travel length of a game plan.</span>
+
+<span class=sd>    This objective function sums up all the travel lengths over all teams.</span>
+<span class=sd>    Days without game (`bye`) are penalized.</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize the game plan length objective function.</span>
+
+<span class=sd>        :param instance: the TTP instance</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>Instance</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=s2>"instance"</span><span class=p>,</span> <span class=n>Instance</span><span class=p>)</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
+
+        <span class=c1>#: the TTP instance</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span>
+        <span class=c1>#: the bye penalty</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>bye_penalty</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=mi>2</span> <span class=o>*</span> <span class=nb>int</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>max</span><span class=p>()))</span> <span class=o>+</span> <span class=mi>1</span>
+
+<div class=viewcode-block id=GamePlanLength.evaluate>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.plan_length.GamePlanLength.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>GamePlan</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Count the errors in a game plan as objective value.</span>
+
+<span class=sd>        :param x: the game plan</span>
+<span class=sd>        :return: the number of errors in the plan</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>game_plan_length</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>x</span><span class=o>.</span><span class=n>instance</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>bye_penalty</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=GamePlanLength.lower_bound>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.plan_length.GamePlanLength.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Obtain the lower bound for the travel length.</span>
+
+<span class=sd>        :return: `0`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mi>0</span></div>
+
+
+<div class=viewcode-block id=GamePlanLength.upper_bound>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.plan_length.GamePlanLength.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Compute upper bound for the travel length: All `n*days*bye_penalty`.</span>
+
+<span class=sd>        :returns: `n * days * self.bye_penalty`</span>
+<span class=sd>        """</span>
+        <span class=n>n</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n_cities</span>
+        <span class=n>rounds</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>rounds</span>
+        <span class=n>days</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=n>n</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>*</span> <span class=n>rounds</span>
+        <span class=k>return</span> <span class=n>n</span> <span class=o>*</span> <span class=n>days</span> <span class=o>*</span> <span class=bp>self</span><span class=o>.</span><span class=n>bye_penalty</span></div>
+
+
+<div class=viewcode-block id=GamePlanLength.is_always_integer>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.plan_length.GamePlanLength.is_always_integer>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>is_always_integer</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>bool</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        State that this objective function is always integer-valued.</span>
+
+<span class=sd>        :return: `True`</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=kc>True</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Get the name of this objective function."""</span>
+        <span class=k>return</span> <span class=s2>"planLength"</span>
+
+<div class=viewcode-block id=GamePlanLength.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.ttp.html#moptipyapps.ttp.plan_length.GamePlanLength.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters of the instance to the given logger.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"byePenalty"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>bye_penalty</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.ttp.plan_length</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>

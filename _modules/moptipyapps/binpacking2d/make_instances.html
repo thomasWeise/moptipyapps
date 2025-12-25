@@ -1,0 +1,241 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.binpacking2d.make_instances — moptipyapps 0.8.79 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=38375235"></script><script src="../../../_static/doctools.js?v=9bcbadda"></script><script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/binpacking2d/make_instances.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.make_instances</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.binpacking2d.make_instances</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Obtain Instances of the 2D-dimensional Bin Packing Problem.</span>
+
+<span class=sd>With this program, we can obtain the instances of the two-dimensional bin</span>
+<span class=sd>packing problem and convert them to a singular resource file.</span>
+<span class=sd>The resource file holds one instance per line.</span>
+
+<span class=sd>1. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele Monaci.</span>
+<span class=sd>   *2DPackLib*.</span>
+<span class=sd>   https://site.unibo.it/operations-research/en/research/2dpacklib</span>
+<span class=sd>2. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele</span>
+<span class=sd>   Monaci. 2DPackLib: A Two-Dimensional Cutting and Packing Library.</span>
+<span class=sd>   *Optimization Letters* 16(2):471-480. March 2022.</span>
+<span class=sd>   https://doi.org/10.1007/s11590-021-01808-y</span>
+<span class=sd>"""</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>zipfile</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>io</span><span class=w> </span><span class=kn>import</span> <span class=n>BytesIO</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>math</span><span class=w> </span><span class=kn>import</span> <span class=n>isqrt</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>os.path</span><span class=w> </span><span class=kn>import</span> <span class=n>dirname</span><span class=p>,</span> <span class=n>exists</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=c1># noinspection PyPackageRequirements</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>certifi</span>  <span class=c1># type: ignore</span>
+
+<span class=c1># noinspection PyPackageRequirements</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>urllib3</span>  <span class=c1># type: ignore</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span><span class=p>,</span> <span class=n>directory_path</span><span class=p>,</span> <span class=n>file_path</span><span class=p>,</span> <span class=n>write_lines</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.temp</span><span class=w> </span><span class=kn>import</span> <span class=n>temp_dir</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>inst_mod</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>INSTANCES_RESOURCE</span><span class=p>,</span>
+    <span class=n>Instance</span><span class=p>,</span>
+<span class=p>)</span>
+
+<span class=c1>#: the base url for 2DPackLib</span>
+<span class=n>__BASE_URL</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> \
+    <span class=s2>"https://site.unibo.it/operations-research/en/research/2dpacklib"</span>
+
+<span class=c1>#: The base URLs of the relevant 2DPackLib instances.</span>
+<span class=n>__BASE_URLS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span>
+    <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>__BASE_URL</span><span class=si>}</span><span class=s2>/</span><span class=si>{</span><span class=n>f</span><span class=si>}</span><span class=s2>.zip"</span> <span class=k>for</span> <span class=n>f</span> <span class=ow>in</span> <span class=p>[</span><span class=s2>"a"</span><span class=p>,</span> <span class=s2>"beng"</span><span class=p>,</span> <span class=s2>"class"</span><span class=p>])</span>
+
+
+<div class=viewcode-block id=download_2dpacklib_instances>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.make_instances.download_2dpacklib_instances>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>download_2dpacklib_instances</span><span class=p>(</span>
+        <span class=n>dest_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+        <span class=n>source_urls</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>__BASE_URLS</span><span class=p>,</span>
+        <span class=n>http</span><span class=p>:</span> <span class=n>urllib3</span><span class=o>.</span><span class=n>PoolManager</span> <span class=o>=</span> <span class=n>urllib3</span><span class=o>.</span><span class=n>PoolManager</span><span class=p>(</span>
+            <span class=n>cert_reqs</span><span class=o>=</span><span class=s2>"CERT_REQUIRED"</span><span class=p>,</span> <span class=n>ca_certs</span><span class=o>=</span><span class=n>certifi</span><span class=o>.</span><span class=n>where</span><span class=p>()))</span> \
+        <span class=o>-></span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Path</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Download the instances from 2DPackLib to a folder.</span>
+
+<span class=sd>    This function downloads the instances from 2DPackLib, which are provided</span>
+<span class=sd>    as zip archives containing one file per instance. It will extract all the</span>
+<span class=sd>    instances into the folder `dest_dir` and return a tuple of the extracted</span>
+<span class=sd>    files. You can specify the source URLs of the zip archives if you want,</span>
+<span class=sd>    but by default we use the three instance sets `A`, `BENG`, and `CLASS`.</span>
+
+<span class=sd>    :param dest_dir: the destination directory</span>
+<span class=sd>    :param source_urls: the source URLs from which to download the zip</span>
+<span class=sd>        archives with the 2DPackLib-formatted instances</span>
+<span class=sd>    :param http: the HTTP pool</span>
+<span class=sd>    :return: the list of unpackaged files</span>
+<span class=sd>    """</span>
+    <span class=n>dest</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>directory_path</span><span class=p>(</span><span class=n>dest_dir</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>source_urls</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>source_urls</span><span class=p>,</span> <span class=s2>"source_urls"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+    <span class=n>result</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=n>Path</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>url</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>source_urls</span><span class=p>):</span>  <span class=c1># iterate over the source URLs</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>url</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>url</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"source_urls[</span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>]"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+
+        <span class=n>response</span> <span class=o>=</span> <span class=n>http</span><span class=o>.</span><span class=n>request</span><span class=p>(</span>  <span class=c1># download the zip archive</span>
+            <span class=s2>"GET"</span><span class=p>,</span> <span class=n>url</span><span class=p>,</span> <span class=n>redirect</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>retries</span><span class=o>=</span><span class=mi>30</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>zipfile</span><span class=o>.</span><span class=n>ZipFile</span><span class=p>(</span><span class=n>BytesIO</span><span class=p>(</span><span class=n>response</span><span class=o>.</span><span class=n>data</span><span class=p>),</span> <span class=n>mode</span><span class=o>=</span><span class=s2>"r"</span><span class=p>)</span> <span class=k>as</span> <span class=n>z</span><span class=p>:</span>
+            <span class=c1># unzip the ins2D files from the archives</span>
+            <span class=n>files</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=n>f</span> <span class=k>for</span> <span class=n>f</span> <span class=ow>in</span> <span class=n>z</span><span class=o>.</span><span class=n>namelist</span><span class=p>()</span>
+                                    <span class=k>if</span> <span class=n>f</span><span class=o>.</span><span class=n>endswith</span><span class=p>(</span><span class=s2>".ins2D"</span><span class=p>)]</span>
+            <span class=n>paths</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=n>dest</span><span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=n>f</span><span class=p>)</span> <span class=k>for</span> <span class=n>f</span> <span class=ow>in</span> <span class=n>files</span><span class=p>]</span>
+            <span class=k>for</span> <span class=n>path</span> <span class=ow>in</span> <span class=n>paths</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>exists</span><span class=p>(</span><span class=n>path</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"file </span><span class=si>{</span><span class=n>path</span><span class=si>}</span><span class=s2> already exists!"</span><span class=p>)</span>
+            <span class=n>z</span><span class=o>.</span><span class=n>extractall</span><span class=p>(</span><span class=n>dest</span><span class=p>,</span> <span class=n>members</span><span class=o>=</span><span class=n>files</span><span class=p>)</span>
+            <span class=k>for</span> <span class=n>path</span> <span class=ow>in</span> <span class=n>paths</span><span class=p>:</span>
+                <span class=n>path</span><span class=o>.</span><span class=n>enforce_file</span><span class=p>()</span>
+                <span class=n>result</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>path</span><span class=p>)</span>
+    <span class=n>result</span><span class=o>.</span><span class=n>sort</span><span class=p>()</span>
+    <span class=k>return</span> <span class=nb>tuple</span><span class=p>(</span><span class=n>result</span><span class=p>)</span></div>
+
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__normalize_2dpacklib_inst_name</span><span class=p>(</span><span class=n>instname</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Normalize an instance name.</span>
+
+<span class=sd>    :param instname: the name</span>
+<span class=sd>    :return: the normalized name</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>instname</span><span class=p>,</span> <span class=nb>str</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>instname</span><span class=p>,</span> <span class=s2>"name"</span><span class=p>,</span> <span class=nb>str</span><span class=p>)</span>
+    <span class=n>instname</span> <span class=o>=</span> <span class=n>instname</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span><span class=o>.</span><span class=n>lower</span><span class=p>()</span>
+    <span class=k>if</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>instname</span><span class=p>)</span> <span class=o>==</span> <span class=mi>2</span><span class=p>)</span> <span class=ow>and</span> \
+            <span class=p>(</span><span class=n>instname</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=ow>in</span> <span class=s2>"abcdefghijklmnoprstuvwxyz"</span><span class=p>)</span> <span class=ow>and</span> \
+            <span class=p>(</span><span class=n>instname</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=ow>in</span> <span class=s2>"123456789"</span><span class=p>):</span>
+        <span class=k>return</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>instname</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=si>}</span><span class=s2>0</span><span class=si>{</span><span class=n>instname</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>if</span> <span class=n>instname</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=s2>"cl_"</span><span class=p>):</span>
+        <span class=k>return</span> <span class=sa>f</span><span class=s2>"cl</span><span class=si>{</span><span class=n>instname</span><span class=p>[</span><span class=mi>3</span><span class=p>:]</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>return</span> <span class=n>instname</span>
+
+
+<div class=viewcode-block id=append_almost_squares_strings>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.make_instances.append_almost_squares_strings>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>append_almost_squares_strings</span><span class=p>(</span><span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+        <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]],</span> <span class=n>Any</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Append the strings of the almost squares instances.</span>
+
+<span class=sd>    :param collector: the instance collector</span>
+<span class=sd>    :return: the strings</span>
+<span class=sd>    """</span>
+    <span class=n>objects</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[[</span><span class=mi>2</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1</span><span class=p>]]</span>
+    <span class=n>size</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>2</span>
+    <span class=k>for</span> <span class=n>small_side</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=mi>2</span><span class=p>,</span> <span class=mi>36</span><span class=p>):</span>
+        <span class=n>big_side</span> <span class=o>=</span> <span class=n>small_side</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=n>objects</span><span class=o>.</span><span class=n>append</span><span class=p>([</span><span class=n>big_side</span><span class=p>,</span> <span class=n>small_side</span><span class=p>,</span> <span class=mi>1</span><span class=p>])</span>
+        <span class=n>size</span> <span class=o>+=</span> <span class=n>small_side</span> <span class=o>*</span> <span class=n>big_side</span>
+
+        <span class=n>bin_small</span> <span class=o>=</span> <span class=n>isqrt</span><span class=p>(</span><span class=n>size</span><span class=p>)</span>
+        <span class=n>bin_big</span> <span class=o>=</span> <span class=n>bin_small</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=p>(</span><span class=n>bin_big</span> <span class=o>*</span> <span class=n>bin_small</span><span class=p>)</span> <span class=o>==</span> <span class=n>size</span><span class=p>:</span>
+            <span class=n>iname</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=nb>str</span><span class=p>(</span><span class=n>small_side</span><span class=p>)</span>
+            <span class=n>iname</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"asqas</span><span class=si>{</span><span class=n>iname</span><span class=si>}</span><span class=s2>"</span> <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>iname</span><span class=p>)</span> <span class=o>>=</span> <span class=mi>2</span> <span class=k>else</span> <span class=sa>f</span><span class=s2>"asqas0</span><span class=si>{</span><span class=n>iname</span><span class=si>}</span><span class=s2>"</span>
+            <span class=n>collector</span><span class=p>((</span><span class=n>iname</span><span class=p>,</span> <span class=n>Instance</span><span class=p>(</span>
+                <span class=n>iname</span><span class=p>,</span> <span class=n>bin_big</span><span class=p>,</span> <span class=n>bin_small</span><span class=p>,</span> <span class=n>objects</span><span class=p>)</span><span class=o>.</span><span class=n>to_compact_str</span><span class=p>()))</span></div>
+
+
+
+<div class=viewcode-block id=join_instances_to_compact>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.make_instances.join_instances_to_compact>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>join_instances_to_compact</span><span class=p>(</span>
+        <span class=n>binpacklib2d_files</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>],</span> <span class=n>dest_file</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+        <span class=n>normalizer</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>__normalize_2dpacklib_inst_name</span><span class=p>)</span> \
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Path</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Join all instances from a set of 2DPackLib files to one compact file.</span>
+
+<span class=sd>    :param binpacklib2d_files: the iterable of 2DPackLib file paths</span>
+<span class=sd>    :param dest_file: the destination file</span>
+<span class=sd>    :param normalizer: the name normalizer, i.e., a function that processes</span>
+<span class=sd>        and/or transforms an instance name</span>
+<span class=sd>    :return: the canonical destination path and the list of instance names</span>
+<span class=sd>        stored</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>binpacklib2d_files</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>binpacklib2d_files</span><span class=p>,</span> <span class=s2>"files"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>callable</span><span class=p>(</span><span class=n>normalizer</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>normalizer</span><span class=p>,</span> <span class=s2>"normalizer"</span><span class=p>,</span> <span class=n>call</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span>
+    <span class=n>dest_path</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>dest_file</span><span class=p>)</span>
+    <span class=n>data</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=k>for</span> <span class=n>file</span> <span class=ow>in</span> <span class=n>binpacklib2d_files</span><span class=p>:</span>
+        <span class=n>inst</span><span class=p>:</span> <span class=n>Instance</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_2dpacklib</span><span class=p>(</span><span class=n>file_path</span><span class=p>(</span><span class=n>file</span><span class=p>))</span>
+        <span class=n>inst</span><span class=o>.</span><span class=n>name</span> <span class=o>=</span> <span class=n>normalizer</span><span class=p>(</span><span class=n>inst</span><span class=o>.</span><span class=n>name</span><span class=p>)</span>
+        <span class=n>data</span><span class=o>.</span><span class=n>append</span><span class=p>((</span><span class=n>inst</span><span class=o>.</span><span class=n>name</span><span class=p>,</span> <span class=n>inst</span><span class=o>.</span><span class=n>to_compact_str</span><span class=p>()))</span>
+    <span class=n>append_almost_squares_strings</span><span class=p>(</span><span class=n>data</span><span class=o>.</span><span class=n>append</span><span class=p>)</span>  <span class=c1># add the asquas instances</span>
+    <span class=n>data</span><span class=o>.</span><span class=n>sort</span><span class=p>()</span>
+    <span class=k>with</span> <span class=n>dest_path</span><span class=o>.</span><span class=n>open_for_write</span><span class=p>()</span> <span class=k>as</span> <span class=n>wd</span><span class=p>:</span>
+        <span class=n>write_lines</span><span class=p>((</span><span class=n>content</span> <span class=k>for</span> <span class=n>_</span><span class=p>,</span> <span class=n>content</span> <span class=ow>in</span> <span class=n>data</span><span class=p>),</span> <span class=n>wd</span><span class=p>)</span>
+    <span class=n>dest_path</span><span class=o>.</span><span class=n>enforce_file</span><span class=p>()</span>
+    <span class=k>return</span> <span class=n>dest_path</span><span class=p>,</span> <span class=p>[</span><span class=n>thename</span> <span class=k>for</span> <span class=n>thename</span><span class=p>,</span> <span class=n>_</span> <span class=ow>in</span> <span class=n>data</span><span class=p>]</span></div>
+
+
+
+<div class=viewcode-block id=make_2dpacklib_resource>
+<a class=viewcode-back href=../../../moptipyapps.binpacking2d.html#moptipyapps.binpacking2d.make_instances.make_2dpacklib_resource>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>make_2dpacklib_resource</span><span class=p>(</span>
+        <span class=n>dest_file</span><span class=p>:</span> <span class=s2>"str | None"</span> <span class=o>=</span> <span class=kc>None</span><span class=p>,</span>
+        <span class=n>source_urls</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>__BASE_URLS</span><span class=p>,</span>
+        <span class=n>normalizer</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span><span class=nb>str</span><span class=p>],</span> <span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>__normalize_2dpacklib_inst_name</span><span class=p>)</span>\
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Path</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>str</span><span class=p>]]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Make the resource with all the relevant 2DPackLib instances.</span>
+
+<span class=sd>    :param dest_file: the optional path to the destination file</span>
+<span class=sd>    :param source_urls: the source URLs from which to download the zip</span>
+<span class=sd>        archives with the 2DPackLib-formatted instances</span>
+<span class=sd>    :param normalizer: the name normalizer, i.e., a function that processes</span>
+<span class=sd>        and/or transforms an instance name</span>
+<span class=sd>    :return: the canonical path to the and the list of instance names stored</span>
+<span class=sd>    """</span>
+    <span class=n>dest_path</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>directory_path</span><span class=p>(</span><span class=n>dirname</span><span class=p>(</span><span class=n>inst_mod</span><span class=o>.</span><span class=vm>__file__</span><span class=p>))</span>\
+        <span class=o>.</span><span class=n>resolve_inside</span><span class=p>(</span><span class=n>INSTANCES_RESOURCE</span><span class=p>)</span> <span class=k>if</span> <span class=n>dest_file</span> <span class=ow>is</span> <span class=kc>None</span> \
+        <span class=k>else</span> <span class=n>Path</span><span class=p>(</span><span class=n>dest_file</span><span class=p>)</span>
+    <span class=k>with</span> <span class=n>temp_dir</span><span class=p>()</span> <span class=k>as</span> <span class=n>temp</span><span class=p>:</span>
+        <span class=n>files</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>download_2dpacklib_instances</span><span class=p>(</span>
+            <span class=n>dest_dir</span><span class=o>=</span><span class=n>temp</span><span class=p>,</span> <span class=n>source_urls</span><span class=o>=</span><span class=n>source_urls</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>join_instances_to_compact</span><span class=p>(</span>
+            <span class=n>files</span><span class=p>,</span> <span class=n>dest_path</span><span class=p>,</span> <span class=n>normalizer</span><span class=p>)</span></div>
+
+
+
+<span class=c1># create the tables if this is the main script</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>_</span><span class=p>,</span> <span class=n>names</span> <span class=o>=</span> <span class=n>make_2dpacklib_resource</span><span class=p>()</span>
+    <span class=n>rows</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=s2>"_INSTANCES: Final[tuple[str, ...]] = ("</span><span class=p>]</span>
+    <span class=n>current</span> <span class=o>=</span> <span class=s2>"    "</span>
+    <span class=n>has_space</span><span class=p>:</span> <span class=nb>bool</span> <span class=o>=</span> <span class=kc>True</span>
+    <span class=k>for</span> <span class=n>name</span> <span class=ow>in</span> <span class=n>names</span><span class=p>:</span>
+        <span class=k>if</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>current</span><span class=p>)</span> <span class=o>+</span> <span class=p>(</span><span class=mi>3</span> <span class=k>if</span> <span class=n>has_space</span> <span class=k>else</span> <span class=mi>4</span><span class=p>)</span> <span class=o>+</span> <span class=nb>len</span><span class=p>(</span><span class=n>name</span><span class=p>))</span> <span class=o>></span> <span class=mi>78</span><span class=p>:</span>
+            <span class=n>rows</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>current</span><span class=p>)</span>
+            <span class=n>current</span> <span class=o>=</span> <span class=s2>"    "</span>
+            <span class=n>has_space</span> <span class=o>=</span> <span class=kc>True</span>
+        <span class=n>current</span> <span class=o>=</span> <span class=sa>f</span><span class=s1>'</span><span class=si>{</span><span class=n>current</span><span class=si>}</span><span class=s1>"</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s1>",'</span> <span class=k>if</span> <span class=n>has_space</span> <span class=k>else</span> \
+            <span class=sa>f</span><span class=s1>'</span><span class=si>{</span><span class=n>current</span><span class=si>}</span><span class=s1> "</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s1>",'</span>
+        <span class=n>has_space</span> <span class=o>=</span> <span class=kc>False</span>
+    <span class=n>rows</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>current</span><span class=p>[:</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>+</span> <span class=s2>")"</span><span class=p>)</span>
+
+    <span class=n>cmt_strs</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span>
+        <span class=s2>"the the list of instance names of the 2DPackLib bin "</span>
+        <span class=sa>f</span><span class=s2>"packing set downloaded from </span><span class=si>{</span><span class=n>__BASE_URL</span><span class=si>}</span><span class=s2> ('a*',"</span>
+        <span class=s2>"'beng*', 'cl*') as well as the four non-trivial "</span>
+        <span class=s2>"'Almost Squares in Almost Squares' instances ('asqas*')."</span><span class=p>)</span><span class=o>.</span><span class=n>split</span><span class=p>()</span>
+    <span class=n>cmt_str</span> <span class=o>=</span> <span class=s2>"#:"</span>
+    <span class=k>for</span> <span class=n>word</span> <span class=ow>in</span> <span class=n>cmt_strs</span><span class=p>:</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>word</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span> <span class=o>+</span> <span class=nb>len</span><span class=p>(</span><span class=n>cmt_str</span><span class=p>)</span> <span class=o><=</span> <span class=mi>79</span><span class=p>:</span>
+            <span class=n>cmt_str</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>cmt_str</span><span class=si>}</span><span class=s2> </span><span class=si>{</span><span class=n>word</span><span class=si>}</span><span class=s2>"</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=nb>print</span><span class=p>(</span><span class=n>cmt_str</span><span class=p>)</span>  <span class=c1># noqa</span>
+            <span class=n>cmt_str</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"#: </span><span class=si>{</span><span class=n>word</span><span class=si>}</span><span class=s2>"</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>cmt_str</span><span class=p>)</span> <span class=o>></span> <span class=mi>2</span><span class=p>:</span>
+        <span class=nb>print</span><span class=p>(</span><span class=n>cmt_str</span><span class=p>)</span>  <span class=c1># noqa</span>
+
+    <span class=k>for</span> <span class=n>s</span> <span class=ow>in</span> <span class=n>rows</span><span class=p>:</span>
+        <span class=nb>print</span><span class=p>(</span><span class=n>s</span><span class=p>)</span>  <span class=c1># noqa</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.79 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.binpacking2d.make_instances</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2025, Thomas Weise.</div>
