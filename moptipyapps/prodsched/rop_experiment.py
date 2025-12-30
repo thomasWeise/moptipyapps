@@ -259,12 +259,12 @@ def run(dest: str, instances: str, n_inst: int, n_runs: int,
     op1: Final[Op1MNormal] = Op1MNormal(search_space, sd=2.5)
     op2: Final = Op2Uniform()
     algo: Final[NSGA2] = NSGA2(op0, op1, op2, ps, 1 / min(16, ps))
-    encoding: Final[ROPMultiSimulation] = ROPMultiSimulation(insts)
+    solution_space: Final[MultiStatisticsSpace] = MultiStatisticsSpace(insts)
+    encoding: Final[ROPMultiSimulation] = ROPMultiSimulation(solution_space)
     f1: Final[WorstAndMeanFillRate] = WorstAndMeanFillRate()
     f2: Final[MaxStockLevel] = MaxStockLevel()
     ws: Final[WeightedSum] = WeightedSum((f1, f2), (
         (1 / (f1.upper_bound() - f1.lower_bound())), 1 / (2 * n_prod)))
-    solution_space: Final[MultiStatisticsSpace] = MultiStatisticsSpace(insts)
 
     def __setup(_) -> MOExecution:
         """

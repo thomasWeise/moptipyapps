@@ -27,7 +27,7 @@ appear in the log files.
 """
 
 from dataclasses import dataclass
-from typing import Final, Generator, Iterable
+from typing import Final, Generator
 
 from moptipy.api.space import Space
 from moptipy.utils.logger import (
@@ -49,7 +49,8 @@ class MultiStatistics:
     #: the instance names
     inst_names: tuple[str, ...]
 
-    def __init__(self, instances: Iterable[Instance]) -> None:
+    def __init__(self, instances: tuple[Instance, ...],
+                 names: tuple[str, ...] | None = None) -> None:
         """
         Create the multi-statistics object.
 
@@ -57,8 +58,11 @@ class MultiStatistics:
         """
         object.__setattr__(self, "per_instance", tuple(
             Statistics(inst.n_products) for inst in instances))
-        object.__setattr__(self, "inst_names", tuple(
-            inst.name for inst in instances))
+        if names is None:
+            names = tuple(inst.name for inst in instances)
+        elif tuple.__len__(names) != tuple.__len__(instances):
+            raise ValueError(f"names {names} do not fit")
+        object.__setattr__(self, "inst_names", names)
 
 
 def to_stream(multi: MultiStatistics) -> Generator[str, None, None]:
@@ -89,8 +93,11 @@ class MultiStatisticsSpace(Space):
         for inst in instances:
             if not isinstance(inst, Instance):
                 raise type_error(inst, "instance", Instance)
-        #: The instance to which the packings apply.
+        #: The instance to which the statistics and simulations belong.
         self.instances: Final[tuple[Instance, ...]] = instances
+        #: the instance names
+        self.__inst_names: Final[tuple[str, ...]] = tuple(
+            inst.name for inst in instances)
 
     def copy(self, dest: MultiStatistics, source: MultiStatistics) -> None:
         """
@@ -108,7 +115,7 @@ class MultiStatisticsSpace(Space):
 
         :return: the empty multi-statistics record
         """
-        return MultiStatistics(self.instances)
+        return MultiStatistics(self.instances, self.__inst_names)
 
     def to_str(self, x: MultiStatistics) -> str:
         """
@@ -127,7 +134,8 @@ class MultiStatisticsSpace(Space):
         :param x2: the second multi-statistics
         :return: `True` if both multi-statistics have the same content
         """
-        return (x1 is x2) or (x1.per_instance == x2.per_instance)
+        return (x1 is x2) or ((x1.per_instance == x2.per_instance) and (
+            x1.inst_names == x2.inst_names))
 
     def from_str(self, text: str) -> MultiStatistics:
         """
@@ -156,6 +164,8 @@ class MultiStatisticsSpace(Space):
         for s in x.per_instance:
             if not isinstance(s, Statistics):
                 raise type_error(s, "x.per_instance[i]", Statistics)
+        if x.inst_names != self.__inst_names:
+            raise ValueError("Wrong instance names.")
 
     def n_points(self) -> int:
         """
@@ -180,5 +190,5 @@ class MultiStatisticsSpace(Space):
         :param logger: the logger for the parameters
         """
         super().log_parameters_to(logger)
-        for i, inst in enumerate(self.instances):
-            logger.key_value(f"inst_{i}", inst.name)
+        for i, inst in enumerate(self.__inst_names):
+            logger.key_value(f"inst_{i}", inst)

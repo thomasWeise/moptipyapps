@@ -36,8 +36,8 @@ This may consume quite some memory, but it might be faster.
 >>> inst2 = sample_mfc_instance(seed=200)
 
 >>> instances = (inst1, inst2)
->>> ms = ROPMultiSimulation(instances)
 >>> space = MultiStatisticsSpace(instances)
+>>> ms = ROPMultiSimulation(space)
 
 >>> x1 = np.array([4, 6, 3, 4, 4, 6, 3, 5, 6, 10])
 >>> y = space.create()
@@ -359,15 +359,12 @@ stocklevel.mean;30.090461520030797;2.907712049060156;4.261495763524114;\
 1.786007080448915;1.7664180248890007;2.4348085700118425;6.194289463750593
 fulfilled.rate;1;1;1;1;1;1;1;1;1;1;1
 """
-from typing import Final, Iterable
+from typing import Final
 
 import numpy as np
 from moptipy.api.encoding import Encoding
 from pycommons.types import type_error
 
-from moptipyapps.prodsched.instance import (
-    Instance,
-)
 from moptipyapps.prodsched.multistatistics import (
     MultiStatistics,
     MultiStatisticsSpace,
@@ -379,33 +376,33 @@ from moptipyapps.prodsched.statistics_collector import StatisticsCollector
 class ROPMultiSimulation(Encoding):
     """A multi-simulation that caches the results for reuse."""
 
-    def __init__(self, instances: Iterable[Instance]) -> None:
+    def __init__(self, space: MultiStatisticsSpace) -> None:
         """
         Instantiate the multi-statistics decoding.
 
         :param instances: the packing instance
         """
-        if not isinstance(instances, Iterable):
-            raise type_error(instances, "instances", Iterable)
+        if not isinstance(space, MultiStatisticsSpace):
+            raise type_error(space, "space", MultiStatisticsSpace)
         #: the statistics collectors
         col: Final[tuple[StatisticsCollector, ...]] = tuple(
-            StatisticsCollector(inst) for inst in instances)
-        #: the instance set
-        self.__instances: Final[tuple[Instance, ...]] = tuple(instances)
+            StatisticsCollector(inst) for inst in space.instances)
         #: the simulations and collectors
         self.__simulations: Final[tuple[tuple[
             ROPSimulation, StatisticsCollector], ...]] = tuple(
             (ROPSimulation(inst, col[i]), col[i])
-            for i, inst in enumerate(self.__instances))
+            for i, inst in enumerate(space.instances))
         #: the internal cache
         self.__cache: Final[dict[tuple[int, ...], MultiStatistics]] = {}
         #: the internal space
-        self.__space: Final[MultiStatisticsSpace] = MultiStatisticsSpace(
-            self.__instances)
+        self.__space: Final[MultiStatisticsSpace] = space
 
     def decode(self, x: np.ndarray, y: MultiStatistics) -> None:
         """
         Map a ROP setting to a multi-statistics.
+
+        This method uses an internal cache: The same re-order points will
+        yield the same statistics.
 
         :param x: the array
         :param y: the Gantt chart
@@ -425,7 +422,7 @@ class ROPMultiSimulation(Encoding):
         for i, (sim, col) in enumerate(self.__simulations):
             col.set_dest(y.per_instance[i])
             sim.ctrl_reset()
-            sim.set_rop(x)
+            sim.set_rop(x_tuple)
             sim.ctrl_run()
 
         # The simulation is completed. We can now cache the result.
