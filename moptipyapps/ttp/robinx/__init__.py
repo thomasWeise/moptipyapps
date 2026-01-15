@@ -15,13 +15,13 @@ The original data of `robinX` can be found at
 <https://robinxval.ugent.be/RobinX/travelRepo.php>
 """
 
-from importlib import resources  # nosem
-from typing import TextIO, cast
+from importlib import resources  # nosem  # noqa: RUF067
+from typing import TextIO, cast  # noqa: RUF067
 
-from pycommons.io.path import UTF8
+from pycommons.io.path import UTF8  # noqa: RUF067
 
 
-def open_resource_stream(file_name: str) -> TextIO:
+def open_resource_stream(file_name: str) -> TextIO:  # noqa: RUF067
     """
     Open a RobinX resource stream.
 

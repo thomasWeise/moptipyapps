@@ -31,11 +31,11 @@ The following additional tools are implemented:
 # Of course, this ignores the situation where there would really be an error.
 # But that is OK, because in that case we will crash later anyway.
 
-can_do: bool = True
-try:
-    from moptipy.utils.sys_info import add_dependency
-except ModuleNotFoundError:
-    can_do = False
+can_do: bool = True  # noqa: RUF067
+try:  # noqa: RUF067
+    from moptipy.utils.sys_info import add_dependency  # noqa: RUF067
+except ModuleNotFoundError:  # noqa: RUF067
+    can_do = False  # noqa: RUF067
 
-if can_do:
-    add_dependency("moptipyapps", ignore_if_make_build=True)
+if can_do:  # noqa: RUF067
+    add_dependency("moptipyapps", ignore_if_make_build=True)  # noqa: RUF067

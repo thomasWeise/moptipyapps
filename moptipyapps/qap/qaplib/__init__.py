@@ -10,13 +10,13 @@ QAPLIB -- A Quadratic Assignment Problem Library.
    1997. https://doi.org/10.1023/A:1008293323270.
 """
 
-from importlib import resources  # nosem
-from typing import TextIO, cast
+from importlib import resources  # nosem  # noqa: RUF067
+from typing import TextIO, cast  # noqa: RUF067
 
-from pycommons.io.path import UTF8
+from pycommons.io.path import UTF8  # noqa: RUF067
 
 
-def open_resource_stream(file_name: str) -> TextIO:
+def open_resource_stream(file_name: str) -> TextIO:  # noqa: RUF067
     """
     Open a QAPLib resource stream.
 
