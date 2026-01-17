@@ -33,4 +33,8 @@
 #
 
 # pycommons provides lots of utilities
-pycommons[dev] == 0.8.81
+pycommons[dev] == 0.8.82
+
+# for now, because otherwise the build fails
+sphinx == 8.2.3
+sphinx-autodoc-typehints == 3.5.2
