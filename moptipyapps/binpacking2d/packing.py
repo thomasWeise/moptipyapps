@@ -40,7 +40,7 @@ class Packing(Component, np.ndarray):
     #: the number of bins
     n_bins: int
 
-    def __new__(cls, instance: Instance) -> "Packing":
+    def __new__(cls, instance: Instance) -> "Packing":  # noqa: PYI034
         """
         Create a solution record for the 2D bin packing problem.
 

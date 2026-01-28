@@ -332,10 +332,11 @@ class Instance(TSPInstance):
     #: the data type to be used for plans
     game_plan_dtype: np.dtype
 
-    def __new__(cls, name: str, matrix: np.ndarray, teams: Iterable[str],
-                rounds: int, home_streak_min: int, home_streak_max: int,
-                away_streak_min: int, away_streak_max: int,
-                separation_min: int, separation_max: int,
+    def __new__(cls, name: str, matrix: np.ndarray,  # noqa: PYI034
+                teams: Iterable[str], rounds: int, home_streak_min: int,
+                home_streak_max: int, away_streak_min: int,
+                away_streak_max: int, separation_min: int,
+                separation_max: int,
                 tour_length_lower_bound: int = 0) -> "Instance":
         """
         Create an instance of the Traveling Salesperson Problem.

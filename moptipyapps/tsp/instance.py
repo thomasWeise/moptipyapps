@@ -841,7 +841,7 @@ class Instance(Component, np.ndarray):
     #: is the TSP instance symmetric?
     is_symmetric: bool
 
-    def __new__(cls, name: str, tour_length_lower_bound: int,
+    def __new__(cls, name: str, tour_length_lower_bound: int,  # noqa: PYI034
                 matrix: np.ndarray,
                 upper_bound_range_multiplier: int = 1) -> "Instance":
         """

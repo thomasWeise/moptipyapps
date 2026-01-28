@@ -537,7 +537,7 @@ class Instance(Component, np.ndarray):
     #: the minimum number of bins that this instance requires
     lower_bound_bins: int
 
-    def __new__(cls, name: str,
+    def __new__(cls, name: str,  # noqa: PYI034
                 bin_width: int, bin_height: int,
                 matrix: np.ndarray | list[list[int]]) -> "Instance":
         """

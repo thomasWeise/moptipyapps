@@ -49,7 +49,7 @@ class GamePlan(Component, np.ndarray):
     #: the TTP instance
     instance: Instance
 
-    def __new__(cls, instance: Instance) -> "GamePlan":
+    def __new__(cls, instance: Instance) -> "GamePlan":  # noqa: PYI034
         """
         Create a solution record for the Traveling Tournament Problem.
 
