@@ -279,9 +279,9 @@ The build only works under Linux.
 [`moptipyapps`](https://thomasweise.github.io/moptipyapps) is a library for implementing, using, and experimenting with metaheuristic optimization algorithms.
 Our project is developed for scientific, educational, and industrial applications.
 
-Copyright (C) 2023-2026  [Thomas Weise](http://iao.hfuu.edu.cn/5) (汤卫思教授)
+Copyright (C) 2023-2026 [Thomas Weise](https://thomasweise.github.io)  (汤卫思教授)
 
-Dr. [Thomas Weise](http://iao.hfuu.edu.cn/5) (see [Contact](#6-contact)) holds the copyright of this package *except* for the data of the benchmark sets we imported from other sources.
+Dr. [Thomas Weise](https://thomasweise.github.io)  (see [Contact](#6-contact)) holds the copyright of this package *except* for the data of the benchmark sets we imported from other sources.
 `moptipyapps` is provided to the public as open source software under the [GNU GENERAL PUBLIC LICENSE, Version 3, 29 June 2007](https://thomasweise.github.io/moptipyapps/LICENSE.html).
 Terms for other licenses, e.g., for specific industrial applications, can be negotiated with Dr. Thomas Weise (who can be reached via the [contact information](#6-contact) below).
 
@@ -309,8 +309,8 @@ If you have any concerns regarding security, please visit our [security policy](
 
 ## 6. Contact
 If you have any questions or suggestions, please contact
-Prof. Dr. [Thomas Weise](http://iao.hfuu.edu.cn/5) (汤卫思教授) of the 
-School of Artificial Intelligence and Big Data ([人工智能与大数据学院](http://www.hfuu.edu.cn/aibd/)) at
-[Hefei University](http://www.hfuu.edu.cn/english/) ([合肥大学](http://www.hfuu.edu.cn/)) in
+Prof. Dr. [Thomas Weise](https://thomasweise.github.io) (汤卫思教授) of the 
+School of Artificial Intelligence and Big Data ([人工智能与大数据学院](http://www.hfuu.edu.cn/aibd)) at
+[Hefei University](http://www.hfuu.edu.cn/english) ([合肥大学](http://www.hfuu.edu.cn)) in
 Hefei, Anhui, China (中国安徽省合肥市) via
 email to [tweise@hfuu.edu.cn](mailto:tweise@hfuu.edu.cn) with CC to [tweise@ustc.edu.cn](mailto:tweise@ustc.edu.cn).
