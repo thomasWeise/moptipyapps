@@ -1,4 +1,4 @@
-[![build](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yml/badge.svg)](https://github.com/thomasWeise/moptipy/actions/workflows/build.yml)
+[![build](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yml/badge.svg)](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yml)
 [![pypi version](https://img.shields.io/pypi/v/moptipyapps)](https://pypi.org/project/moptipyapps)
 [![pypi downloads](https://img.shields.io/pypi/dw/moptipyapps.svg)](https://pypistats.org/packages/moptipyapps)
 [![coverage report](https://thomasweise.github.io/moptipyapps/tc/badge.svg)](https://thomasweise.github.io/moptipyapps/tc/index.html)
@@ -279,9 +279,9 @@ The build only works under Linux.
 [`moptipyapps`](https://thomasweise.github.io/moptipyapps) is a library for implementing, using, and experimenting with metaheuristic optimization algorithms.
 Our project is developed for scientific, educational, and industrial applications.
 
-Copyright (C) 2023  [Thomas Weise](http://iao.hfuu.edu.cn/5) (汤卫思教授)
+Copyright (C) 2023-2026  [Thomas Weise](http://iao.hfuu.edu.cn/5) (汤卫思教授)
 
-Dr. Thomas Weise (see [Contact](#6-contact)) holds the copyright of this package *except* for the data of the benchmark sets we imported from other sources.
+Dr. [Thomas Weise](http://iao.hfuu.edu.cn/5) (see [Contact](#6-contact)) holds the copyright of this package *except* for the data of the benchmark sets we imported from other sources.
 `moptipyapps` is provided to the public as open source software under the [GNU GENERAL PUBLIC LICENSE, Version 3, 29 June 2007](https://thomasweise.github.io/moptipyapps/LICENSE.html).
 Terms for other licenses, e.g., for specific industrial applications, can be negotiated with Dr. Thomas Weise (who can be reached via the [contact information](#6-contact) below).
 

@@ -124,7 +124,7 @@ class Customer:
     """A customer represents purchase orders sequences."""
 
     #: the customer ID
-    id: int
+    pid: int
     #: the number of demands that the customer will issue
     n_demands: int
     #: the time when the customer begins doing their orders
@@ -139,7 +139,7 @@ class Customer:
 
     def __post_init__(self) -> None:
         """Perform sanity checks."""
-        check_int_range(self.id, "id", 0, 1_000_000_000_000)
+        check_int_range(self.pid, "pid", 0, 1_000_000_000_000)
         check_int_range(self.n_demands, "n_demands", 0, 1_000_000_000_000)
         check_int_range(self.time_offset, "time_offset", 0, 1_000_000_000_000)
         object.__setattr__(self, "between_order_times", distribution(
@@ -965,7 +965,7 @@ class InstanceGenerator(AbstractContextManager):
         n_demands: int = 0
         for cust in customers:
             prods.update(map(itemgetter(0), cust.demands_products))
-            custs.add(cust.id)
+            custs.add(cust.pid)
             n_demands += cust.n_demands
 
         if n_customers != (max(custs) - min(custs) + 1):
@@ -1028,7 +1028,7 @@ class InstanceGenerator(AbstractContextManager):
                     prod_src.extend(products)
                     psl = list.__len__(prod_src)
                 order[DEMAND_PRODUCT] = prod_src.pop(rnd.integers(psl))
-                order[DEMAND_CUSTOMER] = customer.id
+                order[DEMAND_CUSTOMER] = customer.pid
             rnd.shuffle(cust_orders)
 
             time: int = customer.time_offset

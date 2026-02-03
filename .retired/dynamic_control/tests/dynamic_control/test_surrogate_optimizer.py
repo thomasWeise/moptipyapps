@@ -67,7 +67,7 @@ def test_surrogate_cmaes() -> None:
     # we need to unpack any numba compilation here, or otherwise the
     # non-numba-compiled equations "__equations" or "__model" would crash.
     def __set_model_unpacked(model_equation, _rsm=real_set_model) -> None:
-        """An internal model setting routine unpacking numba."""
+        """Unpack numba."""
         if hasattr(model_equation, "py_func"):
             model_equation = model_equation.py_func
         _rsm(model_equation)

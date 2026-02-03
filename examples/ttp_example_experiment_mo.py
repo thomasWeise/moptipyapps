@@ -40,8 +40,8 @@ def make_instances() -> Iterable[Callable[[], Instance]]:
 
     :return: the instances to be used in the TTP experiment.
     """
-    return map(lambda i: lambda _i=i: Instance.from_resource(i),
-               Instance.list_resources())
+    return {i: lambda thei=i: Instance.from_resource(thei)
+            for i in Instance.list_resources()}
 
 
 def base_setup(instance: Instance) -> tuple[Permutations, MOExecution]:
