@@ -1,7 +1,7 @@
 [![build](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yml/badge.svg)](https://github.com/thomasWeise/moptipyapps/actions/workflows/build.yml)
 [![pypi version](https://img.shields.io/pypi/v/moptipyapps)](https://pypi.org/project/moptipyapps)
 [![pypi downloads](https://img.shields.io/pypi/dw/moptipyapps.svg)](https://pypistats.org/packages/moptipyapps)
-[![coverage report](https://thomasweise.github.io/moptipyapps/tc/badge.svg)](https://thomasweise.github.io/moptipyapps/tc/index.html)
+[![coverage report](https://shields.io/badge/pytest-coverage-009000)](https://thomasweise.github.io/moptipyapps/tc/index.html)
 [![https://thomasweise.github.io](https://shields.io/badge/home-thomasweise.github.io-009000)](https://thomasweise.github.io)
 
 
