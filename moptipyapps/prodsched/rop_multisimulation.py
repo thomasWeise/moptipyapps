@@ -392,8 +392,6 @@ class ROPMultiSimulation(Encoding):
             ROPSimulation, StatisticsCollector], ...]] = tuple(
             (ROPSimulation(inst, col[i]), col[i])
             for i, inst in enumerate(space.instances))
-        #: the internal cache
-        self.__cache: Final[dict[tuple[int, ...], MultiStatistics]] = {}
         #: the internal space
         self.__space: Final[MultiStatisticsSpace] = space
 
@@ -409,13 +407,6 @@ class ROPMultiSimulation(Encoding):
         """
         # First we map the vector to a tuple of integers.
         x_tuple: Final[tuple[int, ...]] = tuple(map(int, x))
-        # Now we can look up this tuple in the cache.
-        if x_tuple in self.__cache:
-            # If we get here, this means we already simulated this ROP.
-            # Since the simulations are deterministic, we can re-use the
-            # result.
-            self.__space.copy(y, self.__cache[x_tuple])
-            return  # And we are done.
 
         # If we get here, the ROP is new.
         # So we simulate it.
@@ -428,7 +419,6 @@ class ROPMultiSimulation(Encoding):
         # The simulation is completed. We can now cache the result.
         cached: Final[MultiStatistics] = self.__space.create()
         self.__space.copy(cached, y)
-        self.__cache[x_tuple] = cached
 
     def __str__(self) -> str:
         """

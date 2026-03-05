@@ -38,15 +38,13 @@ Dr. Thomas Weise holds the copyright of this package *except* for the JSSP insta
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in `moptipy` by you shall be under the above license, terms, and conditions, without any additional terms or conditions.
 Unless explicitly stating otherwise, contributors accept that their contributions will be licensed under the project terms.
-This also means that they grant Dr. Thomas Weise non-exclusive copyright of their contributions.
+This also means that they grant Dr. [Thomas Weise](https://thomasweise.github.io) non-exclusive copyright of their contributions.
 
 
 ## 3. Contact
-
 If you have any questions or suggestions, please contact
-Prof. Dr. [Thomas Weise](http://iao.hfuu.edu.cn/5) (汤卫思教授) of the 
-Institute of Applied Optimization (应用优化研究所, [IAO](http://iao.hfuu.edu.cn)) of the
-School of Artificial Intelligence and Big Data ([人工智能与大数据学院](http://www.hfuu.edu.cn/aibd/)) at
-[Hefei University](http://www.hfuu.edu.cn/english/) ([合肥学院](http://www.hfuu.edu.cn/)) in
+Prof. Dr. [Thomas Weise](https://thomasweise.github.io) (汤卫思教授) of the 
+School of Artificial Intelligence and Big Data ([人工智能与大数据学院](http://www.hfuu.edu.cn/aibd)) at
+[Hefei University](http://www.hfuu.edu.cn/english) ([合肥大学](http://www.hfuu.edu.cn)) in
 Hefei, Anhui, China (中国安徽省合肥市) via
 email to [tweise@hfuu.edu.cn](mailto:tweise@hfuu.edu.cn) with CC to [tweise@ustc.edu.cn](mailto:tweise@ustc.edu.cn).
