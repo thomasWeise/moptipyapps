@@ -210,7 +210,7 @@ def _schedule(y: np.ndarray, home_idx: int, away_idx: int, start: int,
         # If we got here, we are in the root call.
         # We first tried to find two open slots and failed.
         # Then we tried to find a single open slot and tried to re-schedule
-        # the other game to a later point in time ... an failed.
+        # the other game to a later point in time ... and failed.
         # Now we try rescheduling games towards an early time.
         start = end - 1
         end = direction = -1

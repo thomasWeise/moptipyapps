@@ -22,14 +22,14 @@
 
 ## 1. Introduction
 
-[`moptipy`](https://thomasweise.github.io/moptipy/) is a library with implementations of metaheuristic optimization methods in Python&nbsp;3.12 that also offers an environment for replicable experiments ([`flyer`](https://thomasweise.github.io/moptipy/_static/moptipy_flyer.pdf)).
+[`moptipy`](https://thomasweise.github.io/moptipy) is a library with implementations of metaheuristic optimization methods in Python&nbsp;3.12 that also offers an environment for replicable experiments ([`flyer`](https://thomasweise.github.io/moptipy/_static/moptipy_flyer.pdf)).
 [`moptipyapps`](https://thomasweise.github.io/moptipyapps) is a collection of applications and experiments based on `moptipy`.
 
 
 ## 2. Installation
 
-In order to use this package and to, e.g., run the example codes, you need to first install it using [`pip`](https://pypi.org/project/pip/) or some other tool that can install packages from [PyPi](https://pypi.org).
-You can install the newest version of this library from [PyPi](https://pypi.org/project/moptipyapps/) using [`pip`](https://pypi.org/project/pip/) by doing
+In order to use this package and to, e.g., run the example codes, you need to first install it using [`pip`](https://pypi.org/project/pip) or some other tool that can install packages from [PyPi](https://pypi.org).
+You can install the newest version of this library from [PyPi](https://pypi.org/project/moptipyapps) using [`pip`](https://pypi.org/project/pip) by doing
 
 ```shell
 pip install moptipyapps
@@ -95,7 +95,7 @@ The objective function would be some measure consistent with the goal of minimiz
 - [apply a randomized local search to one 2D bin packing instance](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_rls_py.html)
 - [measure the runtime of the different encodings for the 2D bin packing problem](https://thomasweise.github.io/moptipyapps/examples/binpacking2d_timing_py.html)
 
-Important work on this code has been contributed by Mr. Rui ZHAO (赵睿), <zr1329142665@163.com>, a Master's student at the Institute of Applied Optimization (应用优化研究所) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
+Important work on this code has been contributed by Mr. Rui ZHAO (赵睿) during his time as Master's student at the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
 
 
 ### 3.2. The Traveling Salesperson Problem (TSP)
@@ -110,14 +110,14 @@ So the first number in the permutation identifies the first city, the second num
 and so on.
 The length of the tour can be computed by summing up the distances from the `k`-th city to the `k+1`-st city, for `k` in `0..n_cities-2` and then adding the distance from the last city to the first city.
 
-We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/), the maybe most important benchmark set for the TSP.
+We use the TSP instances from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95), the maybe most important benchmark set for the TSP.
 110 of these instances are included as resources in this package.
 
 *Examples:*
 - [apply a randomized local search to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_rls_py.html)
 - [apply a some FFA-based algorithms to one TSP instance](https://thomasweise.github.io/moptipyapps/examples/tsp_special_algorithms_py.html)
 
-Important work on this code has been contributed by Mr. Tianyu LIANG (梁天宇), <liangty@stu.hfuu.edu.cn> a Master's student at the Institute of Applied Optimization (应用优化研究所) of the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei  University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授).
+Important work on this code has been contributed by Mr. Tianyu Liang (梁天宇) during his time as Master's student at the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
 
 The Traveling Tournament Problem ([TTP](#34-the-traveling-tournament-problem-ttp)) is related to the TTP.
 
@@ -142,6 +142,8 @@ The goal is to find a feasible game schedule where the overall travel distances 
 - [apply a local search to find a feasible TTP plan](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_rls_rs_py.html)
 - [tackle the TTP in a multi-objective manner](https://thomasweise.github.io/moptipyapps/examples/ttp_example_experiment_mo_py.html)
 
+Important work on this code has been contributed by Mr. Xiang Cao (曹翔) during his time as Master's student at the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
+
 
 ### 3.4. The Quadratic Assignment Problem (QAP)
 In the package [`moptipyapps.qap`](https://thomasweise.github.io/moptipyapps/moptipyapps.qap.html#module-moptipyapps.qap), we implement some utilities to play with the Quadratic Assignment Problem (QAP).
@@ -162,6 +164,7 @@ To this end, solutions can be represented as permutations of facilities determin
 - See [one-dimensional ordering](#36-one-dimensional-ordering)
 - [run a QAP experiment with RLS and random sampling](https://thomasweise.github.io/moptipyapps/examples/qap_example_experiment_rls_rs_py.html)
 
+Important work on this code has been contributed by Mr. Jiayang Chen (陈嘉阳) during his time as Master's student at the School of Artificial Intelligence and Big Data (人工智能与大数据学院) at Hefei University (合肥学院) in Hefei, Anhui, China (中国安徽省合肥市) under the supervision of Prof. Dr. Thomas Weise (汤卫思教授), who then refined the implementations.
 
 ### 3.5. One-Dimensional Ordering
 In the package [`moptipyapps.order1d`](https://thomasweise.github.io/moptipyapps/moptipyapps.order1d.html#module-moptipyapps.order1d), we implement what I would like to call the "one-dimensional ordering problem".
@@ -235,26 +238,26 @@ They can push you to properly format and document your code, which, too, improve
 They even can detect a set of well-known and frequently-occurring bugs.
 We therefore also run a variety of such tools on our code base, including (in alphabetical order):
 
-- [`autoflake`](https://pypi.org/project/autoflake/), a tool for finding unused imports and variables
-- [`bandit`](https://pypi.org/project/bandit/), a linter for finding security issues
-- [`dodgy`](https://pypi.org/project/dodgy/), for checking for dodgy looking values in the code
-- [`flake8`](https://pypi.org/project/flake8/), a collection of linters
+- [`autoflake`](https://pypi.org/project/autoflake), a tool for finding unused imports and variables
+- [`bandit`](https://pypi.org/project/bandit), a linter for finding security issues
+- [`dodgy`](https://pypi.org/project/dodgy), for checking for dodgy looking values in the code
+- [`flake8`](https://pypi.org/project/flake8), a collection of linters
 - [`flake8-bugbear`](http://pypi.org/project/flake8-bugbear), for finding common bugs
 - [`flake8-eradicate`](http://pypi.org/project/flake8-eradicate), for finding commented-out code
 - [`flake8-use-fstring`](http://pypi.org/project/flake8-use-fstring), for checking the correct use of f-strings
-- [`mypy`](https://pypi.org/project/mypy/), for checking types and type annotations
-- [`pycodestyle`](https://pypi.org/project/pycodestyle/), for checking the formatting and coding style of the source
-- [`pydocstyle`](https://pypi.org/project/pydocstyle/), for checking the format of the docstrings
-- [`pyflakes`](https://pypi.org/project/pyflakes/), for detecting some errors in the code
-- [`pylint`](https://pypi.org/project/pylint/), another static analysis tool
-- [`pyroma`](https://pypi.org/project/pyroma/), for checking whether the code complies with various best practices
-- [`ruff`](https://pypi.org/project/ruff/), a static analysis tool checking a wide range of coding conventions
-- [`semgrep`](https://pypi.org/project/semgrep/), another static analyzer for finding bugs and problems
-- [`tryceratops`](https://pypi.org/project/tryceratops/), for checking against exception handling anti-patterns
-- [`unimport`](https://pypi.org/project/unimport/), for checking against unused import statements
-- [`vulture`](https://pypi.org/project/vulture/), for finding dead code
+- [`mypy`](https://pypi.org/project/mypy), for checking types and type annotations
+- [`pycodestyle`](https://pypi.org/project/pycodestyle), for checking the formatting and coding style of the source
+- [`pydocstyle`](https://pypi.org/project/pydocstyle), for checking the format of the docstrings
+- [`pyflakes`](https://pypi.org/project/pyflakes), for detecting some errors in the code
+- [`pylint`](https://pypi.org/project/pylint), another static analysis tool
+- [`pyroma`](https://pypi.org/project/pyroma), for checking whether the code complies with various best practices
+- [`ruff`](https://pypi.org/project/ruff), a static analysis tool checking a wide range of coding conventions
+- [`semgrep`](https://pypi.org/project/semgrep), another static analyzer for finding bugs and problems
+- [`tryceratops`](https://pypi.org/project/tryceratops), for checking against exception handling anti-patterns
+- [`unimport`](https://pypi.org/project/unimport), for checking against unused import statements
+- [`vulture`](https://pypi.org/project/vulture), for finding dead code
 
-On git pushes, GitHub also automatically runs [CodeQL](https://codeql.github.com/) to check for common vulnerabilities and coding errors.
+On git pushes, GitHub also automatically runs [CodeQL](https://codeql.github.com) to check for common vulnerabilities and coding errors.
 We also turned on GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/repository-security-advisories/configuring-private-vulnerability-reporting-for-a-repository) and the Dependabot [vulnerability](https://docs.github.com/en/code-security/dependabot/dependabot-alerts/configuring-dependabot-alerts) and [security](https://docs.github.com/en/code-security/dependabot/dependabot-security-updates/configuring-dependabot-security-updates) alerts.
 
 Using all of these tools increases the build time.
@@ -298,7 +301,7 @@ If you have any concerns regarding security, please visit our [security policy](
 - Most of the included benchmark instance data of the [two-dimensional bin packing problem](#31-two-dimensional-bin-packing-problem) is taken from [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib).
   It has been stored in a more size-efficient way and some unnecessary information has been stripped from it (as we really only need the raw bin packing data).
   Nevertheless, the copyright of the original data lies with the authors [2DPackLib](https://site.unibo.it/operations-research/en/research/2dpacklib) or the original authors of the datasets used by them.
-- The included benchmark instances for the [Traveling Salesperson Problem](#32-the-traveling-salesperson-problem-tsp) are taken from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/).
+- The included benchmark instances for the [Traveling Salesperson Problem](#32-the-traveling-salesperson-problem-tsp) are taken from [TSPLib](http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95), which is now offline.
   The copyright of the original data lies with Gerhard Reinelt, the original author of TSPLib, or the original authors of the datasets used by him.
 - The included benchmark instances for the [Traveling Tournament Problem](https://thomasweise.github.io/moptipyapps/#the-traveling-tournament-problem-ttp) are taken from [RobinX](https://robinxval.ugent.be/RobinX/travelRepo.php).
   The copyright of the original data lies with the [authors](https://robinxval.ugent.be/RobinX/contact.php) of the dataset, presumably D. Van Bulck, D. Goossens, J. Schönberger, and M. Guajardo.

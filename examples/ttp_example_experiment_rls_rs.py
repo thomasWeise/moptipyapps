@@ -33,7 +33,6 @@ that exchanges two randomly chosen (different) elements in the permutation.
 Three runs are executed for every algorithm-instance combination (see function
 `run`).
 """
-
 import argparse
 from typing import Callable, Final, Iterable, cast
 

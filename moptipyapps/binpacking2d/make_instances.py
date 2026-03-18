@@ -7,7 +7,7 @@ The resource file holds one instance per line.
 
 1. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele Monaci.
    *2DPackLib*.
-   https://site.unibo.it/operations-research/en/research/2dpacklib
+   <https://site.unibo.it/operations-research/en/research/2dpacklib>
 2. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele
    Monaci. 2DPackLib: A Two-Dimensional Cutting and Packing Library.
    *Optimization Letters* 16(2):471-480. March 2022.
@@ -36,11 +36,11 @@ from moptipyapps.binpacking2d.instance import (
 )
 
 #: the base url for 2DPackLib
-__BASE_URL: str = \
+__BASE_URL: Final[str] = \
     "https://site.unibo.it/operations-research/en/research/2dpacklib"
 
 #: The base URLs of the relevant 2DPackLib instances.
-__BASE_URLS: Final[Iterable[str]] = tuple(
+__BASE_URLS: Final[tuple[str, ...]] = tuple(
     f"{__BASE_URL}/{f}.zip" for f in ["a", "beng", "class"])
 
 

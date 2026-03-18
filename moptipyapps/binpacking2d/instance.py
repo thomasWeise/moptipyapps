@@ -45,7 +45,7 @@ Prof. Dr. Thomas Weise (汤卫思教授).
 
 1. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele Monaci.
    *2DPackLib*.
-   https://site.unibo.it/operations-research/en/research/2dpacklib
+   <https://site.unibo.it/operations-research/en/research/2dpacklib>
 2. Manuel Iori, Vinícius Loti de Lima, Silvano Martello, and Michele
    Monaci. 2DPackLib: A Two-Dimensional Cutting and Packing Library.
    *Optimization Letters* 16(2):471-480. March 2022.
@@ -148,7 +148,7 @@ IDX_HEIGHT: Final[int] = 1
 IDX_REPETITION: Final[int] = 2
 
 #: the list of instance names of the 2DPackLib bin packing set downloaded
-#: from https://site.unibo.it/operations-research/en/research/2dpacklib
+#: from <https://site.unibo.it/operations-research/en/research/2dpacklib>
 #: ('a*','beng*', 'cl*') as well as the four non-trivial 'Almost Squares in
 #: Almost Squares' instances ('asqas*').
 _INSTANCES: Final[tuple[str, ...]] = (

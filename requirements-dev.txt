@@ -2,7 +2,7 @@
 # Dependencies Required to Develop `moptipyapps`
 #
 # In this file we list all the libraries that are required to develop
-# `moptipyapps` code. This means that you want to run the complete `make`
+# `moptipyapps` code. This means that you want to run the complete `make.sh`
 # process, including all the unit tests, the static analysis, and building the
 # documentation. Notice that none of this is necessary if you just want to use
 # `moptipyapps` or even just want to implement an algorithm or problem for your
@@ -25,16 +25,6 @@
 # `moptipyapps` is available at https://thomasweise.github.io/moptipyapps.
 # This file is available at https://github.com/thomasWeise/moptipyapps.
 #
-# Below, we list each library required for development and specify the reason
-# why it is needed. Notice that these libraries may, in turn, depend on other
-# libraries. We cannot maintain a full list of these recursive dependencies.
-# Here we only list the top-level dependencies that are actually used in the
-# `moptipyapps` build process.
-#
 
 # pycommons provides lots of utilities
-pycommons[dev] == 0.8.88
-
-# for now, because otherwise the build fails
-sphinx == 8.2.3
-sphinx-autodoc-typehints == 3.5.2
+pycommons[dev] == 0.8.92
