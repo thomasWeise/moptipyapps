@@ -27,4 +27,4 @@
 #
 
 # pycommons provides lots of utilities
-pycommons[dev] == 0.8.95
+pycommons[dev] == 0.8.96
