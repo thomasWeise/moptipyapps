@@ -270,6 +270,5 @@ class SubmissionSpace(Space):
         logger.key_value("problemId", self.problem_id)
         logger.key_value("challengeId", self.challenge_id)
         logger.key_value("title", self.title)
-        logger.key_value("description", self.description)
         with logger.scope("i") as i:
             self.space.log_parameters_to(i)
