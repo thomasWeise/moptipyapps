@@ -222,11 +222,10 @@ def map_games_2(x: np.ndarray, y: np.ndarray) -> None:
     """
     Translate a permutation of games to a game plan.
 
-    This is a straightforward decoding that places the games into the map one
-    by one. Each game is placed at the earliest slot in which it can be
-    placed. If a game cannot be placed, it is ignored. This will lead to many
-    errors, which can be counted via the :mod:`~moptipyapps.ttp.errors`
-    objective.
+    This is a less straightforward decoding that places the games into the map
+    one by one. Each game is placed at the earliest slot in which it can be
+    placed. If a game cannot be placed, it is attempted to re-schedule already
+    allocated games. The magic happens in the function `_schedule`.
 
     :param x: the source permutation
     :param y: the destination game plan
