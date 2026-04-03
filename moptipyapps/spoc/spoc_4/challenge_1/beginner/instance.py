@@ -36,7 +36,7 @@ np.int64(5444)
 'matching-ii'
 """
 
-from typing import Final, cast
+from typing import Any, Callable, Final, Generator, cast
 
 import numpy as np
 from moptipy.api.component import Component
@@ -166,3 +166,18 @@ class Instance(np.ndarray, Component):
         matching-ii
         """
         return ("matching-i", "matching-ii")
+
+    @staticmethod
+    def list_instances() -> Generator[Callable[[], Any], None, None]:
+        """
+        Get an iterable of all instances.
+
+        :return: the iterable
+
+        >>> for ix in Instance.list_instances():
+        ...     print(ix().name)
+        matching-i
+        matching-ii
+        """
+        yield lambda: Instance("matching-i")
+        yield lambda: Instance("matching-ii")

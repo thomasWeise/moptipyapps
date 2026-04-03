@@ -1,7 +1,7 @@
 """A small example experiment."""
 
 import argparse
-from typing import Callable, Final, cast
+from typing import Final
 
 from moptipy.algorithms.so.rls import RLS
 from moptipy.api.execution import Execution
@@ -90,8 +90,7 @@ def run(base_dir: str) -> None:
 
     run_experiment(
         base_dir=use_dir,
-        instances=cast("Callable", (lambda _iname=iname: Instance(
-            _iname) for iname in Instance.list_resources())),
+        instances=Instance.list_instances(),
         setups=[rls_n, rls_1],
         n_runs=(1, 2, 3, 4, 5, 6, 7, 8),
         perform_warmup=True,
