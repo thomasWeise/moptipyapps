@@ -308,7 +308,9 @@ If you have any concerns regarding security, please visit our [security policy](
 - The included benchmark instances for the Quadratic Assignment Problem are taken from QAPLib, which is available at <https://qaplib.mgi.polymtl.ca> and
 <https://coral.ise.lehigh.edu/data-sets/qaplib>.
   The copyright of the original repository lies with R.E. Burkard, E. Çela, S.E. Karisch and F. Rendl as well as Peter Hahn and Miguel Anjos.
-
+- The included data in the package `moptipyapps.spoc.spoc_4` is taken from <https://github.com/esa/SpOC4>, which is part of the Space Optimization Competition (SpOC), see <https://optimise.esa.int>.
+  The copyright belongs to its authors.
+  This is a GitHub Repository under the GPL-3 license.
 
 ## 6. Contact
 If you have any questions or suggestions, please contact

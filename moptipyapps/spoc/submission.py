@@ -3,8 +3,7 @@ Create submission data for the SPOC challenge.
 
 >>> from moptipy.spaces.permutations import Permutations
 >>> perms = Permutations((0, 1, 2, 3))
->>> submit = SubmissionSpace(perms, "The Challenge", "The Problem",
-...                          "The Title", "The Description")
+>>> submit = SubmissionSpace(perms, "The Challenge", "The Problem")
 >>> submit.initialize()
 >>> the_x = submit.create()
 >>> the_x[:] = perms.blueprint[:]
@@ -16,16 +15,14 @@ Create submission data for the SPOC challenge.
 <BLANKLINE>
 [
       {
+            "challenge": "The Challenge",
+            "problem": "The Problem",
             "decisionVector": [
                   0,
                   1,
                   2,
                   3
-            ],
-            "problem": "The Problem",
-            "challenge": "The Challenge",
-            "name": "The Title",
-            "description": "The Description"
+            ]
       }
 ]
 
@@ -53,6 +50,8 @@ def __listify(x: Any) -> list | int | float:
     :param x: the x value
     :return: the list
     """
+    if isinstance(x, bool):
+        return int(x)
     if isinstance(x, int):
         return x
     if isinstance(x, float):
@@ -92,9 +91,7 @@ def _check_str(s: str | None) -> str | None:
 
 def to_submission(challenge_id: str,
                   problem_id: str,
-                  x: Any,
-                  title: str | None = None,
-                  description: str | None = None) -> str:
+                  x: Any) -> str:
     """
     Create a submission file text.
 
@@ -108,29 +105,25 @@ def to_submission(challenge_id: str,
     :param problem_id: a string of the problem identifier (found on the
         corresponding problem page)
     :param x: the result data
-    :param title: a string that can be used to give your submission a title
-    :param description: a string that can contain meta-information about your
-        submission
 
-    >>> print(to_submission("a", "b", (1, 2, 3), "c", "d"))
+    >>> print(to_submission("a", "b", (1, 2, 3)))
     [
           {
+                "challenge": "a",
+                "problem": "b",
                 "decisionVector": [
                       1,
                       2,
                       3
-                ],
-                "problem": "b",
-                "challenge": "a",
-                "name": "c",
-                "description": "d"
+                ]
           }
     ]
 
-    >>> print(to_submission("a", "b", np.array(((1, 2, 3), (0.2, 4, 4.3))),
-    ...         "The Title", "The Description"))
+    >>> print(to_submission("a", "b", np.array(((1, 2, 3), (0.2, 4, 4.3)))))
     [
           {
+                "challenge": "a",
+                "problem": "b",
                 "decisionVector": [
                       [
                             1,
@@ -142,11 +135,7 @@ def to_submission(challenge_id: str,
                             4,
                             4.3
                       ]
-                ],
-                "problem": "b",
-                "challenge": "a",
-                "name": "The Title",
-                "description": "The Description"
+                ]
           }
     ]
     """
@@ -156,18 +145,14 @@ def to_submission(challenge_id: str,
     pid: str | None = _check_str(problem_id)
     if pid is None:
         raise ValueError(f"{problem_id=}")
-    title = _check_str(title)
-    description = _check_str(description)
 
     # converting numpy datatypes to python datatypes
     x = __listify(x)
 
     with StringIO() as io:
-        dump([{"decisionVector": x,
+        dump([{"challenge": cid,
                "problem": pid,
-               "challenge": cid,
-               "name": "" if title is None else title,
-               "description": "" if description is None else description}],
+               "decisionVector": x}],
              fp=io, indent=6)
         return str.strip(io.getvalue())
 
@@ -188,17 +173,13 @@ class SubmissionSpace(Space):
 
     def __init__(self, space: Space,
                  challenge_id: str,
-                 problem_id: str,
-                 title: str | None = None,
-                 description: str | None = None) -> None:
+                 problem_id: str) -> None:
         """
         Create a submission wrapper space.
 
         :param space: the space to wrap
         :param challenge_id: the challenge identifier
         :param problem_id: the problem identifier
-        :param title: the title string, if any
-        :param description: the description string, if any
         """
         self.create = space.create  # type: ignore
         self.copy = space.copy  # type: ignore
@@ -220,10 +201,6 @@ class SubmissionSpace(Space):
             raise ValueError(f"{challenge_id=}")
         #: the challenge ID
         self.challenge_id: Final[str] = cid
-        #: the title
-        self.title: Final[str | None] = _check_str(title)
-        #: the description
-        self.description: Final[str | None] = _check_str(description)
 
     def to_str(self, x) -> str:  # +book
         """
@@ -236,8 +213,7 @@ class SubmissionSpace(Space):
         if _SUBMISSION_SEPARATOR_INNER in raw:
             raise ValueError(
                 f"{_SUBMISSION_SEPARATOR_INNER} not allowed in text.")
-        sub: Final[str] = to_submission(self.challenge_id, self.problem_id, x,
-                                        self.title, self.description)
+        sub: Final[str] = to_submission(self.challenge_id, self.problem_id, x)
         return f"{raw}{_SUBMISSION_SEPARATOR}{sub}"
 
     def from_str(self, text: str) -> Any:  # +book
@@ -269,6 +245,5 @@ class SubmissionSpace(Space):
         super().log_parameters_to(logger)
         logger.key_value("problemId", self.problem_id)
         logger.key_value("challengeId", self.challenge_id)
-        logger.key_value("title", self.title)
         with logger.scope("i") as i:
             self.space.log_parameters_to(i)
