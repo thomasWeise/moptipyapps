@@ -1,0 +1,122 @@
+<!doctype html><html data-content_root=../../../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment — moptipyapps 0.8.91 documentation</title><link href="../../../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../../../_static/documentation_options.js?v=0ae90841"></script><script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script><script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script><script src=../../../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/spoc/spoc_4/challenge_1/beginner/experiment.html rel=canonical><link href=../../../../../../genindex.html rel=index title=Index><link href=../../../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../../../index.html>moptipyapps 0.8.91 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment</h1><div class=highlight><pre>
+<span></span><span class=sd>"""A small example experiment."""</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>argparse</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.so.rls</span><span class=w> </span><span class=kn>import</span> <span class=n>RLS</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.execution</span><span class=w> </span><span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.experiment</span><span class=w> </span><span class=kn>import</span> <span class=n>run_experiment</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.improvement_logger</span><span class=w> </span><span class=kn>import</span> <span class=n>FileImprovementLoggerFactory</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.permutations.op0_shuffle</span><span class=w> </span><span class=kn>import</span> <span class=n>Op0Shuffle</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.permutations.op1_swap2</span><span class=w> </span><span class=kn>import</span> <span class=n>Op1Swap2</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.permutations.op1_swapn</span><span class=w> </span><span class=kn>import</span> <span class=n>Op1SwapN</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.bitstrings</span><span class=w> </span><span class=kn>import</span> <span class=n>BitStrings</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.spaces.permutations</span><span class=w> </span><span class=kn>import</span> <span class=n>Permutations</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.help</span><span class=w> </span><span class=kn>import</span> <span class=n>moptipy_argparser</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.console</span><span class=w> </span><span class=kn>import</span> <span class=n>logger</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.spoc.spoc_4.challenge_1.beginner.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_no_penalty</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BeginnerObjectiveNP</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.spoc.spoc_4.challenge_1.beginner.permutation_encoding</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>PermutationEncoding</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.spoc.submission</span><span class=w> </span><span class=kn>import</span> <span class=n>SubmissionSpace</span>
+
+<span class=n>MAX_FES</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1_000</span>  <span class=c1># Just a small test</span>
+
+
+<div class=viewcode-block id=base_setup>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment.base_setup>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>base_setup</span><span class=p>(</span>
+        <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>,</span>
+        <span class=n>ilogger</span><span class=p>:</span> <span class=n>FileImprovementLoggerFactory</span> <span class=o>=</span> <span class=n>FileImprovementLoggerFactory</span><span class=p>(</span>
+            <span class=n>max_files</span><span class=o>=</span><span class=mi>10</span><span class=p>))</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Permutations</span><span class=p>,</span> <span class=n>Execution</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the basic setup.</span>
+
+<span class=sd>    :param instance: the instance to use</span>
+<span class=sd>    :param title: a title</span>
+<span class=sd>    :param desc: a description</span>
+<span class=sd>    :param ilogger: the logger to use</span>
+<span class=sd>    :return: the search space and the basic execution</span>
+<span class=sd>    """</span>
+    <span class=n>space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Permutations</span><span class=p>]</span> <span class=o>=</span> <span class=n>Permutations</span><span class=o>.</span><span class=n>standard</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>n</span><span class=p>)</span>
+
+    <span class=k>return</span> <span class=p>(</span><span class=n>space</span><span class=p>,</span> <span class=n>Execution</span><span class=p>()</span><span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=n>MAX_FES</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_search_space</span><span class=p>(</span><span class=n>space</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_encoding</span><span class=p>(</span><span class=n>PermutationEncoding</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span>
+            <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>BeginnerObjectiveNP</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span>
+            <span class=o>.</span><span class=n>set_improvement_logger</span><span class=p>(</span><span class=n>ilogger</span><span class=p>)</span>
+            <span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>SubmissionSpace</span><span class=p>(</span>
+                <span class=n>space</span><span class=o>=</span><span class=n>BitStrings</span><span class=p>(</span><span class=n>instance</span><span class=o>.</span><span class=n>n</span><span class=p>),</span>
+                <span class=n>challenge_id</span><span class=o>=</span><span class=s2>"spoc-4-luna-tomato-logistics"</span><span class=p>,</span>
+                <span class=n>problem_id</span><span class=o>=</span><span class=n>instance</span><span class=o>.</span><span class=n>name</span><span class=p>)))</span></div>
+
+
+
+<div class=viewcode-block id=rls_n>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment.rls_n>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>rls_n</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the RLS setup.</span>
+
+<span class=sd>    :param instance: the instance to use</span>
+<span class=sd>    :return: the RLS</span>
+<span class=sd>    """</span>
+    <span class=n>space</span><span class=p>,</span> <span class=n>execute</span> <span class=o>=</span> <span class=n>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=o>=</span><span class=n>instance</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>execute</span><span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>RLS</span><span class=p>(</span>
+        <span class=n>Op0Shuffle</span><span class=p>(</span><span class=n>space</span><span class=p>),</span> <span class=n>Op1SwapN</span><span class=p>()))</span></div>
+
+
+
+<div class=viewcode-block id=rls_1>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment.rls_1>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>rls_1</span><span class=p>(</span><span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=n>Execution</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create the RLS setup.</span>
+
+<span class=sd>    :param instance: the instance to use</span>
+<span class=sd>    :return: the RLS</span>
+<span class=sd>    """</span>
+    <span class=n>space</span><span class=p>,</span> <span class=n>execute</span> <span class=o>=</span> <span class=n>base_setup</span><span class=p>(</span><span class=n>instance</span><span class=o>=</span><span class=n>instance</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>execute</span><span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>RLS</span><span class=p>(</span>
+        <span class=n>Op0Shuffle</span><span class=p>(</span><span class=n>space</span><span class=p>),</span> <span class=n>Op1Swap2</span><span class=p>()))</span></div>
+
+
+
+<div class=viewcode-block id=run>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment.run>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>run</span><span class=p>(</span><span class=n>base_dir</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Run the experiment.</span>
+
+<span class=sd>    :param base_dir: the base directory</span>
+<span class=sd>    """</span>
+    <span class=n>use_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>base_dir</span><span class=p>)</span>
+    <span class=n>use_dir</span><span class=o>.</span><span class=n>ensure_dir_exists</span><span class=p>()</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Writing to directory </span><span class=si>{</span><span class=n>use_dir</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=n>run_experiment</span><span class=p>(</span>
+        <span class=n>base_dir</span><span class=o>=</span><span class=n>use_dir</span><span class=p>,</span>
+        <span class=n>instances</span><span class=o>=</span><span class=n>Instance</span><span class=o>.</span><span class=n>list_instances</span><span class=p>(),</span>
+        <span class=n>setups</span><span class=o>=</span><span class=p>[</span><span class=n>rls_n</span><span class=p>,</span> <span class=n>rls_1</span><span class=p>],</span>
+        <span class=n>n_runs</span><span class=o>=</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mi>2</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>4</span><span class=p>,</span> <span class=mi>5</span><span class=p>,</span> <span class=mi>6</span><span class=p>,</span> <span class=mi>7</span><span class=p>,</span> <span class=mi>8</span><span class=p>),</span>
+        <span class=n>perform_warmup</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span>
+        <span class=n>perform_pre_warmup</span><span class=o>=</span><span class=kc>True</span><span class=p>)</span></div>
+
+
+
+<span class=c1># Run the experiment from the command line</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipy_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span> <span class=s2>"SpOC 4: Challenge 1"</span><span class=p>,</span> <span class=s2>"Run the 1st challenge of SpOC 4"</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the directory to store the experimental results under"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./results/"</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+    <span class=n>run</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../../../index.html>moptipyapps 0.8.91 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2026, Thomas Weise.</div>

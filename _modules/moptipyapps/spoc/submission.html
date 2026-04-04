@@ -1,0 +1,266 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.spoc.submission — moptipyapps 0.8.91 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=0ae90841"></script><script src="../../../_static/doctools.js?v=fd6eb6e6"></script><script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/spoc/submission.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.91 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.spoc.submission</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.spoc.submission</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>Create submission data for the SPOC challenge.</span>
+
+<span class=sd>>>> from moptipy.spaces.permutations import Permutations</span>
+<span class=sd>>>> perms = Permutations((0, 1, 2, 3))</span>
+<span class=sd>>>> submit = SubmissionSpace(perms, "The Challenge", "The Problem")</span>
+<span class=sd>>>> submit.initialize()</span>
+<span class=sd>>>> the_x = submit.create()</span>
+<span class=sd>>>> the_x[:] = perms.blueprint[:]</span>
+<span class=sd>>>> the_str = submit.to_str(the_x)</span>
+<span class=sd>>>> print(the_str)</span>
+<span class=sd>0;1;2;3</span>
+<span class=sd>&LTBLANKLINE></span>
+<span class=sd>----------- SUBMISSION -----------</span>
+<span class=sd>&LTBLANKLINE></span>
+<span class=sd>[</span>
+<span class=sd>      {</span>
+<span class=sd>            "challenge": "The Challenge",</span>
+<span class=sd>            "problem": "The Problem",</span>
+<span class=sd>            "decisionVector": [</span>
+<span class=sd>                  0,</span>
+<span class=sd>                  1,</span>
+<span class=sd>                  2,</span>
+<span class=sd>                  3</span>
+<span class=sd>            ]</span>
+<span class=sd>      }</span>
+<span class=sd>]</span>
+
+<span class=sd>>>> the_x2 = submit.from_str(the_str)</span>
+<span class=sd>>>> submit.is_equal(the_x, the_x2)</span>
+<span class=sd>True</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>io</span><span class=w> </span><span class=kn>import</span> <span class=n>StringIO</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>json</span><span class=w> </span><span class=kn>import</span> <span class=n>dump</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.space</span><span class=w> </span><span class=kn>import</span> <span class=n>Space</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.math.int_math</span><span class=w> </span><span class=kn>import</span> <span class=n>try_int</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.strings.chars</span><span class=w> </span><span class=kn>import</span> <span class=n>NEWLINE</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>__listify</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=n>Any</span><span class=p>)</span> <span class=o>-></span> <span class=nb>list</span> <span class=o>|</span> <span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert a solution to a list.</span>
+
+<span class=sd>    :param x: the x value</span>
+<span class=sd>    :return: the list</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=nb>bool</span><span class=p>):</span>
+        <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=nb>int</span><span class=p>):</span>
+        <span class=k>return</span> <span class=n>x</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=nb>float</span><span class=p>):</span>
+        <span class=k>return</span> <span class=n>try_int</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>number</span><span class=p>):</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>integer</span><span class=p>):</span>
+            <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>floating</span><span class=p>):</span>
+            <span class=k>return</span> <span class=n>try_int</span><span class=p>(</span><span class=nb>float</span><span class=p>(</span><span class=n>x</span><span class=p>))</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=s2>"x"</span><span class=p>,</span> <span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>integer</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>floating</span><span class=p>))</span>
+    <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+        <span class=n>x</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span><span class=n>x</span><span class=p>)</span><span class=o>.</span><span class=n>tolist</span><span class=p>()</span>
+    <span class=k>elif</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=nb>list</span><span class=p>):</span>
+        <span class=n>x</span> <span class=o>=</span> <span class=nb>list</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>y</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>x</span><span class=p>):</span>
+        <span class=n>x</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>__listify</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>x</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>_check_str</span><span class=p>(</span><span class=n>s</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Check a string.</span>
+
+<span class=sd>    :param s: the string</span>
+<span class=sd>    :return: the fixed string</span>
+<span class=sd>    """</span>
+    <span class=n>use</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=n>s</span>
+    <span class=k>if</span> <span class=n>use</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=n>use</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>use</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>use</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>return</span> <span class=kc>None</span>
+        <span class=k>for</span> <span class=n>c</span> <span class=ow>in</span> <span class=n>NEWLINE</span><span class=p>:</span>
+            <span class=k>if</span> <span class=n>c</span> <span class=ow>in</span> <span class=n>use</span><span class=p>:</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>s</span><span class=si>=}</span><span class=s2> forbidden, contains </span><span class=si>{</span><span class=n>c</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+    <span class=k>return</span> <span class=n>use</span>
+
+
+<div class=viewcode-block id=to_submission>
+<a class=viewcode-back href=../../../moptipyapps.spoc.html#moptipyapps.spoc.submission.to_submission>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>to_submission</span><span class=p>(</span><span class=n>challenge_id</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+                  <span class=n>problem_id</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+                  <span class=n>x</span><span class=p>:</span> <span class=n>Any</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Create a submission file text.</span>
+
+<span class=sd>    This function follows the specification given in</span>
+<span class=sd>    &LThttps://api.optimize.esa.int/data/tools/submission_helper.py>, with the</span>
+<span class=sd>    exception that it tries to convert floating points to integers, where</span>
+<span class=sd>    possible without loss of precision.</span>
+
+<span class=sd>    :param challenge_id: a string of the challenge identifier (found on the</span>
+<span class=sd>        corresponding problem page)</span>
+<span class=sd>    :param problem_id: a string of the problem identifier (found on the</span>
+<span class=sd>        corresponding problem page)</span>
+<span class=sd>    :param x: the result data</span>
+
+<span class=sd>    >>> print(to_submission("a", "b", (1, 2, 3)))</span>
+<span class=sd>    [</span>
+<span class=sd>          {</span>
+<span class=sd>                "challenge": "a",</span>
+<span class=sd>                "problem": "b",</span>
+<span class=sd>                "decisionVector": [</span>
+<span class=sd>                      1,</span>
+<span class=sd>                      2,</span>
+<span class=sd>                      3</span>
+<span class=sd>                ]</span>
+<span class=sd>          }</span>
+<span class=sd>    ]</span>
+
+<span class=sd>    >>> print(to_submission("a", "b", np.array(((1, 2, 3), (0.2, 4, 4.3)))))</span>
+<span class=sd>    [</span>
+<span class=sd>          {</span>
+<span class=sd>                "challenge": "a",</span>
+<span class=sd>                "problem": "b",</span>
+<span class=sd>                "decisionVector": [</span>
+<span class=sd>                      [</span>
+<span class=sd>                            1,</span>
+<span class=sd>                            2,</span>
+<span class=sd>                            3</span>
+<span class=sd>                      ],</span>
+<span class=sd>                      [</span>
+<span class=sd>                            0.2,</span>
+<span class=sd>                            4,</span>
+<span class=sd>                            4.3</span>
+<span class=sd>                      ]</span>
+<span class=sd>                ]</span>
+<span class=sd>          }</span>
+<span class=sd>    ]</span>
+<span class=sd>    """</span>
+    <span class=n>cid</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=n>_check_str</span><span class=p>(</span><span class=n>challenge_id</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>cid</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>challenge_id</span><span class=si>=}</span><span class=s2>"</span><span class=p>)</span>
+    <span class=n>pid</span><span class=p>:</span> <span class=nb>str</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=n>_check_str</span><span class=p>(</span><span class=n>problem_id</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>pid</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+        <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>problem_id</span><span class=si>=}</span><span class=s2>"</span><span class=p>)</span>
+
+    <span class=c1># converting numpy datatypes to python datatypes</span>
+    <span class=n>x</span> <span class=o>=</span> <span class=n>__listify</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
+
+    <span class=k>with</span> <span class=n>StringIO</span><span class=p>()</span> <span class=k>as</span> <span class=n>io</span><span class=p>:</span>
+        <span class=n>dump</span><span class=p>([{</span><span class=s2>"challenge"</span><span class=p>:</span> <span class=n>cid</span><span class=p>,</span>
+               <span class=s2>"problem"</span><span class=p>:</span> <span class=n>pid</span><span class=p>,</span>
+               <span class=s2>"decisionVector"</span><span class=p>:</span> <span class=n>x</span><span class=p>}],</span>
+             <span class=n>fp</span><span class=o>=</span><span class=n>io</span><span class=p>,</span> <span class=n>indent</span><span class=o>=</span><span class=mi>6</span><span class=p>)</span>
+        <span class=k>return</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>io</span><span class=o>.</span><span class=n>getvalue</span><span class=p>())</span></div>
+
+
+
+<span class=c1>#: the inner submission separator</span>
+<span class=n>_SUBMISSION_SEPARATOR_INNER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"----------- SUBMISSION -----------"</span>
+<span class=c1>#: the submission separator</span>
+<span class=n>_SUBMISSION_SEPARATOR</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"</span><span class=se>\n\n</span><span class=si>{</span><span class=n>_SUBMISSION_SEPARATOR_INNER</span><span class=si>}</span><span class=se>\n\n</span><span class=s2>"</span>
+
+
+<div class=viewcode-block id=SubmissionSpace>
+<a class=viewcode-back href=../../../moptipyapps.spoc.html#moptipyapps.spoc.submission.SubmissionSpace>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>SubmissionSpace</span><span class=p>(</span><span class=n>Space</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    A space that also provides the submission data.</span>
+
+<span class=sd>    This space is designed to wrap around an existing space type and to</span>
+<span class=sd>    generate the SPOC submission text when textifying space elements.</span>
+<span class=sd>    """</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>space</span><span class=p>:</span> <span class=n>Space</span><span class=p>,</span>
+                 <span class=n>challenge_id</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+                 <span class=n>problem_id</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create a submission wrapper space.</span>
+
+<span class=sd>        :param space: the space to wrap</span>
+<span class=sd>        :param challenge_id: the challenge identifier</span>
+<span class=sd>        :param problem_id: the problem identifier</span>
+<span class=sd>        """</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>create</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>create</span>  <span class=c1># type: ignore</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>copy</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>copy</span>  <span class=c1># type: ignore</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>is_equal</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>is_equal</span>  <span class=c1># type: ignore</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>validate</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>validate</span>  <span class=c1># type: ignore</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>n_points</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>n_points</span>  <span class=c1># type: ignore</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>initialize</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>initialize</span>  <span class=c1># type: ignore</span>
+
+        <span class=c1>#: the internal space copy</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Space</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span>
+
+        <span class=n>pid</span> <span class=o>=</span> <span class=n>_check_str</span><span class=p>(</span><span class=n>problem_id</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>pid</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>problem_id</span><span class=si>=}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=c1>#: the problem ID</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>problem_id</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>pid</span>
+        <span class=n>cid</span> <span class=o>=</span> <span class=n>_check_str</span><span class=p>(</span><span class=n>challenge_id</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>cid</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>challenge_id</span><span class=si>=}</span><span class=s2>"</span><span class=p>)</span>
+        <span class=c1>#: the challenge ID</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>challenge_id</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>cid</span>
+
+<div class=viewcode-block id=SubmissionSpace.to_str>
+<a class=viewcode-back href=../../../moptipyapps.spoc.html#moptipyapps.spoc.submission.SubmissionSpace.to_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>to_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>  <span class=c1># +book</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Obtain a textual representation of an instance of the data structure.</span>
+
+<span class=sd>        :param x: the instance</span>
+<span class=sd>        :return: the string representation of x</span>
+<span class=sd>        """</span>
+        <span class=n>raw</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>to_str</span><span class=p>(</span><span class=n>x</span><span class=p>))</span>
+        <span class=k>if</span> <span class=n>_SUBMISSION_SEPARATOR_INNER</span> <span class=ow>in</span> <span class=n>raw</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>_SUBMISSION_SEPARATOR_INNER</span><span class=si>}</span><span class=s2> not allowed in text."</span><span class=p>)</span>
+        <span class=n>sub</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>to_submission</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>challenge_id</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>problem_id</span><span class=p>,</span> <span class=n>x</span><span class=p>)</span>
+        <span class=k>return</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>raw</span><span class=si>}{</span><span class=n>_SUBMISSION_SEPARATOR</span><span class=si>}{</span><span class=n>sub</span><span class=si>}</span><span class=s2>"</span></div>
+
+
+<div class=viewcode-block id=SubmissionSpace.from_str>
+<a class=viewcode-back href=../../../moptipyapps.spoc.html#moptipyapps.spoc.submission.SubmissionSpace.from_str>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>from_str</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>text</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=n>Any</span><span class=p>:</span>  <span class=c1># +book</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Transform a string `text` to one element of the space.</span>
+
+<span class=sd>        :param text: the input string</span>
+<span class=sd>        :return: the element in the space corresponding to `text`</span>
+<span class=sd>        """</span>
+        <span class=n>i</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>find</span><span class=p>(</span><span class=n>text</span><span class=p>,</span> <span class=n>_SUBMISSION_SEPARATOR_INNER</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>i</span> <span class=o>></span> <span class=mi>0</span><span class=p>:</span>
+            <span class=n>text</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>text</span><span class=p>[:</span><span class=n>i</span><span class=p>])</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>from_str</span><span class=p>(</span><span class=n>text</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the submission space ID.</span>
+
+<span class=sd>        :return: the submission space ID</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=sa>f</span><span class=s2>"s_</span><span class=si>{</span><span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=fm>__str__</span><span class=p>()</span><span class=si>}</span><span class=s2>"</span>
+
+<div class=viewcode-block id=SubmissionSpace.log_parameters_to>
+<a class=viewcode-back href=../../../moptipyapps.spoc.html#moptipyapps.spoc.submission.SubmissionSpace.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log the parameters to a logger.</span>
+
+<span class=sd>        :param logger: the logger</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"problemId"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>problem_id</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"challengeId"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>challenge_id</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"i"</span><span class=p>)</span> <span class=k>as</span> <span class=n>i</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>space</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>i</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.91 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.spoc.submission</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2026, Thomas Weise.</div>

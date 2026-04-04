@@ -1,0 +1,15 @@
+moptipyapps.spoc.spoc\_4.challenge\_1 package
+=============================================
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.spoc.spoc_4.challenge_1.beginner

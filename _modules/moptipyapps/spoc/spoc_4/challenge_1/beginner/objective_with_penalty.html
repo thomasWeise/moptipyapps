@@ -1,0 +1,152 @@
+<!doctype html><html data-content_root=../../../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty — moptipyapps 0.8.91 documentation</title><link href="../../../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../../../_static/documentation_options.js?v=0ae90841"></script><script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script><script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script><script src=../../../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/spoc/spoc_4/challenge_1/beginner/objective_with_penalty.html rel=canonical><link href=../../../../../../genindex.html rel=index title=Index><link href=../../../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../../../index.html>moptipyapps 0.8.91 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>The objective function of the beginner problem.</span>
+
+<span class=sd>>>> inst = Instance("matching-i")</span>
+<span class=sd>>>> obj = BeginnerObjectiveP(inst)</span>
+
+<span class=sd>>>> test_x = np.ndarray(inst.n, dtype=np.bool)</span>
+<span class=sd>>>> test_x.fill(0)</span>
+
+<span class=sd>>>> obj.evaluate(test_x)</span>
+<span class=sd>0</span>
+
+<span class=sd>>>> test_x[0] = 1</span>
+<span class=sd>>>> obj.evaluate(test_x)</span>
+<span class=sd>-267</span>
+<span class=sd>>>> inst[0, -1]</span>
+<span class=sd>np.int64(267)</span>
+
+<span class=sd>The clash of two orbits incurs a penalty:</span>
+
+<span class=sd>>>> test_x[2234] = 1</span>
+<span class=sd>>>> obj.evaluate(test_x)</span>
+<span class=sd>125518718</span>
+
+<span class=sd>>>> inst.penalty - 267 - 7636</span>
+<span class=sd>125518718</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numba</span>  <span class=c1># type: ignore</span>
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>Objective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.spoc.spoc_4.challenge_1.beginner.base_obj</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>BaseObjectWithArrays</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.spoc.spoc_4.challenge_1.beginner.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+
+
+<span class=nd>@numba</span><span class=o>.</span><span class=n>njit</span><span class=p>(</span><span class=n>cache</span><span class=o>=</span><span class=kc>True</span><span class=p>,</span> <span class=n>inline</span><span class=o>=</span><span class=s2>"always"</span><span class=p>,</span> <span class=n>fastmath</span><span class=o>=</span><span class=kc>False</span><span class=p>,</span> <span class=n>boundscheck</span><span class=o>=</span><span class=kc>False</span><span class=p>)</span>
+<span class=k>def</span><span class=w> </span><span class=nf>_compute</span><span class=p>(</span><span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>data</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>penalty</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+             <span class=n>earth</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>lunar</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>dest</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Compute the objective function of the beginner problem.</span>
+
+<span class=sd>    :param x: the candidate solution</span>
+<span class=sd>    :param data: the orbit data</span>
+<span class=sd>    :param penalty: the penalty for clashes</span>
+<span class=sd>    :param earth: the earth orbits</span>
+<span class=sd>    :param lunar: the lunar orbits</span>
+<span class=sd>    :param dest: the destination orbits</span>
+<span class=sd>    :return: the objective value, minus the offset</span>
+<span class=sd>    """</span>
+    <span class=n>earth</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>
+    <span class=n>lunar</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>
+    <span class=n>dest</span><span class=o>.</span><span class=n>fill</span><span class=p>(</span><span class=mi>0</span><span class=p>)</span>
+    <span class=n>result</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>use</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>x</span><span class=p>):</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=n>use</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>ue</span><span class=p>,</span> <span class=n>ul</span><span class=p>,</span> <span class=n>ud</span><span class=p>,</span> <span class=n>uo</span> <span class=o>=</span> <span class=n>data</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=p>:]</span>
+        <span class=k>if</span> <span class=n>earth</span><span class=p>[</span><span class=n>ue</span><span class=p>]:</span>
+            <span class=n>result</span> <span class=o>+=</span> <span class=n>penalty</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>earth</span><span class=p>[</span><span class=n>ue</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=n>lunar</span><span class=p>[</span><span class=n>ul</span><span class=p>]:</span>
+            <span class=n>result</span> <span class=o>+=</span> <span class=n>penalty</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>lunar</span><span class=p>[</span><span class=n>ul</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=n>dest</span><span class=p>[</span><span class=n>ud</span><span class=p>]:</span>
+            <span class=n>result</span> <span class=o>+=</span> <span class=n>penalty</span>
+        <span class=k>else</span><span class=p>:</span>
+            <span class=n>dest</span><span class=p>[</span><span class=n>ud</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1</span>
+        <span class=n>result</span> <span class=o>-=</span> <span class=n>uo</span>
+    <span class=k>return</span> <span class=nb>int</span><span class=p>(</span><span class=n>result</span><span class=p>)</span>
+
+
+<div class=viewcode-block id=BeginnerObjectiveP>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty.BeginnerObjectiveP>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>BeginnerObjectiveP</span><span class=p>(</span><span class=n>BaseObjectWithArrays</span><span class=p>,</span> <span class=n>Objective</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""The objective function of the beginner problem."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>Instance</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Create the objective function of the beginner problem.</span>
+
+<span class=sd>        :param instance: the instance of the objective function.</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+        <span class=c1>#: the penalty</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__p</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>penalty</span>
+
+<div class=viewcode-block id=BeginnerObjectiveP.evaluate>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty.BeginnerObjectiveP.evaluate>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>evaluate</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Evaluate the objective function of the beginner problem.</span>
+
+<span class=sd>        :param x: the solution vector</span>
+<span class=sd>        :return: the result</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=n>_compute</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>__p</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>earth</span><span class=p>,</span>
+                        <span class=bp>self</span><span class=o>.</span><span class=n>lunar</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=BeginnerObjectiveP.lower_bound>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty.BeginnerObjectiveP.lower_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>lower_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the lower bound.</span>
+
+<span class=sd>        :return: the lower bound</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=mi>1</span> <span class=o>-</span> <span class=bp>self</span><span class=o>.</span><span class=n>__p</span></div>
+
+
+<div class=viewcode-block id=BeginnerObjectiveP.upper_bound>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty.BeginnerObjectiveP.upper_bound>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>upper_bound</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the upper bound.</span>
+
+<span class=sd>        :return: the upper bound</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>n</span> <span class=o>*</span> <span class=mi>3</span> <span class=o>*</span> <span class=bp>self</span><span class=o>.</span><span class=n>__p</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of the objective function.</span>
+
+<span class=sd>        :return: the name of the objective function</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"spoc4beginnerP"</span>
+
+<div class=viewcode-block id=BeginnerObjectiveP.log_parameters_to>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty.BeginnerObjectiveP.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=k>with</span> <span class=n>logger</span><span class=o>.</span><span class=n>scope</span><span class=p>(</span><span class=s2>"i"</span><span class=p>)</span> <span class=k>as</span> <span class=n>inst</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>instance</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>inst</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../../../index.html>moptipyapps 0.8.91 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2026, Thomas Weise.</div>

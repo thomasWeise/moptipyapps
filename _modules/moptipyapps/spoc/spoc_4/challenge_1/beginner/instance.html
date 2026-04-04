@@ -1,0 +1,197 @@
+<!doctype html><html data-content_root=../../../../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.spoc.spoc_4.challenge_1.beginner.instance — moptipyapps 0.8.91 documentation</title><link href="../../../../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../../../../_static/documentation_options.js?v=0ae90841"></script><script src="../../../../../../_static/doctools.js?v=fd6eb6e6"></script><script src="../../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script><script src=../../../../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/spoc/spoc_4/challenge_1/beginner/instance.html rel=canonical><link href=../../../../../../genindex.html rel=index title=Index><link href=../../../../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../../../index.html>moptipyapps 0.8.91 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.spoc.spoc_4.challenge_1.beginner.instance</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.spoc.spoc_4.challenge_1.beginner.instance</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>The instance of the Lunar Tomato Logistics beginner problem.</span>
+
+<span class=sd>>>> inst1 = Instance("matching-i")</span>
+<span class=sd>>>> inst1.n</span>
+<span class=sd>25000</span>
+<span class=sd>>>> inst1.shape</span>
+<span class=sd>(25000, 4)</span>
+<span class=sd>>>> list(map(int, inst1[0, :]))</span>
+<span class=sd>[3390, 4454, 3664, 267]</span>
+<span class=sd>>>> inst1[0, 1]</span>
+<span class=sd>np.int64(4454)</span>
+<span class=sd>>>> inst1.penalty</span>
+<span class=sd>125526621</span>
+<span class=sd>>>> inst1.lengths</span>
+<span class=sd>(5000, 5000, 5000)</span>
+<span class=sd>>>> inst1.name</span>
+<span class=sd>'matching-i'</span>
+<span class=sd>>>> inst1 is Instance("matching-i")</span>
+<span class=sd>True</span>
+
+<span class=sd>>>> inst2 = Instance("matching-ii")</span>
+<span class=sd>>>> inst2.n</span>
+<span class=sd>92103</span>
+<span class=sd>>>> inst2.shape</span>
+<span class=sd>(92103, 4)</span>
+<span class=sd>>>> list(map(int, inst2[0, :]))</span>
+<span class=sd>[5559, 5444, 3794, 9723]</span>
+<span class=sd>>>> inst2[0, 1]</span>
+<span class=sd>np.int64(5444)</span>
+<span class=sd>>>> inst2.penalty</span>
+<span class=sd>460191177</span>
+<span class=sd>>>> inst2.lengths</span>
+<span class=sd>(10000, 10000, 10000)</span>
+<span class=sd>>>> inst2.name</span>
+<span class=sd>'matching-ii'</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Generator</span><span class=p>,</span> <span class=n>cast</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.component</span><span class=w> </span><span class=kn>import</span> <span class=n>Component</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.logger</span><span class=w> </span><span class=kn>import</span> <span class=n>KeyValueLogSection</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>int_range_to_dtype</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_to_int_range</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.spoc.spoc_4.challenge_1.beginner.data</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>open_resource_stream</span><span class=p>,</span>
+<span class=p>)</span>
+
+
+<div class=viewcode-block id=Instance>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.instance.Instance>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>Instance</span><span class=p>(</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>Component</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""The instances of the Lunar Tomato Logistics beginner problem."""</span>
+
+    <span class=c1>#: set the result name</span>
+    <span class=n>name</span><span class=p>:</span> <span class=nb>str</span>
+    <span class=c1>#: set the penalty</span>
+    <span class=n>penalty</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the number of orbit pairs</span>
+    <span class=n>n</span><span class=p>:</span> <span class=nb>int</span>
+    <span class=c1>#: the number of values per column</span>
+    <span class=n>lengths</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__new__</span><span class=p>(</span><span class=bp>cls</span><span class=p>,</span> <span class=n>name</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=s2>"Instance"</span><span class=p>:</span>  <span class=c1># noqa: PYI034</span>
+<span class=w>        </span><span class=sd>"""Create the single instance."""</span>
+        <span class=n>name</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>name</span><span class=p>)</span>
+        <span class=k>if</span> <span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>name</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Invalid name."</span><span class=p>)</span>
+        <span class=n>meth</span><span class=p>:</span> <span class=n>Final</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=fm>__new__</span>
+        <span class=n>attr</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=sa>f</span><span class=s2>"__</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>_data"</span>
+        <span class=k>if</span> <span class=nb>hasattr</span><span class=p>(</span><span class=n>meth</span><span class=p>,</span> <span class=n>attr</span><span class=p>):</span>
+            <span class=k>return</span> <span class=n>cast</span><span class=p>(</span><span class=s2>"Instance"</span><span class=p>,</span> <span class=nb>getattr</span><span class=p>(</span><span class=n>meth</span><span class=p>,</span> <span class=n>attr</span><span class=p>))</span>
+
+        <span class=n>data</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+        <span class=n>power</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>with</span> <span class=n>open_resource_stream</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>name</span><span class=si>}</span><span class=s2>.txt"</span><span class=p>)</span> <span class=k>as</span> <span class=n>stream</span><span class=p>:</span>
+            <span class=k>for</span> <span class=n>oline</span> <span class=ow>in</span> <span class=n>stream</span><span class=p>:</span>
+                <span class=n>line</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>oline</span><span class=p>)</span>
+                <span class=k>if</span> <span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>line</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=k>continue</span>
+                <span class=n>splt</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>split</span><span class=p>()</span>
+                <span class=k>if</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>splt</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>4</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid format: </span><span class=si>{</span><span class=n>oline</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=n>cap</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=n>splt</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span>
+                <span class=n>data</span><span class=o>.</span><span class=n>append</span><span class=p>([</span>
+                    <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=s2>"e"</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span>
+                    <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=mi>1</span><span class=p>],</span> <span class=s2>"l"</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span>
+                    <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>splt</span><span class=p>[</span><span class=mi>2</span><span class=p>],</span> <span class=s2>"d"</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span><span class=p>,</span>
+                    <span class=n>cap</span><span class=p>])</span>
+                <span class=n>li</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>cap</span><span class=o>.</span><span class=n>rfind</span><span class=p>(</span><span class=s2>"."</span><span class=p>)</span>
+                <span class=k>if</span> <span class=n>li</span> <span class=o>>=</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=n>power</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>power</span><span class=p>,</span> <span class=nb>len</span><span class=p>(</span><span class=n>cap</span><span class=p>)</span> <span class=o>-</span> <span class=n>li</span><span class=p>)</span>
+
+        <span class=n>power</span> <span class=o>-=</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=n>power</span> <span class=o>!=</span> <span class=mi>3</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Power must be 3, but is </span><span class=si>{</span><span class=n>power</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>power</span> <span class=o>=</span> <span class=mi>10</span> <span class=o>**</span> <span class=n>power</span>
+        <span class=k>for</span> <span class=n>row</span> <span class=ow>in</span> <span class=n>data</span><span class=p>:</span>
+            <span class=n>row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>]</span> <span class=o>=</span> <span class=nb>round</span><span class=p>(</span><span class=nb>float</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=o>-</span><span class=mi>1</span><span class=p>])</span> <span class=o>*</span> <span class=n>power</span><span class=p>)</span>
+            <span class=k>if</span> <span class=nb>any</span><span class=p>(</span><span class=n>r</span> <span class=o><</span> <span class=mi>0</span> <span class=k>for</span> <span class=n>r</span> <span class=ow>in</span> <span class=n>row</span><span class=p>):</span>
+                <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid row: </span><span class=si>{</span><span class=n>row</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+
+        <span class=n>penalty</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>sum</span><span class=p>(</span><span class=n>r</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span> <span class=k>for</span> <span class=n>r</span> <span class=ow>in</span> <span class=n>data</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span>
+        <span class=k>if</span> <span class=n>penalty</span> <span class=o><=</span> <span class=mi>1</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span>
+                <span class=sa>f</span><span class=s2>"Maximum must be positive, but is </span><span class=si>{</span><span class=n>penalty</span><span class=w> </span><span class=o>-</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2>."</span><span class=p>)</span>
+        <span class=n>lengths</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>(</span>
+            <span class=nb>max</span><span class=p>(</span><span class=n>r</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=k>for</span> <span class=n>r</span> <span class=ow>in</span> <span class=n>data</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span>
+            <span class=nb>max</span><span class=p>(</span><span class=n>r</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=k>for</span> <span class=n>r</span> <span class=ow>in</span> <span class=n>data</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>,</span>
+            <span class=nb>max</span><span class=p>(</span><span class=n>r</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span> <span class=k>for</span> <span class=n>r</span> <span class=ow>in</span> <span class=n>data</span><span class=p>)</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span>
+
+        <span class=n>use_shape</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>data</span><span class=p>),</span> <span class=mi>4</span><span class=p>)</span>
+        <span class=n>dt</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>dtype</span> <span class=o>=</span> <span class=n>int_range_to_dtype</span><span class=p>(</span>
+            <span class=mi>0</span><span class=p>,</span> <span class=p>(</span><span class=mi>3</span> <span class=o>*</span> <span class=n>penalty</span> <span class=o>*</span> <span class=n>use_shape</span><span class=p>[</span><span class=mi>0</span><span class=p>])</span> <span class=o>+</span> <span class=n>penalty</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span>
+
+        <span class=n>result</span><span class=p>:</span> <span class=n>Instance</span> <span class=o>=</span> <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__new__</span><span class=p>(</span><span class=n>Instance</span><span class=p>,</span> <span class=n>use_shape</span><span class=p>,</span> <span class=n>dt</span><span class=p>)</span>
+
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>row</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>data</span><span class=p>):</span>
+            <span class=k>for</span> <span class=n>j</span><span class=p>,</span> <span class=n>val</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>row</span><span class=p>):</span>
+                <span class=n>result</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]</span> <span class=o>=</span> <span class=n>val</span>
+                <span class=k>if</span> <span class=n>val</span> <span class=o>!=</span> <span class=n>result</span><span class=p>[</span><span class=n>i</span><span class=p>,</span> <span class=n>j</span><span class=p>]:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Error during conversion."</span><span class=p>)</span>
+
+        <span class=c1>#: set the result name</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>name</span> <span class=o>=</span> <span class=n>name</span>
+        <span class=c1>#: set the penalty</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>penalty</span> <span class=o>=</span> <span class=n>penalty</span>
+        <span class=c1>#: the number of orbit pairs</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>n</span> <span class=o>=</span> <span class=n>use_shape</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span>
+        <span class=c1>#: the number of values per column</span>
+        <span class=n>result</span><span class=o>.</span><span class=n>lengths</span> <span class=o>=</span> <span class=n>lengths</span>
+        <span class=nb>setattr</span><span class=p>(</span><span class=n>meth</span><span class=p>,</span> <span class=n>attr</span><span class=p>,</span> <span class=n>result</span><span class=p>)</span>
+        <span class=k>return</span> <span class=n>result</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this instance.</span>
+
+<span class=sd>        :returns: the name of this instance.</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>name</span>
+
+<div class=viewcode-block id=Instance.log_parameters_to>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.instance.Instance.log_parameters_to>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>log_parameters_to</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>logger</span><span class=p>:</span> <span class=n>KeyValueLogSection</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Log all parameters of this component as key-value pairs.</span>
+
+<span class=sd>        :param logger: the logger for the parameters</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=n>log_parameters_to</span><span class=p>(</span><span class=n>logger</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"penalty"</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>penalty</span><span class=p>)</span>
+        <span class=n>logger</span><span class=o>.</span><span class=n>key_value</span><span class=p>(</span><span class=s2>"lengths"</span><span class=p>,</span> <span class=s2>";"</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=p>,</span> <span class=bp>self</span><span class=o>.</span><span class=n>lengths</span><span class=p>)))</span></div>
+
+
+<div class=viewcode-block id=Instance.list_resources>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.instance.Instance.list_resources>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>list_resources</span><span class=p>()</span> <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get all the beginner problem instances.</span>
+
+<span class=sd>        :return: the problem instance names</span>
+
+<span class=sd>        >>> Instance.list_resources()</span>
+<span class=sd>        ('matching-i', 'matching-ii')</span>
+
+<span class=sd>        >>> for ix in Instance.list_resources():</span>
+<span class=sd>        ...     print(Instance(ix).name)</span>
+<span class=sd>        matching-i</span>
+<span class=sd>        matching-ii</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=p>(</span><span class=s2>"matching-i"</span><span class=p>,</span> <span class=s2>"matching-ii"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=Instance.list_instances>
+<a class=viewcode-back href=../../../../../../moptipyapps.spoc.spoc_4.challenge_1.beginner.html#moptipyapps.spoc.spoc_4.challenge_1.beginner.instance.Instance.list_instances>[docs]</a>
+    <span class=nd>@staticmethod</span>
+    <span class=k>def</span><span class=w> </span><span class=nf>list_instances</span><span class=p>()</span> <span class=o>-></span> <span class=n>Generator</span><span class=p>[</span><span class=n>Callable</span><span class=p>[[],</span> <span class=n>Any</span><span class=p>],</span> <span class=kc>None</span><span class=p>,</span> <span class=kc>None</span><span class=p>]:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get an iterable of all instances.</span>
+
+<span class=sd>        :return: the iterable</span>
+
+<span class=sd>        >>> for ix in Instance.list_instances():</span>
+<span class=sd>        ...     print(ix().name)</span>
+<span class=sd>        matching-i</span>
+<span class=sd>        matching-ii</span>
+<span class=sd>        """</span>
+        <span class=k>yield</span> <span class=k>lambda</span><span class=p>:</span> <span class=n>Instance</span><span class=p>(</span><span class=s2>"matching-i"</span><span class=p>)</span>
+        <span class=k>yield</span> <span class=k>lambda</span><span class=p>:</span> <span class=n>Instance</span><span class=p>(</span><span class=s2>"matching-ii"</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../../../../index.html>moptipyapps 0.8.91 documentation</a> »<li class="nav-item nav-item-1"><a href=../../../../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.spoc.spoc_4.challenge_1.beginner.instance</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2026, Thomas Weise.</div>
