@@ -1,5 +1,5 @@
 """
-The instance of the Luna Tomato Logistics beginner problem.
+The instance of the Lunar Tomato Logistics beginner problem.
 
 >>> inst1 = Instance("matching-i")
 >>> inst1.n
@@ -50,7 +50,7 @@ from moptipyapps.spoc.spoc_4.challenge_1.beginner.data import (
 
 
 class Instance(np.ndarray, Component):
-    """The instances of the Luna Tomato Logistics beginner problem."""
+    """The instances of the Lunar Tomato Logistics beginner problem."""
 
     #: set the result name
     name: str

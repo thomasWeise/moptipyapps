@@ -1,5 +1,5 @@
 """
-The Luna Tomato Logistics beginner problem data.
+The Lunar Tomato Logistics beginner problem data.
 
 See <https://github.com/esa/SpOC4> for the original source of the data.
 """
