@@ -1,4 +1,39 @@
-"""Maximize the worst and average immediate rates."""
+"""
+Maximize the worst and average immediate rates.
+
+This objective function tries to find solutions which have very robust
+and also good fill rates.
+The fill rate is the fraction of customers that can get served directly,
+i.e., the fraction of customers that do not need to wait.
+This means that it is the fraction of customers whose demands can directly be
+satisfied from the stock.
+
+Fill rates are between 0 and 1.
+Of course, high fill rates are good and should therefore be subject to
+maximization.
+However, since we can only *minimize*, we minimize "1 - fill rate".
+
+Now, the question is:
+What is a *robust* fill rate / solution?
+Well, we simulate the solutions (such as re-order points) over multiple
+instances.
+A robust good fill rate would be high on the worst instance.
+In other words, the smallest fill rate measured on any instance should
+be as high as possible.
+This means that the largest value "1 - fill rate" should be as small as
+possible.
+
+However, this does not consider the average performance.
+A good average performance would mean that we maximize the *average*
+fill rate over all instances, or, in terms of minimization, that we minimize
+"1 - average fill rate".
+
+This objective function combines both concepts, putting special emphasis
+on the worst-case fill rate.
+It minimizes
+
+    "100+(1 - worst-case fill rate) + (1 - average fill rate)"
+"""
 
 
 from moptipy.api.objective import Objective
@@ -7,7 +42,7 @@ from moptipyapps.prodsched.multistatistics import MultiStatistics
 
 
 class WorstAndMeanFillRate(Objective):
-    """Compute the worst immediate rate and return `1 -` of it."""
+    """Combine and minimize worst and average fill rate."""
 
     def evaluate(self, x: MultiStatistics) -> int | float:
         """
@@ -37,7 +72,7 @@ class WorstAndMeanFillRate(Objective):
         """
         Get the upper bound of the inverted minimum immediate rate.
 
-        :retval 1: always
+        :retval 101: always
         """
         return 101
 
