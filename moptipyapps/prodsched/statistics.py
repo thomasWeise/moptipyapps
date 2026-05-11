@@ -11,7 +11,7 @@ plugged into the
 """
 
 from itertools import chain
-from typing import Callable, Final, Generator
+from typing import Callable, Final, Generator, Iterable, Self
 
 from moptipy.utils.logger import KEY_VALUE_SEPARATOR
 from pycommons.io.csv import CSV_SEPARATOR, SCOPE_SEPARATOR
@@ -22,7 +22,10 @@ from pycommons.math.stream_statistics import (
     KEY_STDDEV,
     StreamStatistics,
 )
-from pycommons.strings.string_conv import num_or_none_to_str
+from pycommons.strings.string_conv import (
+    num_or_none_to_str,
+    str_to_num_or_none,
+)
 from pycommons.types import check_int_range, type_error
 
 #: the name of the statistics key
@@ -49,7 +52,7 @@ ROW_SIMULATION_TIME: Final[str] = \
     f"time{SCOPE_SEPARATOR}s{KEY_VALUE_SEPARATOR}"
 
 #: the statistics that we will print
-__STATS: tuple[tuple[str, Callable[[
+_STATS: tuple[tuple[str, Callable[[
     StreamStatistics], int | float | None]], ...] = (
     (KEY_MINIMUM, StreamStatistics.getter_or_none(KEY_MINIMUM)),
     (KEY_MEAN_ARITH, StreamStatistics.getter_or_none(KEY_MEAN_ARITH)),
@@ -158,6 +161,25 @@ class Statistics:
         """Convert this object to a string."""
         return "\n".join(to_stream(self))
 
+    def clear(self) -> None:
+        """Clear all the data."""
+        n: Final[int] = list.__len__(self.production_times)
+        if n <= 0:
+            raise ValueError("Huh?")
+        for i in range(n):
+            self.production_times[i] = None
+            self.immediate_rates[i] = None
+            self.waiting_times[i] = None
+            self.fulfilled_rates[i] = None
+            self.stock_levels[i] = None
+
+        self.production_time = None
+        self.immediate_rate = None
+        self.waiting_time = None
+        self.fulfilled_rate = None
+        self.stock_level = None
+        self.simulation_time_nanos = None
+
     def copy_from(self, stat: "Statistics") -> None:
         """
         Copy the contents of another statistics record.
@@ -178,6 +200,127 @@ class Statistics:
         self.stock_level = stat.stock_level
         self.simulation_time_nanos = stat.simulation_time_nanos
 
+    def from_stream(self, stream: Iterable[str]) -> Self:
+        """
+        Load the data from a stream.
+
+        Notice: The `n` values of the statistics records cannot be loaded.
+        They will be lost and just set to some more or less random number.
+
+        :param stream: the stream of data
+        :return: this object
+        """
+        self.clear()
+
+        n: Final[int] = list.__len__(self.production_times)
+        if n <= 0:
+            raise ValueError("Huh?")
+
+        keys: Final[set[str]] = {
+            f"{key}{SCOPE_SEPARATOR}{the_stat[0]}"
+            for key in (ROW_TRP, ROW_CWT) for the_stat in _STATS}
+        keys.update((ROW_FILL_RATE, ROW_FULFILLED_RATE,
+                     ROW_STOCK_LEVEL_MEAN))
+        sim_time_key: Final[str] = ROW_SIMULATION_TIME
+
+        data: dict[str, list[int | float | None]] = {}
+        sim_time: int | None = None
+        for srow in stream:
+            row = str.strip(srow)
+            if row.startswith(sim_time_key):
+                sim_time = check_int_range(round(float(
+                    row[str.__len__(sim_time_key):]) * 1_000_000_000),
+                                           sim_time_key, 0,
+                                           1_000_000_000_000_000_000_000_000)
+                if set.__len__(keys) <= 0:
+                    break
+                continue
+
+            cols: list[str] = str.split(srow, CSV_SEPARATOR)
+            key: str = cols[0]
+            if (list.__len__(cols) <= (n + 1)) or (key not in keys):
+                continue
+            if key in data:
+                raise ValueError(f"Duplicate key '{key}'.")
+            data[key] = [str_to_num_or_none(cols[i]) for i in range(1, n + 2)]
+            keys.remove(key)
+            if (set.__len__(keys) <= 0) and (sim_time is not None):
+                break
+
+        if set.__len__(keys) > 0:
+            raise ValueError(f"Missing keys: {keys}")
+        if sim_time is None:
+            raise ValueError(f"Did not find key '{sim_time_key}'.")
+
+        self.simulation_time_nanos = sim_time
+        self.production_time = _split_data_stat(
+            data, ROW_TRP, self.production_times)
+        self.waiting_time = _split_data_stat(
+            data, ROW_CWT, self.waiting_times)
+
+        vals: list[int | float | None] = data[ROW_FILL_RATE]
+        self.immediate_rate = vals[0]
+        self.immediate_rates[:] = vals[1:]
+
+        vals = data[ROW_STOCK_LEVEL_MEAN]
+        self.stock_level = vals[0]
+        self.stock_levels[:] = vals[1:]
+
+        vals = data[ROW_FULFILLED_RATE]
+        self.fulfilled_rate = vals[0]
+        self.fulfilled_rates[:] = vals[1:]
+
+        return self
+
+
+def _split_data_stat(data: dict[str, list[int | float | None]],
+                     key: str,
+                     dest: list[StreamStatistics | None]) \
+        -> StreamStatistics | None:
+    """
+    Split a data set.
+
+    :param data: the data set
+    :param dest: the destination list
+    :return: the main statistics, if any
+    """
+    key_min: Final[str] = f"{key}{SCOPE_SEPARATOR}{KEY_MINIMUM}"
+    key_mean: Final[str] = f"{key}{SCOPE_SEPARATOR}{KEY_MEAN_ARITH}"
+    key_max: Final[str] = f"{key}{SCOPE_SEPARATOR}{KEY_MAXIMUM}"
+    key_sd: Final[str] = f"{key}{SCOPE_SEPARATOR}{KEY_STDDEV}"
+    for i in range(1, list.__len__(dest) + 1):
+        dest[i - 1] = __stream_stats(data, key_min, key_mean, key_max,
+                                     key_sd, i)
+    return __stream_stats(data, key_min, key_mean, key_max, key_sd, 0)
+
+
+def __stream_stats(data: dict[str, list[int | float | None]],
+                   key_min: str, key_mean: str, key_max: str, key_sd: str,
+                   i: int) -> StreamStatistics | None:
+    """
+    Get a stream statistics.
+
+    :param data: the data array
+    :param key_min: the minimum key
+    :param key_mean: the mean key
+    :param key_max: the maximum key
+    :param key_sd: the standard deviation key
+    :param i: the index
+    :return: the statistics or `None`
+    """
+    the_min = data[key_min][i]
+    the_mean = data[key_mean][i]
+    the_max = data[key_max][i]
+    the_sd = data[key_sd][i]
+    if (the_min is None) or (the_max is None):
+        return None
+    if the_mean is None:
+        raise ValueError(
+            f"Invalid mean {the_mean} for min={the_min}, max={the_max}!")
+    return StreamStatistics(n=1 if the_sd is None else 100, minimum=the_min,
+                            mean_arith=the_mean,
+                            maximum=the_max, stddev=the_sd)
+
 
 def to_stream(stats: Statistics) -> Generator[str, None, None]:
     """
@@ -196,7 +339,7 @@ def to_stream(stats: Statistics) -> Generator[str, None, None]:
     for key, alle, single in (
             (ROW_TRP, stats.production_times, stats.production_time),
             (ROW_CWT, stats.waiting_times, stats.waiting_time)):
-        for stat, call in __STATS:
+        for stat, call in _STATS:
             yield str.join(CSV_SEPARATOR, chain((
                 f"{key}{SCOPE_SEPARATOR}{stat}", nts(call(single))), (
                 map(nts, map(call, alle)))))

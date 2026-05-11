@@ -27,7 +27,7 @@ appear in the log files.
 """
 
 from dataclasses import dataclass
-from typing import Final, Generator
+from typing import Final, Generator, Iterable, Self
 
 from moptipy.api.space import Space
 from moptipy.utils.logger import (
@@ -63,6 +63,46 @@ class MultiStatistics:
         elif tuple.__len__(names) != tuple.__len__(instances):
             raise ValueError(f"names {names} do not fit")
         object.__setattr__(self, "inst_names", names)
+
+    def from_stream(self, stream: Iterable[str]) -> Self:
+        """
+        Convert a stream of text to a multi-statistics object.
+
+        Warning: This method cannot restore the numbers `n` in the single
+        stream statistics.
+
+        :param stream: the stream
+        :return: the object itself
+        """
+        pi: Final[tuple[Statistics, ...]] = self.per_instance
+        n: Final[int] = tuple.__len__(pi)
+        for statistics in pi:
+            statistics.clear()
+        source = iter(stream)
+        needs: Final[set[int]] = set(range(n))
+        for srow in source:
+            row = str.strip(srow)
+            if not row.startswith("-"):
+                continue
+            space: int = row.index(" ", row.index(" ") + 1)
+            colon: int = row.index(":", space + 1)
+            prime_1: int = row.index("'", colon + 1)
+            prime_2: int = row.index("'", prime_1 + 1)
+            inst_name: str = str.strip(row[prime_1 + 1: prime_2])
+            inst_idx: int = int(row[space + 1:colon])
+            if inst_idx not in needs:
+                raise ValueError(f"Instance data {inst_idx} / "
+                                 f"{inst_name!r} already loaded.")
+            if self.inst_names[inst_idx] != inst_name:
+                raise ValueError(
+                    f"Name {inst_name!r} of instance {inst_idx} should "
+                    f"be {self.inst_names[inst_idx]!r}.")
+            pi[inst_idx].from_stream(source)
+            needs.remove(inst_idx)
+
+        if set.__len__(needs) != 0:
+            raise ValueError(f"Data for instances {needs} is missing.")
+        return self
 
 
 def to_stream(multi: MultiStatistics) -> Generator[str, None, None]:
@@ -141,12 +181,17 @@ class MultiStatisticsSpace(Space):
         """
         Convert a string to a multi-statistics.
 
+        Warning: This method cannot restore the numbers `n` in the single
+        stream statistics. Therefore, the returned objects cannot be identical
+        to the stored objects...
+
         :param text: the string
         :return: the multi-statistics
         """
-        if not isinstance(text, str):
-            raise type_error(text, "text", str)
-        raise NotImplementedError
+        result: Final[MultiStatistics] = self.create().from_stream(
+            text.split())
+        self.validate(result)
+        return result
 
     def validate(self, x: MultiStatistics) -> None:
         """

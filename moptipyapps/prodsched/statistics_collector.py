@@ -55,7 +55,25 @@ independent instances, then can be used as basis for objective functions
 >>> collector.set_dest(statistics)
 >>> simulation = Simulation(instance, collector)
 >>> simulation.ctrl_run()
->>> print("\n".join(str(statistics).split("\n")[:-1]))
+>>> from moptipyapps.prodsched.statistics import to_stream
+>>> text = list(to_stream(statistics))
+>>> print("\n".join(text[:-1]))
+stat;total;product_0;product_1
+trp.min;229.57142857142858;455.6;229.57142857142858
+trp.mean;304.8888888888889;455.6;246.92307692307693
+trp.max;455.6;455.6;267.1666666666667
+trp.sd;97.56326157594913;0;19.50721118346466
+cwt.min;1603;2278;1603
+cwt.mean;1829.3333333333333;2278;1605
+cwt.max;2278;2278;1607
+cwt.sd;388.56187838403986;;2.8284271247461903
+fill.rate;0;0;0
+stocklevel.mean;0.6078765407355446;0.4497444633730835;0.15813207736246118
+fulfilled.rate;1;1;1
+
+>>> statistics_2 = Statistics(instance.n_products)
+>>> statistics_2 = statistics_2.from_stream(text)
+>>> print("\n".join(list(to_stream(statistics_2))[:-1]))
 stat;total;product_0;product_1
 trp.min;229.57142857142858;455.6;229.57142857142858
 trp.mean;304.8888888888889;455.6;246.92307692307693
