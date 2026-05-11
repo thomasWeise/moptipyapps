@@ -228,10 +228,10 @@ class Statistics:
         for srow in stream:
             row = str.strip(srow)
             if row.startswith(sim_time_key):
-                sim_time = check_int_range(round(float(
-                    row[str.__len__(sim_time_key):]) * 1_000_000_000),
-                                           sim_time_key, 0,
-                                           1_000_000_000_000_000_000_000_000)
+                sim_time = check_int_range(
+                    round(float(row[str.__len__(
+                        sim_time_key):]) * 1_000_000_000),
+                    sim_time_key, 0, 1_000_000_000_000_000_000_000_000)
                 if set.__len__(keys) <= 0:
                     break
                 continue
