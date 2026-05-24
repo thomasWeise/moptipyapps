@@ -37,6 +37,16 @@ locations.
 >>> QAPObjective(inst).evaluate(np.array([
 ...     7, 0, 5, 1, 10, 9, 2, 4, 8, 6, 11, 3]))
 224416
+
+>>> inst = Instance.from_resource("tai10a")
+>>> QAPObjective(inst).evaluate(np.array([
+...     8, 0, 7, 5, 9, 4, 3, 2, 6, 1]))
+135028
+
+>>> inst = Instance.from_resource("tai10b")
+>>> QAPObjective(inst).evaluate(np.array([
+...     4, 5, 0, 3, 6, 7, 8, 2, 1, 9]))
+1183760
 """
 
 

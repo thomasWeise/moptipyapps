@@ -26,7 +26,7 @@ def __check_resource_instance(name: str, root_class) -> None:
     :param root_class: the root class
     """
     instance: Final[Instance] = root_class.from_resource(name)
-    try:
+    try:  # noqa: PLW0717
         assert isinstance(instance, Instance)
         assert 0 <= instance.tour_length_lower_bound <= \
                instance.tour_length_upper_bound < 1_000_000_000_000_000

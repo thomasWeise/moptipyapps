@@ -120,11 +120,12 @@ _INSTANCES: Final[tuple[str, ...]] = (
     "nug25", "nug27", "nug28", "nug30", "rou12", "rou15", "rou20", "scr12",
     "scr15", "scr20", "sko42", "sko49", "sko56", "sko64", "sko72", "sko81",
     "sko90", "sko100a", "sko100b", "sko100c", "sko100d", "sko100e", "sko100f",
-    "ste36a", "ste36b", "ste36c", "tai12a", "tai12b", "tai15a", "tai15b",
-    "tai17a", "tai20a", "tai20b", "tai25a", "tai25b", "tai30a", "tai30b",
-    "tai35a", "tai35b", "tai40a", "tai40b", "tai50a", "tai50b", "tai60a",
-    "tai60b", "tai64c", "tai80a", "tai80b", "tai100a", "tai100b", "tai150b",
-    "tai256c", "tho30", "tho40", "tho150", "wil50", "wil100")
+    "ste36a", "ste36b", "ste36c", "tai10a", "tai10b", "tai12a", "tai12b",
+    "tai15a", "tai15b", "tai17a", "tai20a", "tai20b", "tai25a", "tai25b",
+    "tai30a", "tai30b", "tai35a", "tai35b", "tai40a", "tai40b", "tai50a",
+    "tai50b", "tai60a", "tai60b", "tai64c", "tai80a", "tai80b", "tai100a",
+    "tai100b", "tai150b", "tai256c", "tho30", "tho40", "tho150", "wil50",
+    "wil100")
 
 #: the lower bounds provided at <https://qaplib.mgi.polymtl.ca/>
 _BOUNDS: Final[dict[str, int]] = {
@@ -136,16 +137,16 @@ _BOUNDS: Final[dict[str, int]] = {
     "sko100c": 139881, "sko100d": 141289, "sko100e": 140893, "sko100f": 140691,
     "sko42": 15332, "sko49": 22650, "sko56": 33385, "sko64": 47017,
     "sko72": 64455, "sko81": 88359, "sko90": 112423, "ste36a": 9526,
-    "ste36b": 15852, "ste36c": 8239110, "tai100a": 17853840,
-    "tai100b": 1151591000, "tai12a": 224416, "tai12b": 39464925,
-    "tai150b": 441786736, "tai15a": 388214, "tai15b": 51765268,
-    "tai17a": 491812, "tai20a": 703482, "tai20b": 122455319,
-    "tai256c": 44095032, "tai25a": 1167256, "tai25b": 344355646,
+    "ste36b": 15852, "ste36c": 8239110, "tai10a": 135028, "tai10b": 1183760,
+    "tai12a": 224416, "tai12b": 39464925, "tai150b": 441786736,
+    "tai15a": 388214, "tai15b": 51765268, "tai17a": 491812, "tai20a": 703482,
+    "tai20b": 122455319, "tai25a": 1167256, "tai25b": 344355646,
     "tai30a": 1706855, "tai30b": 637117113, "tai35a": 2216627,
     "tai35b": 269532400, "tai40a": 2843274, "tai40b": 608808400,
     "tai50a": 4390920, "tai50b": 431090700, "tai60a": 6325978,
     "tai60b": 592371800, "tai64c": 1855928, "tai80a": 11657010,
-    "tai80b": 786298800, "tho150": 7620628, "tho30": 149936, "tho40": 226490,
+    "tai80b": 786298800, "tai100a": 17853840, "tai100b": 1151591000,
+    "tai256c": 44095032, "tho150": 7620628, "tho30": 149936, "tho40": 226490,
     "wil100": 268955, "wil50": 48121, "bur26a": 5426670, "bur26b": 3817852,
     "bur26c": 5426795, "bur26d": 3821225, "bur26e": 5386879, "bur26f": 3782044,
     "bur26g": 10117172, "bur26h": 7098658, "chr12a": 9552, "chr12b": 9742,
@@ -435,7 +436,7 @@ class Instance(Component):
         :return: the tuple with the instance names
 
         >>> len(Instance.list_resources())
-        134
+        136
         """
         return _INSTANCES
 
