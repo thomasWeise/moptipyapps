@@ -87,6 +87,10 @@ Erlang(k=1, theta=0.26)
  0.04904717644388396, 0.32082097064821674, 0.001884448999141546,\
  0.6687964040577958, 0.060598863807579915, 0.21491377996577304,\
  0.23088301776258766, 0.23667780086315618]
+>>> erlang.mean()
+0.26
+>>> mean(x)
+0.23951704283832467
 >>> mean(x) / erlang.mean()
 0.9212193955320179
 
@@ -165,13 +169,32 @@ Erlang(k=3, theta=3.3333333333333335)
 1.022444624140316
 
 >>> AtLeast.greater_than_zero(Gamma(1, 0.5))
-AtLeast(lb=5e-324, d=Exponential(eta=1))
+AtLeast(lb=5e-324, d=Exponential(eta=0.5))
 
 >>> AtLeast.greater_than_zero(Gamma(2, 0.5))
 Erlang(k=2, theta=0.5)
 
 >>> AtLeast.greater_than_zero(Gamma(2.5, 0.5))
 Gamma(k=2.5, theta=0.5)
+
+>>> expo = erlang.simplify()
+>>> expo
+Exponential(eta=0.26)
+>>> x = [expo.sample(rnd) for _ in range(200)]
+>>> x[:20]
+[0.07166050776665364, 0.16168119850191573, 0.22421276308859897, \
+0.0159144585889376, 0.2814946917726687, 0.18627887507033897, \
+0.023154315537313133, 0.04580416404670023, 0.6022196871728142, \
+0.025107668179499498, 0.8833625673263216, 0.15071056549661394, \
+0.00971431623116772, 0.024629860397399155, 0.5601666963985541, \
+0.14266231845989083, 0.05929349838310316, 0.34738399195888336, \
+0.048260650616228924, 0.28230843185818594]
+>>> mean(x)
+0.23545459359353754
+>>> expo.mean()
+0.26
+>>> mean(x) / expo.mean()
+0.9055945907443751
 """
 
 from dataclasses import dataclass
@@ -393,7 +416,7 @@ class Gamma(Distribution):
 
         :returns: a simplified version of this distribution
         """
-        return Exponential(self.k) if self.k == 1 else (
+        return Exponential(self.theta) if self.k == 1 else (
             Erlang(self.k, self.theta) if isinstance(
                 self.k, int) and not isinstance(self, Erlang) else self)
 
