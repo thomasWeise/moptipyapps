@@ -437,6 +437,27 @@ class Gamma(Distribution):
         :param alpha: the alpha parameter
         :param beta: the beta parameter
         :return: the distribution
+
+        >>> Gamma.from_alpha_beta(1, 1)
+        Exponential(eta=1)
+
+        >>> Gamma.from_alpha_beta(2, 1)
+        Erlang(k=2, theta=1)
+
+        >>> Gamma.from_alpha_beta(1, 2)
+        Exponential(eta=0.5)
+
+        >>> Gamma.from_alpha_beta(2, 2)
+        Erlang(k=2, theta=0.5)
+
+        >>> Gamma.from_alpha_beta(1.5, 1)
+        Gamma(k=1.5, theta=1)
+
+        >>> Gamma.from_alpha_beta(1, 1.5)
+        Exponential(eta=0.6666666666666666)
+
+        >>> Gamma.from_alpha_beta(1.5, 1.5)
+        Gamma(k=1.5, theta=0.6666666666666666)
         """
         beta = try_int(beta)
         if beta == 0:
@@ -452,6 +473,24 @@ class Gamma(Distribution):
         :param k: the shape parameter
         :param mean: the mean
         :return: the distribution
+
+        >>> Gamma.from_k_and_mean(1, 1)
+        Exponential(eta=1)
+
+        >>> Gamma.from_k_and_mean(1, 2)
+        Exponential(eta=2)
+
+        >>> Gamma.from_k_and_mean(2, 1)
+        Erlang(k=2, theta=0.5)
+
+        >>> Gamma.from_k_and_mean(2, 2)
+        Erlang(k=2, theta=1)
+
+        >>> Gamma.from_k_and_mean(1.5, 1)
+        Gamma(k=1.5, theta=0.6666666666666666)
+
+        >>> Gamma.from_k_and_mean(1, 1.5)
+        Exponential(eta=1.5)
         """
         k = try_int(k)
         mean = try_int(mean)

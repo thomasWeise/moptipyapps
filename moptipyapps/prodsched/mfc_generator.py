@@ -544,7 +544,7 @@ def default_stations() -> tuple[Station, ...]:
  Station(station_id=2, processing_time=Erlang(k=2, theta=1.33),\
  processing_windows=Const(v=0.125)),\
  Station(station_id=3,\
- processing_time=AtLeast(lb=5e-324, d=Exponential(eta=1)),\
+ processing_time=AtLeast(lb=5e-324, d=Exponential(eta=1.06)),\
  processing_windows=Const(v=0.125)),\
  Station(station_id=4, processing_time=Erlang(k=3, theta=0.67),\
  processing_windows=Const(v=0.125)),\
@@ -559,7 +559,7 @@ def default_stations() -> tuple[Station, ...]:
  Station(station_id=9, processing_time=Erlang(k=3, theta=0.6),\
  processing_windows=Const(v=0.125)),\
  Station(station_id=10,\
- processing_time=AtLeast(lb=5e-324, d=Exponential(eta=1)),\
+ processing_time=AtLeast(lb=5e-324, d=Exponential(eta=1.44)),\
  processing_windows=Const(v=0.125)),\
  Station(station_id=11, processing_time=Erlang(k=4, theta=0.29),\
  processing_windows=Const(v=0.125)),\
