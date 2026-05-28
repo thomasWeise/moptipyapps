@@ -1,0 +1,362 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.rop_multisimulation — moptipyapps 0.8.94 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=52e096ff"></script><script src="../../../_static/doctools.js?v=fd6eb6e6"></script><script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/rop_multisimulation.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.94 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.rop_multisimulation</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.rop_multisimulation</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A simulator for multiple runs of the ROP scenario.</span>
+
+<span class=sd>Re-Order-Point (ROP) scenarios are such that for each product, a value `X` is</span>
+<span class=sd>provided. Once there are no more than `X` elements of that product in the</span>
+<span class=sd>warehouse, one new unit is ordered to be produced.</span>
+<span class=sd>Therefore, we have `n_products` such `X` values.</span>
+<span class=sd>A simulation in this scenario is implemented in</span>
+<span class=sd>:mod:`~moptipyapps.prodsched.rop_simulation` as class</span>
+<span class=sd>:class:`~moptipyapps.prodsched.rop_simulation.ROPSimulation`.</span>
+
+<span class=sd>This module here provides the functionality to simulate this ROP-approach</span>
+<span class=sd>over *multiple* instances (:class:`~moptipyapps.prodsched.instance.Instance`).</span>
+<span class=sd>It acts as an :class:`~moptipy.api.encoding.Encoding` that converts a re-order</span>
+<span class=sd>point into an instance of</span>
+<span class=sd>:class:`~moptipyapps.prodsched.multistatistics.MultiStatistics` which can then</span>
+<span class=sd>be used as basis to compute the values of (potentially multiple)</span>
+<span class=sd>objective functions, such as those given in package</span>
+<span class=sd>:mod:`~moptipyapps.prodsched.objectives`.</span>
+
+<span class=sd>Now, doing a multi-simulation is costly.</span>
+<span class=sd>It takes from half a second to several seconds.</span>
+<span class=sd>It is unlikely that we can do more than a million in any run of an</span>
+<span class=sd>optimization algorithm.</span>
+<span class=sd>Therefore, we use an internal caching mechanism to store all the input</span>
+<span class=sd>vectors and output statistics.</span>
+<span class=sd>This may consume quite some memory, but it might be faster.</span>
+
+<span class=sd>>>> from moptipyapps.prodsched.mfc_generator import sample_mfc_instance</span>
+<span class=sd>>>> from moptipyapps.prodsched.mfc_generator import Product</span>
+<span class=sd>>>> from moptipyapps.prodsched.mfc_generator import Station</span>
+<span class=sd>>>> from moptipyapps.utils.sampling import Gamma</span>
+<span class=sd>>>> from moptipyapps.prodsched.multistatistics import to_stream</span>
+
+<span class=sd>>>> inst1 = sample_mfc_instance(seed=100)</span>
+<span class=sd>>>> inst2 = sample_mfc_instance(seed=200)</span>
+
+<span class=sd>>>> instances = (inst1, inst2)</span>
+<span class=sd>>>> space = MultiStatisticsSpace(instances)</span>
+<span class=sd>>>> ms = ROPMultiSimulation(space)</span>
+
+<span class=sd>>>> x1 = np.array([4, 6, 3, 4, 4, 6, 3, 5, 6, 10])</span>
+<span class=sd>>>> y = space.create()</span>
+<span class=sd>>>> ms.decode(x1, y)</span>
+<span class=sd>>>> data = list(to_stream(y))</span>
+<span class=sd>>>> for s in data:</span>
+<span class=sd>...     if "time" not in s:</span>
+<span class=sd>...         print(s)</span>
+<span class=sd>-------- Instance 0: 'mfc_10_13_10000_0x64' -------</span>
+<span class=sd>stat;total;product_0;product_1;product_2;product_3;product_4;product_5;\</span>
+<span class=sd>product_6;product_7;product_8;product_9</span>
+<span class=sd>trp.min;7.148698771011368;7.148698771011368;9.851247306791265;\</span>
+<span class=sd>8.427300405584901;7.732987823144867;9.070787436894534;11.245150186528008;\</span>
+<span class=sd>7.548472763230166;17.99718923960154;19.843363570212205;21.06416134257961</span>
+<span class=sd>trp.mean;32.97790594850951;24.596468674329277;30.563844531997784;\</span>
+<span class=sd>27.279429397719902;27.79703033632461;26.77907139640676;31.011169285683117;\</span>
+<span class=sd>22.68822054678187;43.68592626657671;44.53906054313191;50.332354253457126</span>
+<span class=sd>trp.max;81.85722054558573;61.64176267270341;81.27718406438362;\</span>
+<span class=sd>59.59867846381849;61.89396888322699;58.814665098144815;58.66937148871966;\</span>
+<span class=sd>46.20656698190578;81.15104324107142;78.27784582696768;81.85722054558573</span>
+<span class=sd>trp.sd;13.469211388152745;9.448650489856151;10.895076940486566;\</span>
+<span class=sd>9.109918454636354;9.52161563781995;9.01547173838026;9.813054414557046;\</span>
+<span class=sd>7.002160286247719;10.716869779123178;10.334832333293049;\</span>
+<span class=sd>11.999775884280249</span>
+<span class=sd>cwt.min;0.005395059989496076;0.9780139529375447;0.2348135728352645;\</span>
+<span class=sd>0.03942528753759689;0.20585198680419126;0.5507500551393605;\</span>
+<span class=sd>0.13329136607262626;0.2233135479809789;0.005395059989496076;\</span>
+<span class=sd>0.363337511282225;0.39745336452870106</span>
+<span class=sd>cwt.mean;6.3170778026045005;7.056731365091693;5.2182919382446675;\</span>
+<span class=sd>6.87124683902964;9.079584429859228;5.9399972995436725;3.4793130259088376;\</span>
+<span class=sd>5.078417615955683;6.087077618707137;6.0301712727273555;0.39745336452870106</span>
+<span class=sd>cwt.max;30.3947134928394;18.927977914853727;14.788743864707612;\</span>
+<span class=sd>26.82679173953329;30.3947134928394;20.036018396819145;10.330677260388256;\</span>
+<span class=sd>14.073472667324495;24.646629221033436;21.919009444512994;\</span>
+<span class=sd>0.39745336452870106</span>
+<span class=sd>cwt.sd;5.5974909506906085;4.221610650071981;4.562515459731836;\</span>
+<span class=sd>6.170158967232;8.323952010113258;4.890025309334268;2.5970717405650108;\</span>
+<span class=sd>3.9630879947212585;5.290686494450313;5.719967055634048;</span>
+<span class=sd>fill.rate;0.9444205701188941;0.9545454545454546;0.9840579710144928;\</span>
+<span class=sd>0.8876080691642652;0.9431137724550899;0.9317851959361393;\</span>
+<span class=sd>0.9789325842696629;0.9251412429378532;0.8884180790960452;0.9510086455331412;\</span>
+<span class=sd>0.9985994397759104</span>
+<span class=sd>stocklevel.mean;28.41820760852814;2.560290636738579;3.9957232241217637;\</span>
+<span class=sd>1.3649189126423142;2.3827363444008087;2.402699293752699;3.8512931890069;\</span>
+<span class=sd>1.7423245168807433;1.641365095584735;2.6211003662097;5.8557560291898945</span>
+<span class=sd>fulfilled.rate;1;1;1;1;1;1;1;1;1;1;1</span>
+<span class=sd>-------- Instance 1: 'mfc_10_13_10000_0xc8' -------</span>
+<span class=sd>stat;total;product_0;product_1;product_2;product_3;product_4;product_5;\</span>
+<span class=sd>product_6;product_7;product_8;product_9</span>
+<span class=sd>trp.min;5.948427591903055;7.773461678094918;8.104543866997119;\</span>
+<span class=sd>9.933972266073852;9.004947959652782;8.776700665666795;9.975332333055121;\</span>
+<span class=sd>5.948427591903055;20.799002041634594;17.964307940585968;24.272536333651715</span>
+<span class=sd>trp.mean;35.167924925950125;27.18841637847806;33.27855240987676;\</span>
+<span class=sd>29.982146375833715;30.449231453771148;29.084101384288005;32.62138736043257;\</span>
+<span class=sd>22.83061361662951;46.50691768018183;45.7665440237148;53.59331009237047</span>
+<span class=sd>trp.max;95.9013844625315;67.73174100731194;75.85471491774206;\</span>
+<span class=sd>73.69881984770018;68.71451528269608;71.21493108382583;76.23405217026357;\</span>
+<span class=sd>48.44126891105043;95.9013844625315;80.51310862833998;93.74247469991224</span>
+<span class=sd>trp.sd;15.01651152311082;12.1357409577245;11.927832420121684;\</span>
+<span class=sd>12.110870983620881;12.231352766383868;11.422631005468508;10.870562799044663;\</span>
+<span class=sd>6.991683919460075;12.90335326836488;10.608823203464715;13.923445407906742</span>
+<span class=sd>cwt.min;0.029403377815469867;0.33968352876763674;0.8012226423225002;\</span>
+<span class=sd>0.4169237064834306;0.04608099701363244;0.13958597264536365;\</span>
+<span class=sd>0.1427841231916318;0.031861988642049255;0.04509163852708298;\</span>
+<span class=sd>0.029403377815469867;0.30706729430312407</span>
+<span class=sd>cwt.mean;9.125995226441729;7.635949273012871;8.099259381058715;\</span>
+<span class=sd>10.53104684412949;12.0613536196739;6.755248335968917;3.3923317916747693;\</span>
+<span class=sd>5.694018876707761;9.678250496815913;9.407512664676307;1.8529460623847172</span>
+<span class=sd>cwt.max;47.02757613742506;26.69298476563017;23.81131382935382;\</span>
+<span class=sd>33.68826448411983;47.02757613742506;21.765393608298837;8.465947593324927;\</span>
+<span class=sd>27.96794209550535;41.19798755026659;26.935112545980246;4.7028845058594015</span>
+<span class=sd>cwt.sd;8.312790326182888;5.699569122267945;7.46568137298234;\</span>
+<span class=sd>7.984381269231696;12.256771187209509;5.163135442961999;2.273816079756312;\</span>
+<span class=sd>6.655405008762987;8.35629247653758;7.251352236700332;1.9462759372992589</span>
+<span class=sd>fill.rate;0.9067748363222317;0.8929577464788733;0.9696969696969697;\</span>
+<span class=sd>0.7905982905982906;0.8695652173913043;0.8978723404255319;0.9854651162790697;\</span>
+<span class=sd>0.9276410998552822;0.8256484149855908;0.9142053445850914;0.9944367176634215</span>
+<span class=sd>stocklevel.mean;26.506300325777048;2.3225382137372628;3.7298268255006812;\</span>
+<span class=sd>1.2114694030566133;2.055027916866671;2.1359308723688653;3.803260303815258;\</span>
+<span class=sd>1.7840029880750334;1.5544812126506562;2.4214269649529525;5.488335624753054</span>
+<span class=sd>fulfilled.rate;1;1;1;1;1;1;1;1;1;1;1</span>
+
+<span class=sd>>>> y2 = space.create()</span>
+<span class=sd>>>> y2 = y2.from_stream(data)</span>
+<span class=sd>>>> for s in to_stream(y2):</span>
+<span class=sd>...     if "time" not in s:</span>
+<span class=sd>...         print(s)</span>
+<span class=sd>-------- Instance 0: 'mfc_10_13_10000_0x64' -------</span>
+<span class=sd>stat;total;product_0;product_1;product_2;product_3;product_4;product_5;\</span>
+<span class=sd>product_6;product_7;product_8;product_9</span>
+<span class=sd>trp.min;7.148698771011368;7.148698771011368;9.851247306791265;\</span>
+<span class=sd>8.427300405584901;7.732987823144867;9.070787436894534;11.245150186528008;\</span>
+<span class=sd>7.548472763230166;17.99718923960154;19.843363570212205;21.06416134257961</span>
+<span class=sd>trp.mean;32.97790594850951;24.596468674329277;30.563844531997784;\</span>
+<span class=sd>27.279429397719902;27.79703033632461;26.77907139640676;31.011169285683117;\</span>
+<span class=sd>22.68822054678187;43.68592626657671;44.53906054313191;50.332354253457126</span>
+<span class=sd>trp.max;81.85722054558573;61.64176267270341;81.27718406438362;\</span>
+<span class=sd>59.59867846381849;61.89396888322699;58.814665098144815;58.66937148871966;\</span>
+<span class=sd>46.20656698190578;81.15104324107142;78.27784582696768;81.85722054558573</span>
+<span class=sd>trp.sd;13.469211388152745;9.448650489856151;10.895076940486566;\</span>
+<span class=sd>9.109918454636354;9.52161563781995;9.01547173838026;9.813054414557046;\</span>
+<span class=sd>7.002160286247719;10.716869779123178;10.334832333293049;\</span>
+<span class=sd>11.999775884280249</span>
+<span class=sd>cwt.min;0.005395059989496076;0.9780139529375447;0.2348135728352645;\</span>
+<span class=sd>0.03942528753759689;0.20585198680419126;0.5507500551393605;\</span>
+<span class=sd>0.13329136607262626;0.2233135479809789;0.005395059989496076;\</span>
+<span class=sd>0.363337511282225;0.39745336452870106</span>
+<span class=sd>cwt.mean;6.3170778026045005;7.056731365091693;5.2182919382446675;\</span>
+<span class=sd>6.87124683902964;9.079584429859228;5.9399972995436725;3.4793130259088376;\</span>
+<span class=sd>5.078417615955683;6.087077618707137;6.0301712727273555;0.39745336452870106</span>
+<span class=sd>cwt.max;30.3947134928394;18.927977914853727;14.788743864707612;\</span>
+<span class=sd>26.82679173953329;30.3947134928394;20.036018396819145;10.330677260388256;\</span>
+<span class=sd>14.073472667324495;24.646629221033436;21.919009444512994;\</span>
+<span class=sd>0.39745336452870106</span>
+<span class=sd>cwt.sd;5.5974909506906085;4.221610650071981;4.562515459731836;\</span>
+<span class=sd>6.170158967232;8.323952010113258;4.890025309334268;2.5970717405650108;\</span>
+<span class=sd>3.9630879947212585;5.290686494450313;5.719967055634048;</span>
+<span class=sd>fill.rate;0.9444205701188941;0.9545454545454546;0.9840579710144928;\</span>
+<span class=sd>0.8876080691642652;0.9431137724550899;0.9317851959361393;\</span>
+<span class=sd>0.9789325842696629;0.9251412429378532;0.8884180790960452;0.9510086455331412;\</span>
+<span class=sd>0.9985994397759104</span>
+<span class=sd>stocklevel.mean;28.41820760852814;2.560290636738579;3.9957232241217637;\</span>
+<span class=sd>1.3649189126423142;2.3827363444008087;2.402699293752699;3.8512931890069;\</span>
+<span class=sd>1.7423245168807433;1.641365095584735;2.6211003662097;5.8557560291898945</span>
+<span class=sd>fulfilled.rate;1;1;1;1;1;1;1;1;1;1;1</span>
+<span class=sd>-------- Instance 1: 'mfc_10_13_10000_0xc8' -------</span>
+<span class=sd>stat;total;product_0;product_1;product_2;product_3;product_4;product_5;\</span>
+<span class=sd>product_6;product_7;product_8;product_9</span>
+<span class=sd>trp.min;5.948427591903055;7.773461678094918;8.104543866997119;\</span>
+<span class=sd>9.933972266073852;9.004947959652782;8.776700665666795;9.975332333055121;\</span>
+<span class=sd>5.948427591903055;20.799002041634594;17.964307940585968;24.272536333651715</span>
+<span class=sd>trp.mean;35.167924925950125;27.18841637847806;33.27855240987676;\</span>
+<span class=sd>29.982146375833715;30.449231453771148;29.084101384288005;32.62138736043257;\</span>
+<span class=sd>22.83061361662951;46.50691768018183;45.7665440237148;53.59331009237047</span>
+<span class=sd>trp.max;95.9013844625315;67.73174100731194;75.85471491774206;\</span>
+<span class=sd>73.69881984770018;68.71451528269608;71.21493108382583;76.23405217026357;\</span>
+<span class=sd>48.44126891105043;95.9013844625315;80.51310862833998;93.74247469991224</span>
+<span class=sd>trp.sd;15.01651152311082;12.1357409577245;11.927832420121684;\</span>
+<span class=sd>12.110870983620881;12.231352766383868;11.422631005468508;10.870562799044663;\</span>
+<span class=sd>6.991683919460075;12.90335326836488;10.608823203464715;13.923445407906742</span>
+<span class=sd>cwt.min;0.029403377815469867;0.33968352876763674;0.8012226423225002;\</span>
+<span class=sd>0.4169237064834306;0.04608099701363244;0.13958597264536365;\</span>
+<span class=sd>0.1427841231916318;0.031861988642049255;0.04509163852708298;\</span>
+<span class=sd>0.029403377815469867;0.30706729430312407</span>
+<span class=sd>cwt.mean;9.125995226441729;7.635949273012871;8.099259381058715;\</span>
+<span class=sd>10.53104684412949;12.0613536196739;6.755248335968917;3.3923317916747693;\</span>
+<span class=sd>5.694018876707761;9.678250496815913;9.407512664676307;1.8529460623847172</span>
+<span class=sd>cwt.max;47.02757613742506;26.69298476563017;23.81131382935382;\</span>
+<span class=sd>33.68826448411983;47.02757613742506;21.765393608298837;8.465947593324927;\</span>
+<span class=sd>27.96794209550535;41.19798755026659;26.935112545980246;4.7028845058594015</span>
+<span class=sd>cwt.sd;8.312790326182888;5.699569122267945;7.46568137298234;\</span>
+<span class=sd>7.984381269231696;12.256771187209509;5.163135442961999;2.273816079756312;\</span>
+<span class=sd>6.655405008762987;8.35629247653758;7.251352236700332;1.9462759372992589</span>
+<span class=sd>fill.rate;0.9067748363222317;0.8929577464788733;0.9696969696969697;\</span>
+<span class=sd>0.7905982905982906;0.8695652173913043;0.8978723404255319;0.9854651162790697;\</span>
+<span class=sd>0.9276410998552822;0.8256484149855908;0.9142053445850914;0.9944367176634215</span>
+<span class=sd>stocklevel.mean;26.506300325777048;2.3225382137372628;3.7298268255006812;\</span>
+<span class=sd>1.2114694030566133;2.055027916866671;2.1359308723688653;3.803260303815258;\</span>
+<span class=sd>1.7840029880750334;1.5544812126506562;2.4214269649529525;5.488335624753054</span>
+<span class=sd>fulfilled.rate;1;1;1;1;1;1;1;1;1;1;1</span>
+
+
+<span class=sd>>>> x2 = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1])</span>
+<span class=sd>>>> ms.decode(x2, y)</span>
+<span class=sd>>>> for s in to_stream(y):</span>
+<span class=sd>...     if "time" not in s:</span>
+<span class=sd>...         print(s)</span>
+<span class=sd>-------- Instance 0: 'mfc_10_13_10000_0x64' -------</span>
+<span class=sd>stat;total;product_0;product_1;product_2;product_3;product_4;product_5;\</span>
+<span class=sd>product_6;product_7;product_8;product_9</span>
+<span class=sd>trp.min;6.6579246980854805;6.6579246980854805;10.040428073632938;\</span>
+<span class=sd>9.144356382177648;8.296261623940154;7.667382695110064;7.49579069264837;\</span>
+<span class=sd>8.581919683902015;19.249891132463745;18.452787187654394;18.901212658200166</span>
+<span class=sd>trp.mean;30.74716064960712;22.55644591592345;28.15643187379386;\</span>
+<span class=sd>25.157306197204942;25.891453823516155;24.656654627623602;28.280298002722372;\</span>
+<span class=sd>21.884096260231306;41.33149767348687;42.01272258331701;47.0432009577156</span>
+<span class=sd>trp.max;79.69814356608413;50.3897190429866;60.417297663587306;\</span>
+<span class=sd>58.155910569312255;57.205821481757084;52.45021315253325;59.77053868767143;\</span>
+<span class=sd>43.246354315288954;71.73764560662357;68.38738538621237;79.69814356608413</span>
+<span class=sd>trp.sd;12.157985067348928;7.639186573173071;8.568931718969022;\</span>
+<span class=sd>7.973929260222244;8.038036986999414;7.925969997080636;8.599986516235049;\</span>
+<span class=sd>6.097255369156319;9.856734625477339;8.9409753618694;10.274842345336927</span>
+<span class=sd>cwt.min;0.007410165035253158;0.010823749293649598;0.05938309523889984;\</span>
+<span class=sd>0.07244315036041371;0.007410165035253158;0.007457627479197981;\</span>
+<span class=sd>0.040943728912679944;0.03445897573783441;0.03898586586547026;\</span>
+<span class=sd>0.08116594846524094;0.14281174169173028</span>
+<span class=sd>cwt.mean;16.08134651193112;9.407819301031829;13.599570996899798;\</span>
+<span class=sd>9.281088119494319;11.11399938015249;10.30717585037071;13.666658677426005;\</span>
+<span class=sd>8.030271931727988;21.81659380310111;22.632166486797452;28.69724449522347</span>
+<span class=sd>cwt.max;68.13273609246335;34.22959482141596;54.775201309764725;\</span>
+<span class=sd>40.73069593375112;41.04427051696348;38.24440503984806;42.85895780219471;\</span>
+<span class=sd>31.703705121431085;53.001747956494;51.120920634961294;68.13273609246335</span>
+<span class=sd>cwt.sd;11.41034407109861;6.914971921203133;8.553611465539651;\</span>
+<span class=sd>6.705681452336642;7.5489609746268345;7.570333206165438;8.32656793004751;\</span>
+<span class=sd>6.081437849778869;10.3176054520999;9.98985948404976;12.586922189036457</span>
+<span class=sd>fill.rate;0.23005300100272166;0.3877840909090909;0.26811594202898553;\</span>
+<span class=sd>0.30979827089337175;0.312874251497006;0.3439767779390421;\</span>
+<span class=sd>0.22752808988764045;0.384180790960452;0.009887005649717515;\</span>
+<span class=sd>0.03170028818443804;0.03361344537815126</span>
+<span class=sd>stocklevel.mean;1.673940782484679;0.31292966720234844;0.20715377564649276;\</span>
+<span class=sd>0.13834460042719282;0.25115561718382967;0.2398635057643522;\</span>
+<span class=sd>0.19840432550798928;0.2850204974085108;0.0023773765165652936;\</span>
+<span class=sd>0.011388858983845954;0.027302557843551636</span>
+<span class=sd>fulfilled.rate;0.9988540323735855;0.9985795454545454;1;0.9985590778097982;\</span>
+<span class=sd>1;1;0.9971910112359551;1;0.9971751412429378;0.9985590778097982;\</span>
+<span class=sd>0.9985994397759104</span>
+<span class=sd>-------- Instance 1: 'mfc_10_13_10000_0xc8' -------</span>
+<span class=sd>stat;total;product_0;product_1;product_2;product_3;product_4;product_5;\</span>
+<span class=sd>product_6;product_7;product_8;product_9</span>
+<span class=sd>trp.min;6.553059261284034;6.553059261284034;10.108606281321954;\</span>
+<span class=sd>9.703090589753629;11.174354779162059;8.321303147977233;11.439845494670408;\</span>
+<span class=sd>8.009630409889724;15.112291339387411;21.10066493332215;26.25138351485475</span>
+<span class=sd>trp.mean;35.457717990887495;27.190617501492195;33.285557575397284;\</span>
+<span class=sd>29.938089184363303;30.57060178357617;29.855403667616407;33.96324823266337;\</span>
+<span class=sd>22.77623364751058;47.106553173547205;45.91880621944926;53.65085012387992</span>
+<span class=sd>trp.max;88.07784608736165;56.968128655076725;67.76184441039186;\</span>
+<span class=sd>58.983867721681236;56.352778532964294;60.30516528044609;62.48506657539656;\</span>
+<span class=sd>47.527002503284166;76.8993130774079;72.71943839738833;88.07784608736165</span>
+<span class=sd>trp.sd;13.47506267495003;9.02066756428428;9.843605381506345;\</span>
+<span class=sd>9.041655339468601;8.972226014586374;9.64262838980214;9.682655730390962;\</span>
+<span class=sd>6.905743095003228;10.732554367883997;9.649376408388306;11.415428192248845</span>
+<span class=sd>cwt.min;0.006287345835517044;0.12899921433927375;0.12664124934963183;\</span>
+<span class=sd>0.018981504710609443;0.012018201038699772;0.006287345835517044;\</span>
+<span class=sd>0.07326658304918965;0.03329370768551598;0.687625592607219;\</span>
+<span class=sd>0.16628305106132757;0.8814572391811453</span>
+<span class=sd>cwt.mean;19.616157243489514;12.54124700723885;17.17954158092728;\</span>
+<span class=sd>12.797030006049777;14.78523355299519;14.531965580117795;17.509595977311385;\</span>
+<span class=sd>8.869499446666719;27.071380519490486;26.35203858982817;34.65830156782526</span>
+<span class=sd>cwt.max;74.59018342258969;41.182989166839434;49.26013039123245;\</span>
+<span class=sd>42.677472406387096;43.76841772841544;45.64997544083144;50.08378847398126;\</span>
+<span class=sd>34.685042479895856;58.25570602393418;58.60214532455484;74.59018342258969</span>
+<span class=sd>cwt.sd;12.79311806936005;8.220650581141385;10.036535907608853;\</span>
+<span class=sd>8.032836405284439;8.961327098641396;9.01894965593242;9.987307711032216;\</span>
+<span class=sd>6.809774156819015;11.394609551985406;11.22216829037131;13.382242351946935</span>
+<span class=sd>fill.rate;0.15328778821520067;0.2563380281690141;0.15728715728715728;\</span>
+<span class=sd>0.1581196581196581;0.17251051893408134;0.2170212765957447;0.1555232558139535;\</span>
+<span class=sd>0.40086830680173663;0.004322766570605188;0.004219409282700422;\</span>
+<span class=sd>0.012517385257301807</span>
+<span class=sd>stocklevel.mean;1.0688209713197157;0.1893746360753341;0.13978209374798592;\</span>
+<span class=sd>0.07751886834182369;0.1308059798092467;0.13779442473717082;\</span>
+<span class=sd>0.11712916644109925;0.2719222690871477;0.00018993221962948934;\</span>
+<span class=sd>0.0012621122002660092;0.003041488660012029</span>
+<span class=sd>fulfilled.rate;0.9981497295758611;0.9985915492957746;0.9985569985569985;1;1;\</span>
+<span class=sd>1;0.998546511627907;1;0.9971181556195965;0.9929676511954993;0.9958275382475661</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.encoding</span><span class=w> </span><span class=kn>import</span> <span class=n>Encoding</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.multistatistics</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>MultiStatistics</span><span class=p>,</span>
+    <span class=n>MultiStatisticsSpace</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.rop_simulation</span><span class=w> </span><span class=kn>import</span> <span class=n>ROPSimulation</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.statistics_collector</span><span class=w> </span><span class=kn>import</span> <span class=n>StatisticsCollector</span>
+
+
+<div class=viewcode-block id=ROPMultiSimulation>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.rop_multisimulation.ROPMultiSimulation>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>ROPMultiSimulation</span><span class=p>(</span><span class=n>Encoding</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""A multi-simulation that caches the results for reuse."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>space</span><span class=p>:</span> <span class=n>MultiStatisticsSpace</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Instantiate the multi-statistics decoding.</span>
+
+<span class=sd>        :param instances: the packing instance</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>space</span><span class=p>,</span> <span class=n>MultiStatisticsSpace</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>space</span><span class=p>,</span> <span class=s2>"space"</span><span class=p>,</span> <span class=n>MultiStatisticsSpace</span><span class=p>)</span>
+        <span class=c1>#: the statistics collectors</span>
+        <span class=n>col</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=n>StatisticsCollector</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span>
+            <span class=n>StatisticsCollector</span><span class=p>(</span><span class=n>inst</span><span class=p>)</span> <span class=k>for</span> <span class=n>inst</span> <span class=ow>in</span> <span class=n>space</span><span class=o>.</span><span class=n>instances</span><span class=p>)</span>
+        <span class=c1>#: the simulations and collectors</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__simulations</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span>
+            <span class=n>ROPSimulation</span><span class=p>,</span> <span class=n>StatisticsCollector</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span>
+            <span class=p>(</span><span class=n>ROPSimulation</span><span class=p>(</span><span class=n>inst</span><span class=p>,</span> <span class=n>col</span><span class=p>[</span><span class=n>i</span><span class=p>]),</span> <span class=n>col</span><span class=p>[</span><span class=n>i</span><span class=p>])</span>
+            <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>inst</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>space</span><span class=o>.</span><span class=n>instances</span><span class=p>))</span>
+        <span class=c1>#: the internal space</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>MultiStatisticsSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span>
+
+<div class=viewcode-block id=ROPMultiSimulation.decode>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.rop_multisimulation.ROPMultiSimulation.decode>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>decode</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>:</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>,</span> <span class=n>y</span><span class=p>:</span> <span class=n>MultiStatistics</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Map a ROP setting to a multi-statistics.</span>
+
+<span class=sd>        This method uses an internal cache: The same re-order points will</span>
+<span class=sd>        yield the same statistics.</span>
+
+<span class=sd>        :param x: the array</span>
+<span class=sd>        :param y: the Gantt chart</span>
+<span class=sd>        """</span>
+        <span class=c1># First we map the vector to a tuple of integers.</span>
+        <span class=n>x_tuple</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>int</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>tuple</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=n>x</span><span class=p>))</span>
+
+        <span class=c1># If we get here, the ROP is new.</span>
+        <span class=c1># So we simulate it.</span>
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=p>(</span><span class=n>sim</span><span class=p>,</span> <span class=n>col</span><span class=p>)</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__simulations</span><span class=p>):</span>
+            <span class=n>col</span><span class=o>.</span><span class=n>set_dest</span><span class=p>(</span><span class=n>y</span><span class=o>.</span><span class=n>per_instance</span><span class=p>[</span><span class=n>i</span><span class=p>])</span>
+            <span class=n>sim</span><span class=o>.</span><span class=n>ctrl_reset</span><span class=p>()</span>
+            <span class=n>sim</span><span class=o>.</span><span class=n>set_rop</span><span class=p>(</span><span class=n>x_tuple</span><span class=p>)</span>
+            <span class=n>sim</span><span class=o>.</span><span class=n>ctrl_run</span><span class=p>()</span>
+
+        <span class=c1># The simulation is completed. We can now cache the result.</span>
+        <span class=n>cached</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>MultiStatistics</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__space</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__space</span><span class=o>.</span><span class=n>copy</span><span class=p>(</span><span class=n>cached</span><span class=p>,</span> <span class=n>y</span><span class=p>)</span></div>
+
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__str__</span><span class=p>(</span><span class=bp>self</span><span class=p>)</span> <span class=o>-></span> <span class=nb>str</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Get the name of this decoding.</span>
+
+<span class=sd>        :return: `"rms"`</span>
+<span class=sd>        :rtype: str</span>
+<span class=sd>        """</span>
+        <span class=k>return</span> <span class=s2>"rms"</span></div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.94 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.rop_multisimulation</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2026, Thomas Weise.</div>

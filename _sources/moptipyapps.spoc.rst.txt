@@ -1,0 +1,26 @@
+moptipyapps.spoc package
+========================
+
+.. automodule:: moptipyapps.spoc
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.spoc.spoc_4
+
+Submodules
+----------
+
+moptipyapps.spoc.submission module
+----------------------------------
+
+.. automodule:: moptipyapps.spoc.submission
+   :members:
+   :show-inheritance:
+   :undoc-members:

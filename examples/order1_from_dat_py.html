@@ -1,0 +1,257 @@
+<!doctype html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd"><title></title><meta content="text/html; charset=utf-8"http-equiv=content-type><style>pre{line-height:125%}td.linenos .normal,span.linenos{color:inherit;background-color:#0000;padding-left:5px;padding-right:5px}td.linenos .special,span.linenos.special{color:#000;background-color:#ffffc0;padding-left:5px;padding-right:5px}body .hll{background-color:#ffc}body{background:#f8f8f8}body .c{color:#3d7b7b;font-style:italic}body .err{border:1px solid red}body .k{color:green;font-weight:700}body .o{color:#666}body .ch,body .cm{color:#3d7b7b;font-style:italic}body .cp{color:#9c6500}body .cpf,body .c1,body .cs{color:#3d7b7b;font-style:italic}body .gd{color:#a00000}body .ge{font-style:italic}body .ges{font-style:italic;font-weight:700}body .gr{color:#e40000}body .gh{color:navy;font-weight:700}body .gi{color:#008400}body .go{color:#717171}body .gp{color:navy;font-weight:700}body .gs{font-weight:700}body .gu{color:purple;font-weight:700}body .gt{color:#04d}body .kc,body .kd,body .kn{color:green;font-weight:700}body .kp{color:green}body .kr{color:green;font-weight:700}body .kt{color:#b00040}body .m{color:#666}body .s{color:#ba2121}body .na{color:#687822}body .nb{color:green}body .nc{color:#00f;font-weight:700}body .no{color:#800}body .nd{color:#a2f}body .ni{color:#717171;font-weight:700}body .ne{color:#cb3f38;font-weight:700}body .nf{color:#00f}body .nl{color:#767600}body .nn{color:#00f;font-weight:700}body .nt{color:green;font-weight:700}body .nv{color:#19177c}body .ow{color:#a2f;font-weight:700}body .w{color:#bbb}body .mb,body .mf,body .mh,body .mi,body .mo{color:#666}body .sa,body .sb,body .sc,body .dl{color:#ba2121}body .sd{color:#ba2121;font-style:italic}body .s2{color:#ba2121}body .se{color:#aa5d1f;font-weight:700}body .sh{color:#ba2121}body .si{color:#a45a77;font-weight:700}body .sx{color:green}body .sr{color:#a45a77}body .s1{color:#ba2121}body .ss{color:#19177c}body .bp{color:green}body .fm{color:#00f}body .vc,body .vg,body .vi,body .vm{color:#19177c}body .il{color:#666}</style><body><h2></h2><div class=highlight><pre><span></span><span class=sd>"""</span>
+<span class=sd>Find a reasonable one-dimensional order for permutations.</span>
+
+<span class=sd>Solve the one-dimensional ordering problem for permutations with fitness</span>
+<span class=sd>stored in the `dat` file format as used by Thomson et al. This program</span>
+<span class=sd>loads permutations from one or multiple files of this type and then tries</span>
+<span class=sd>to arrange them on a horizontal axis such that their neighborhood relation</span>
+<span class=sd>on the one-dimensional axis represents their neighborhood based one the</span>
+<span class=sd>swap distance metric in the permutation space. It does this re-arrangement</span>
+<span class=sd>by applying a randomized local search (RLS) to find the right permutation</span>
+<span class=sd>of these permutations to be mapped to one-dimensional coordinates.</span>
+
+<span class=sd>You can call this program as follows:</span>
+
+<span class=sd>`python3 order1_from_dat.py sourceData outputFile \</span>
+<span class=sd>[fitnessCap] [maxFEs] [fileNameRegEx]`</span>
+
+<span class=sd>where</span>
+<span class=sd>- `sourceData` is the path to a file or folder with the original data.</span>
+<span class=sd>  If it is a file, the file will be loaded if it matches `fileNameRegEx`.</span>
+<span class=sd>  If it is a folder, all files in this folder and all sub-folders will</span>
+<span class=sd>  recursively be parsed for input data.</span>
+<span class=sd>- `outputFile` is the path to a file where to store the result.</span>
+<span class=sd>- `fitnessCap` is an upper limit for the fitness values stored in the files,</span>
+<span class=sd>  all points with higher fitness are ignored. (default: So high that it does</span>
+<span class=sd>  not matter.)</span>
+<span class=sd>- `maxFEs` are the maximum number of optimization steps until done. By</span>
+<span class=sd>  default, these are `10000`.</span>
+<span class=sd>- `fileNameRegEx` is a regular expression. Only file names matching this</span>
+<span class=sd>  regular expression are parsed. By default, it matches all files. But you</span>
+<span class=sd>  could provide `tai27e01.*`, e.g., to only match files starting with</span>
+<span class=sd>  `tai27e01` (make sure to write `"tai27e01.*"` on the command line to prevent</span>
+<span class=sd>  the dot-start from being expanded by the shell),</span>
+
+<span class=sd>The input format of this program are `dat` files of the format</span>
+<span class=sd>```</span>
+<span class=sd>EVALS    GENOTYPE    FITNESS</span>
+<span class=sd>1    [22, 7, 6, 26, 27, 19, 3, 1, ... 5, 21, 8, 17, 2, 16, 9, 23]    87018</span>
+<span class=sd>13    [20, 7, 6, 26, 18, 19, 9, 1, ... 25, 13, 23, 16, 15, 24]    85456</span>
+<span class=sd>20    [20, 7, 18, 26, 6, 16, 9, 1,  ...  21, 13, 12, 19, 15, 17]    84152</span>
+<span class=sd>29    [20, 11, 14, 25, 5, 16, 15, 1,  ...  21, 13, 12, 9, 19, 17]    83180</span>
+<span class=sd>32    [20, 10, 14, 25, 5, 12, 15, 1,  ... 17, 13, 16, 9, 19, 21]    82846</span>
+<span class=sd>34    [20, 15, 14, 25, 5, 12, 10, 1,  ...  6, 17, 13, 16, 9, 19, 21]    78204</span>
+<span class=sd>```</span>
+
+<span class=sd>`fitnessCap` reflects an upper limit to the `FITNESS` column. Setting it to</span>
+<span class=sd>`80000` would, for example, lead to ignoring all but the last line in the</span>
+<span class=sd>above example.</span>
+<span class=sd>"""</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>argparse</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>operator</span><span class=w> </span><span class=kn>import</span> <span class=n>itemgetter</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>os</span><span class=w> </span><span class=kn>import</span> <span class=n>listdir</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>os.path</span><span class=w> </span><span class=kn>import</span> <span class=n>basename</span><span class=p>,</span> <span class=n>dirname</span><span class=p>,</span> <span class=n>isdir</span><span class=p>,</span> <span class=n>isfile</span><span class=p>,</span> <span class=n>join</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>re</span><span class=w> </span><span class=kn>import</span> <span class=n>Pattern</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>re</span><span class=w> </span><span class=kn>import</span> <span class=nb>compile</span> <span class=k>as</span> <span class=n>re_compile</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Any</span><span class=p>,</span> <span class=n>Callable</span><span class=p>,</span> <span class=n>Final</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>matplotlib.axes</span><span class=w> </span><span class=kn>import</span> <span class=n>Axes</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>matplotlib.figure</span><span class=w> </span><span class=kn>import</span> <span class=n>Figure</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.algorithms.so.rls</span><span class=w> </span><span class=kn>import</span> <span class=n>RLS</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.api.execution</span><span class=w> </span><span class=kn>import</span> <span class=n>Execution</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.permutations.op0_shuffle</span><span class=w> </span><span class=kn>import</span> <span class=n>Op0Shuffle</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.operators.permutations.op1_swap2</span><span class=w> </span><span class=kn>import</span> <span class=n>Op1Swap2</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>rand_seeds_from_str</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.plot_defaults</span><span class=w> </span><span class=kn>import</span> <span class=n>distinct_colors</span><span class=p>,</span> <span class=n>distinct_markers</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.plot_utils</span><span class=w> </span><span class=kn>import</span> <span class=n>create_figure</span><span class=p>,</span> <span class=n>get_axes</span><span class=p>,</span> <span class=n>save_figure</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.console</span><span class=w> </span><span class=kn>import</span> <span class=n>logger</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span><span class=p>,</span> <span class=n>directory_path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_to_int_range</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.order1d.distances</span><span class=w> </span><span class=kn>import</span> <span class=n>swap_distance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.order1d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.order1d.space</span><span class=w> </span><span class=kn>import</span> <span class=n>OrderingSpace</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.qap.objective</span><span class=w> </span><span class=kn>import</span> <span class=n>QAPObjective</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>moptipyapps_argparser</span>
+
+<span class=c1>#: the impact of rank differences</span>
+<span class=n>POWER</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>float</span><span class=p>]</span> <span class=o>=</span> <span class=mf>2.0</span>
+<span class=c1>#: ignore everything that is farther away than the 64th nearest neighbor</span>
+<span class=n>HORIZON</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=mi>1024</span>
+<span class=c1>#: the fitness tag</span>
+<span class=n>TAG_FITNESS</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"fitness"</span>
+<span class=c1>#: the evaluation tag</span>
+<span class=n>TAG_EVAL</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"evaluations"</span>
+<span class=c1>#: the permutation</span>
+<span class=n>TAG_PERM</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"permutation"</span>
+<span class=c1>#: the file</span>
+<span class=n>TAG_FILE</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"file"</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>parse_data</span><span class=p>(</span><span class=n>path</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>collector</span><span class=p>:</span> <span class=n>Callable</span><span class=p>[[</span>
+        <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]],</span> <span class=n>Any</span><span class=p>],</span>
+        <span class=n>fitness_limit</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>pattern</span><span class=p>:</span> <span class=n>Pattern</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Parse a dat file.</span>
+
+<span class=sd>    :param path: the path</span>
+<span class=sd>    :param collector: the collector function to invoke when loading data</span>
+<span class=sd>    :param fitness_limit: the minimum acceptable fitness</span>
+<span class=sd>    :param pattern: the file name pattern</span>
+<span class=sd>    """</span>
+    <span class=n>the_path</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>path</span><span class=p>)</span>
+    <span class=k>if</span> <span class=n>isdir</span><span class=p>(</span><span class=n>the_path</span><span class=p>):</span>  <span class=c1># recursively parse directories</span>
+        <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"recursing into directory '</span><span class=si>{</span><span class=n>the_path</span><span class=si>}</span><span class=s2>'."</span><span class=p>)</span>
+        <span class=k>for</span> <span class=n>subpath</span> <span class=ow>in</span> <span class=n>listdir</span><span class=p>(</span><span class=n>the_path</span><span class=p>):</span>
+            <span class=n>parse_data</span><span class=p>(</span><span class=n>join</span><span class=p>(</span><span class=n>the_path</span><span class=p>,</span> <span class=n>subpath</span><span class=p>),</span> <span class=n>collector</span><span class=p>,</span> <span class=n>fitness_limit</span><span class=p>,</span>
+                       <span class=n>pattern</span><span class=p>)</span>
+        <span class=k>return</span>
+
+    <span class=k>if</span> <span class=ow>not</span> <span class=n>isfile</span><span class=p>(</span><span class=n>the_path</span><span class=p>):</span>
+        <span class=k>return</span>  <span class=c1># if it is not a file, we quit</span>
+    <span class=n>the_name</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=n>basename</span><span class=p>(</span><span class=n>the_path</span><span class=p>)</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=n>pattern</span><span class=o>.</span><span class=n>match</span><span class=p>(</span><span class=n>the_name</span><span class=p>):</span>
+        <span class=k>return</span>  <span class=c1># file does not match</span>
+
+    <span class=c1># parse the file</span>
+    <span class=k>for</span> <span class=n>oline</span> <span class=ow>in</span> <span class=n>the_path</span><span class=o>.</span><span class=n>open_for_read</span><span class=p>():</span>
+        <span class=n>line</span> <span class=o>=</span> <span class=n>oline</span><span class=o>.</span><span class=n>strip</span><span class=p>()</span>
+        <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=n>line</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>bracket_open</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>find</span><span class=p>(</span><span class=s2>"["</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>bracket_open</span> <span class=o><=</span> <span class=mi>0</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>bracket_close</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>line</span><span class=o>.</span><span class=n>find</span><span class=p>(</span><span class=s2>"]"</span><span class=p>,</span> <span class=n>bracket_open</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>bracket_close</span> <span class=o><=</span> <span class=n>bracket_open</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>f</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>line</span><span class=p>[</span><span class=n>bracket_close</span> <span class=o>+</span> <span class=mi>1</span><span class=p>:],</span>
+                                    <span class=n>TAG_FITNESS</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000_000_000</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>f</span> <span class=o>></span> <span class=n>fitness_limit</span><span class=p>:</span>
+            <span class=k>continue</span>
+        <span class=n>evals</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>line</span><span class=p>[:</span><span class=n>bracket_open</span><span class=p>]</span><span class=o>.</span><span class=n>strip</span><span class=p>(),</span>
+                                        <span class=n>TAG_EVAL</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000_000_000</span><span class=p>)</span>
+        <span class=n>perm</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span>
+            <span class=n>check_to_int_range</span><span class=p>(</span><span class=n>s</span><span class=p>,</span> <span class=n>TAG_PERM</span><span class=p>,</span> <span class=mi>1</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span> <span class=o>-</span> <span class=mi>1</span>
+            <span class=k>for</span> <span class=n>s</span> <span class=ow>in</span> <span class=n>line</span><span class=p>[</span><span class=n>bracket_open</span> <span class=o>+</span> <span class=mi>1</span><span class=p>:</span><span class=n>bracket_close</span><span class=p>]</span><span class=o>.</span><span class=n>split</span><span class=p>(</span><span class=s2>","</span><span class=p>)]</span>
+        <span class=n>collector</span><span class=p>((</span><span class=n>the_name</span><span class=p>,</span> <span class=n>evals</span><span class=p>,</span> <span class=n>f</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span><span class=n>perm</span><span class=p>)))</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>get_tags</span><span class=p>(</span><span class=n>data</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>])</span> \
+        <span class=o>-></span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>,</span> <span class=nb>str</span><span class=p>]:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get the tags to store along with the data.</span>
+
+<span class=sd>    :param data: the data</span>
+<span class=sd>    :return: the tags</span>
+<span class=sd>    """</span>
+    <span class=n>sep</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>","</span>
+    <span class=k>return</span> <span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=mi>0</span><span class=p>],</span> <span class=nb>str</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=mi>1</span><span class=p>]),</span> <span class=nb>str</span><span class=p>(</span><span class=n>data</span><span class=p>[</span><span class=mi>2</span><span class=p>]),</span>
+            <span class=sa>f</span><span class=s1>'"[</span><span class=si>{</span><span class=n>sep</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>str</span><span class=p>(</span><span class=n>a</span><span class=w> </span><span class=o>+</span><span class=w> </span><span class=mi>1</span><span class=p>)</span><span class=w> </span><span class=k>for</span><span class=w> </span><span class=n>a</span><span class=w> </span><span class=ow>in</span><span class=w> </span><span class=n>data</span><span class=p>[</span><span class=mi>3</span><span class=p>])</span><span class=si>}</span><span class=s1>]"'</span><span class=p>)</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>get_distance</span><span class=p>(</span><span class=n>a</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>],</span>
+                 <span class=n>b</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>])</span> <span class=o>-></span> <span class=nb>int</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Get the distance between two data elements.</span>
+
+<span class=sd>    The distance here is the swap distance.</span>
+
+<span class=sd>    :param a: the first element</span>
+<span class=sd>    :param b: the second element</span>
+<span class=sd>    :return: the swap distance</span>
+<span class=sd>    """</span>
+    <span class=k>return</span> <span class=n>swap_distance</span><span class=p>(</span><span class=n>a</span><span class=p>[</span><span class=mi>3</span><span class=p>],</span> <span class=n>b</span><span class=p>[</span><span class=mi>3</span><span class=p>])</span>
+
+
+<span class=k>def</span><span class=w> </span><span class=nf>run</span><span class=p>(</span><span class=n>source</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>dest</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>max_fes</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>fitness_limit</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+        <span class=n>file_name_regex</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Run the RLS algorithm to optimize a horizontal layout permutation.</span>
+
+<span class=sd>    :param source: the source file or directory</span>
+<span class=sd>    :param dest: the destination file</span>
+<span class=sd>    :param max_fes: the maximum FEs</span>
+<span class=sd>    :param fitness_limit: the minimum acceptable fitness</span>
+<span class=sd>    :param file_name_regex: the file name regular expression</span>
+<span class=sd>    """</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"invoked program with source='</span><span class=si>{</span><span class=n>source</span><span class=si>}</span><span class=s2>', dest='</span><span class=si>{</span><span class=n>dest</span><span class=si>}</span><span class=s2>', "</span>
+           <span class=sa>f</span><span class=s2>"max_fes=</span><span class=si>{</span><span class=n>max_fes</span><span class=si>}</span><span class=s2>, fitness_limit=</span><span class=si>{</span><span class=n>fitness_limit</span><span class=si>}</span><span class=s2>, and "</span>
+           <span class=sa>f</span><span class=s2>"file_name_regex='</span><span class=si>{</span><span class=n>file_name_regex</span><span class=si>}</span><span class=s2>'."</span><span class=p>)</span>
+    <span class=c1># first, we load all the data to construct a distance rank matrix</span>
+    <span class=n>pattern</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Pattern</span><span class=p>]</span> <span class=o>=</span> <span class=n>re_compile</span><span class=p>(</span><span class=n>file_name_regex</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"now loading data from '</span><span class=si>{</span><span class=n>source</span><span class=si>}</span><span class=s2>' matching to '</span><span class=si>{</span><span class=n>pattern</span><span class=si>}</span><span class=s2>'."</span><span class=p>)</span>
+
+    <span class=n>data</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=nb>int</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>parse_data</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=n>data</span><span class=o>.</span><span class=n>append</span><span class=p>,</span> <span class=n>fitness_limit</span><span class=p>,</span> <span class=n>pattern</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"finished loading </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>data</span><span class=p>)</span><span class=si>}</span><span class=s2> rows of data, "</span>
+           <span class=s2>"now constructing distance rank matrix."</span><span class=p>)</span>
+    <span class=n>instance</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Instance</span><span class=p>]</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_sequence_and_distance</span><span class=p>(</span>
+        <span class=n>data</span><span class=p>,</span> <span class=n>get_distance</span><span class=p>,</span> <span class=n>POWER</span><span class=p>,</span> <span class=n>HORIZON</span><span class=p>,</span>
+        <span class=p>(</span><span class=n>TAG_FILE</span><span class=p>,</span> <span class=n>TAG_EVAL</span><span class=p>,</span> <span class=n>TAG_FITNESS</span><span class=p>,</span> <span class=n>TAG_PERM</span><span class=p>),</span> <span class=n>get_tags</span><span class=p>)</span>
+    <span class=k>del</span> <span class=n>data</span>  <span class=c1># free the now useless data</span>
+
+    <span class=c1># run the algorithm</span>
+    <span class=n>dest_file</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>dest</span><span class=si>}</span><span class=s2>.txt"</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"finished constructing matrix with </span><span class=si>{</span><span class=n>instance</span><span class=o>.</span><span class=n>n</span><span class=si>}</span><span class=s2> rows, "</span>
+           <span class=s2>"now doing optimization for "</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>max_fes</span><span class=si>}</span><span class=s2> FEs and, afterwards, writing result to '</span><span class=si>{</span><span class=n>dest_file</span><span class=si>}</span><span class=s2>'."</span><span class=p>)</span>
+    <span class=n>space</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>OrderingSpace</span><span class=p>]</span> <span class=o>=</span> <span class=n>OrderingSpace</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>
+    <span class=n>result</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>]</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>
+    <span class=k>with</span> <span class=p>(</span><span class=n>Execution</span><span class=p>()</span><span class=o>.</span><span class=n>set_solution_space</span><span class=p>(</span><span class=n>space</span><span class=p>)</span>
+          <span class=o>.</span><span class=n>set_objective</span><span class=p>(</span><span class=n>QAPObjective</span><span class=p>(</span><span class=n>instance</span><span class=p>))</span>
+          <span class=o>.</span><span class=n>set_algorithm</span><span class=p>(</span><span class=n>RLS</span><span class=p>(</span><span class=n>Op0Shuffle</span><span class=p>(</span><span class=n>space</span><span class=p>),</span> <span class=n>Op1Swap2</span><span class=p>()))</span>
+          <span class=o>.</span><span class=n>set_max_fes</span><span class=p>(</span><span class=n>max_fes</span><span class=p>)</span>
+          <span class=o>.</span><span class=n>set_log_improvements</span><span class=p>(</span><span class=kc>True</span><span class=p>)</span>
+          <span class=o>.</span><span class=n>set_log_file</span><span class=p>(</span><span class=n>dest_file</span><span class=p>)</span>
+          <span class=o>.</span><span class=n>set_rand_seed</span><span class=p>(</span><span class=n>rand_seeds_from_str</span><span class=p>(</span><span class=n>source</span><span class=p>,</span> <span class=mi>1</span><span class=p>)[</span><span class=mi>0</span><span class=p>])</span>
+            <span class=o>.</span><span class=n>execute</span><span class=p>())</span> <span class=k>as</span> <span class=n>proc</span><span class=p>:</span>
+        <span class=n>proc</span><span class=o>.</span><span class=n>get_copy_of_best_y</span><span class=p>(</span><span class=n>result</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=s2>"finished optimizing, got the solution "</span>
+           <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=s1>','</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=nb>str</span><span class=p>,</span><span class=w> </span><span class=n>result</span><span class=p>))</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+
+    <span class=n>files</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=nb>sorted</span><span class=p>({</span><span class=n>f</span><span class=p>[</span><span class=mi>0</span><span class=p>][</span><span class=mi>0</span><span class=p>]</span> <span class=k>for</span> <span class=n>f</span> <span class=ow>in</span> <span class=n>instance</span><span class=o>.</span><span class=n>tags</span><span class=p>})</span>
+    <span class=n>logger</span><span class=p>(</span><span class=sa>f</span><span class=s2>"now we begin plotting the data from </span><span class=si>{</span><span class=nb>len</span><span class=p>(</span><span class=n>files</span><span class=p>)</span><span class=si>}</span><span class=s2> files."</span><span class=p>)</span>
+    <span class=n>dest_dir</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>directory_path</span><span class=p>(</span><span class=n>dirname</span><span class=p>(</span><span class=n>dest_file</span><span class=p>))</span>
+    <span class=n>figure</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Figure</span><span class=p>]</span> <span class=o>=</span> <span class=n>create_figure</span><span class=p>()</span>
+    <span class=n>colors</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>float</span><span class=p>,</span> <span class=nb>float</span><span class=p>,</span> <span class=nb>float</span><span class=p>],</span> <span class=o>...</span><span class=p>]]</span> \
+        <span class=o>=</span> <span class=n>distinct_colors</span><span class=p>(</span><span class=nb>len</span><span class=p>(</span><span class=n>files</span><span class=p>))</span>
+    <span class=n>markers</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>tuple</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=o>...</span><span class=p>]]</span> <span class=o>=</span> <span class=n>distinct_markers</span><span class=p>(</span><span class=mi>4</span><span class=p>)</span>
+    <span class=n>axes</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Axes</span><span class=p>]</span> <span class=o>=</span> <span class=n>get_axes</span><span class=p>(</span><span class=n>figure</span><span class=p>)</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>file</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>files</span><span class=p>):</span>
+        <span class=n>plot_data</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span>
+            <span class=nb>sorted</span><span class=p>([(</span><span class=n>result</span><span class=p>[</span><span class=n>idx</span><span class=p>],</span> <span class=nb>int</span><span class=p>(</span><span class=n>tags</span><span class=p>[</span><span class=mi>2</span><span class=p>]))</span> <span class=k>for</span> <span class=n>tags</span><span class=p>,</span> <span class=n>idx</span> <span class=ow>in</span>
+                    <span class=n>instance</span><span class=o>.</span><span class=n>tags</span> <span class=k>if</span> <span class=n>tags</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>==</span> <span class=n>file</span><span class=p>],</span>
+                   <span class=n>key</span><span class=o>=</span><span class=n>itemgetter</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mi>0</span><span class=p>)),</span> <span class=n>dtype</span><span class=o>=</span><span class=nb>int</span><span class=p>)</span>
+        <span class=n>axes</span><span class=o>.</span><span class=n>plot</span><span class=p>(</span><span class=n>plot_data</span><span class=p>[:,</span> <span class=mi>0</span><span class=p>],</span> <span class=n>plot_data</span><span class=p>[:,</span> <span class=mi>1</span><span class=p>],</span> <span class=n>color</span><span class=o>=</span><span class=n>colors</span><span class=p>[</span><span class=n>i</span><span class=p>],</span>
+                  <span class=n>marker</span><span class=o>=</span><span class=n>markers</span><span class=p>[</span><span class=n>i</span> <span class=o>%</span> <span class=nb>len</span><span class=p>(</span><span class=n>markers</span><span class=p>)])</span>
+    <span class=n>axes</span><span class=o>.</span><span class=n>set_xticks</span><span class=p>([])</span>
+    <span class=n>save_figure</span><span class=p>(</span><span class=n>figure</span><span class=p>,</span> <span class=n>basename</span><span class=p>(</span><span class=n>dest</span><span class=p>),</span> <span class=n>dest_dir</span><span class=p>,</span> <span class=s2>"pdf"</span><span class=p>)</span>
+    <span class=n>logger</span><span class=p>(</span><span class=s2>"finished plotting."</span><span class=p>)</span>
+
+
+<span class=c1># Perform the optimization</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span> <span class=s2>"One-Dimensional Ordering of Permutations"</span><span class=p>,</span>
+        <span class=s2>"Run the one-dimensional order of permutations experiment."</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"source"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the directory or file with the input data"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./"</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the file to write the output to"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./result.txt"</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span><span class=s2>"fitnessLimit"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the minimum acceptable fitness"</span><span class=p>,</span>
+                        <span class=nb>type</span><span class=o>=</span><span class=nb>int</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=mi>1_000_000_000</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span><span class=s2>"maxFEs"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the maximum FEs to perform"</span><span class=p>,</span>
+                        <span class=nb>type</span><span class=o>=</span><span class=nb>int</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=mi>10_000</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"fileNameRegEx"</span><span class=p>,</span>
+        <span class=n>help</span><span class=o>=</span><span class=s2>"a regular expression that file names must match"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=nb>str</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>".*"</span><span class=p>)</span>
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+    <span class=n>run</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>source</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>maxFEs</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>fitnessLimit</span><span class=p>,</span>
+        <span class=n>args</span><span class=o>.</span><span class=n>fileNameRegEx</span><span class=p>)</span>
+</pre></div>

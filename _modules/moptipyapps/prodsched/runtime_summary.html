@@ -1,0 +1,127 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.runtime_summary — moptipyapps 0.8.94 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><script src="../../../_static/documentation_options.js?v=52e096ff"></script><script src="../../../_static/doctools.js?v=fd6eb6e6"></script><script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/runtime_summary.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.94 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.runtime_summary</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.runtime_summary</h1><div class=highlight><pre>
+<span></span><span class=sd>"""Create data for runtime distribution plots."""</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>argparse</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.csv</span><span class=w> </span><span class=kn>import</span> <span class=n>COMMENT_START</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.csv</span><span class=w> </span><span class=kn>import</span> <span class=n>CSV_SEPARATOR</span> <span class=k>as</span> <span class=n>__CS</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.path</span><span class=w> </span><span class=kn>import</span> <span class=n>Path</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.strings.string_conv</span><span class=w> </span><span class=kn>import</span> <span class=n>num_to_str</span><span class=p>,</span> <span class=n>str_to_num</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.utils.shared</span><span class=w> </span><span class=kn>import</span> <span class=n>moptipyapps_argparser</span>
+
+
+<div class=viewcode-block id=find_runtimes>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.runtime_summary.find_runtimes>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>find_runtimes</span><span class=p>(</span>
+        <span class=n>source</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span> <span class=n>runtimes</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>list</span><span class=p>[</span><span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span><span class=p>]])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Load an ROP multi-simulation summary from a log file.</span>
+
+<span class=sd>    :param source: the source path</span>
+<span class=sd>    :param runtimes: the destination for runtimes</span>
+<span class=sd>    """</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>runtimes</span><span class=p>,</span> <span class=nb>dict</span><span class=p>):</span>
+        <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>runtimes</span><span class=p>,</span> <span class=s2>"runtimes"</span><span class=p>,</span> <span class=nb>dict</span><span class=p>)</span>
+    <span class=n>spath</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>source</span><span class=p>)</span>
+
+    <span class=k>if</span> <span class=n>spath</span><span class=o>.</span><span class=n>is_dir</span><span class=p>():</span>
+        <span class=k>for</span> <span class=n>subfile</span> <span class=ow>in</span> <span class=n>spath</span><span class=o>.</span><span class=n>list_dir</span><span class=p>():</span>
+            <span class=n>find_runtimes</span><span class=p>(</span><span class=n>subfile</span><span class=p>,</span> <span class=n>runtimes</span><span class=p>)</span>
+        <span class=k>return</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=n>spath</span><span class=o>.</span><span class=n>is_file</span><span class=p>():</span>
+        <span class=k>return</span>
+
+    <span class=n>computer_id</span><span class=p>:</span> <span class=nb>str</span> <span class=o>=</span> <span class=s2>""</span>
+
+    <span class=c1># collect the raw data</span>
+    <span class=n>computer_key</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"session.node: "</span>
+    <span class=n>simtime_key</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=s2>"time.s: "</span>
+    <span class=n>dest</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>float</span> <span class=o>|</span> <span class=nb>int</span><span class=p>]</span> <span class=o>|</span> <span class=kc>None</span> <span class=o>=</span> <span class=kc>None</span>
+
+    <span class=k>with</span> <span class=n>spath</span><span class=o>.</span><span class=n>open_for_read</span><span class=p>()</span> <span class=k>as</span> <span class=n>stream</span><span class=p>:</span>
+        <span class=k>for</span> <span class=n>srow</span> <span class=ow>in</span> <span class=n>stream</span><span class=p>:</span>
+            <span class=n>row</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>srow</span><span class=p>)</span>
+            <span class=k>if</span> <span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>row</span><span class=p>)</span> <span class=o><=</span> <span class=mi>0</span><span class=p>)</span> <span class=ow>or</span> <span class=n>row</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>COMMENT_START</span><span class=p>):</span>
+                <span class=k>continue</span>
+            <span class=k>if</span> <span class=nb>str</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>row</span><span class=p>,</span> <span class=n>computer_key</span><span class=p>):</span>
+                <span class=k>if</span> <span class=p>(</span><span class=n>dest</span> <span class=ow>is</span> <span class=ow>not</span> <span class=kc>None</span><span class=p>)</span> <span class=ow>or</span> <span class=p>(</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>computer_id</span><span class=p>)</span> <span class=o>></span> <span class=mi>0</span><span class=p>):</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Illegal State, already got computer id "</span>
+                                     <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>computer_id</span><span class=si>!r}</span><span class=s2>, now found </span><span class=si>{</span><span class=n>row</span><span class=si>!r}</span><span class=s2>."</span><span class=p>)</span>
+                <span class=n>computer_id</span> <span class=o>=</span> <span class=nb>str</span><span class=o>.</span><span class=n>strip</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>computer_key</span><span class=p>):])</span>
+                <span class=k>if</span> <span class=n>computer_id</span> <span class=ow>in</span> <span class=n>runtimes</span><span class=p>:</span>
+                    <span class=n>dest</span> <span class=o>=</span> <span class=n>runtimes</span><span class=p>[</span><span class=n>computer_id</span><span class=p>]</span>
+                <span class=k>else</span><span class=p>:</span>
+                    <span class=n>dest</span> <span class=o>=</span> <span class=p>[]</span>
+                    <span class=n>runtimes</span><span class=p>[</span><span class=n>computer_id</span><span class=p>]</span> <span class=o>=</span> <span class=n>dest</span>
+            <span class=k>elif</span> <span class=nb>str</span><span class=o>.</span><span class=n>startswith</span><span class=p>(</span><span class=n>row</span><span class=p>,</span> <span class=n>simtime_key</span><span class=p>):</span>
+                <span class=k>if</span> <span class=n>dest</span> <span class=ow>is</span> <span class=kc>None</span><span class=p>:</span>
+                    <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=s2>"Don't have computer id yet!"</span><span class=p>)</span>
+                <span class=n>dest</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>str_to_num</span><span class=p>(</span><span class=n>row</span><span class=p>[</span><span class=nb>str</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>simtime_key</span><span class=p>):]))</span></div>
+
+
+
+<div class=viewcode-block id=runtime_summary>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.runtime_summary.runtime_summary>[docs]</a>
+<span class=k>def</span><span class=w> </span><span class=nf>runtime_summary</span><span class=p>(</span>
+        <span class=n>source</span><span class=p>:</span> <span class=nb>str</span><span class=p>,</span>
+        <span class=n>dest</span><span class=p>:</span> <span class=nb>str</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>    </span><span class=sd>"""</span>
+<span class=sd>    Convert one or multiple files from a source to a destination.</span>
+
+<span class=sd>    :param source: the source file or directory</span>
+<span class=sd>    :param dest: the destination file</span>
+<span class=sd>    """</span>
+    <span class=n>src</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>source</span><span class=p>)</span>
+    <span class=n>dst_file</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>Path</span><span class=p>]</span> <span class=o>=</span> <span class=n>Path</span><span class=p>(</span><span class=n>dest</span><span class=p>)</span>
+
+    <span class=n>runtimes</span><span class=p>:</span> <span class=nb>dict</span><span class=p>[</span><span class=nb>str</span><span class=p>,</span> <span class=nb>list</span><span class=p>[</span><span class=nb>int</span> <span class=o>|</span> <span class=nb>float</span><span class=p>]]</span> <span class=o>=</span> <span class=p>{}</span>
+    <span class=n>find_runtimes</span><span class=p>(</span><span class=n>src</span><span class=p>,</span> <span class=n>runtimes</span><span class=p>)</span>
+
+    <span class=n>data</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=n>max_len</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+    <span class=k>for</span> <span class=n>key</span> <span class=ow>in</span> <span class=nb>sorted</span><span class=p>(</span><span class=n>runtimes</span><span class=o>.</span><span class=n>keys</span><span class=p>()):</span>
+        <span class=n>lst</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>[</span><span class=n>key</span><span class=p>]</span>
+        <span class=n>keydata</span> <span class=o>=</span> <span class=n>runtimes</span><span class=p>[</span><span class=n>key</span><span class=p>]</span>
+        <span class=n>keydata</span><span class=o>.</span><span class=n>sort</span><span class=p>()</span>
+        <span class=n>lst</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=nb>map</span><span class=p>(</span><span class=n>num_to_str</span><span class=p>,</span> <span class=n>keydata</span><span class=p>))</span>
+        <span class=n>max_len</span> <span class=o>=</span> <span class=nb>max</span><span class=p>(</span><span class=n>max_len</span><span class=p>,</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>lst</span><span class=p>))</span>
+        <span class=n>data</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>lst</span><span class=p>)</span>
+
+    <span class=n>row</span><span class=p>:</span> <span class=nb>list</span><span class=p>[</span><span class=nb>str</span><span class=p>]</span> <span class=o>=</span> <span class=p>[]</span>
+    <span class=k>with</span> <span class=n>dst_file</span><span class=o>.</span><span class=n>open_for_write</span><span class=p>()</span> <span class=k>as</span> <span class=n>stream</span><span class=p>:</span>
+        <span class=k>for</span> <span class=n>i</span> <span class=ow>in</span> <span class=nb>range</span><span class=p>(</span><span class=n>max_len</span><span class=p>):</span>
+            <span class=n>row</span><span class=o>.</span><span class=n>clear</span><span class=p>()</span>
+            <span class=k>for</span> <span class=n>col</span> <span class=ow>in</span> <span class=n>data</span><span class=p>:</span>
+                <span class=k>if</span> <span class=n>i</span> <span class=o>==</span> <span class=mi>0</span><span class=p>:</span>
+                    <span class=n>row</span><span class=o>.</span><span class=n>extend</span><span class=p>((</span><span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>col</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=si>}</span><span class=s2>_x"</span><span class=p>,</span> <span class=sa>f</span><span class=s2>"</span><span class=si>{</span><span class=n>col</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span><span class=si>}</span><span class=s2>_rt"</span><span class=p>))</span>
+                <span class=k>else</span><span class=p>:</span>
+                    <span class=n>ll</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=n>col</span><span class=p>)</span>
+                    <span class=k>if</span> <span class=n>i</span> <span class=o><</span> <span class=n>ll</span><span class=p>:</span>
+                        <span class=n>row</span><span class=o>.</span><span class=n>extend</span><span class=p>((</span><span class=n>num_to_str</span><span class=p>((</span><span class=n>i</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)</span> <span class=o>/</span> <span class=p>(</span><span class=n>ll</span> <span class=o>-</span> <span class=mi>1</span><span class=p>)),</span> <span class=n>col</span><span class=p>[</span><span class=n>i</span><span class=p>]))</span>
+                    <span class=k>else</span><span class=p>:</span>
+                        <span class=n>row</span><span class=o>.</span><span class=n>extend</span><span class=p>((</span><span class=s2>""</span><span class=p>,</span> <span class=s2>""</span><span class=p>))</span>
+            <span class=n>stream</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=n>__CS</span><span class=o>.</span><span class=n>join</span><span class=p>(</span><span class=n>row</span><span class=p>))</span>
+            <span class=n>stream</span><span class=o>.</span><span class=n>write</span><span class=p>(</span><span class=s2>"</span><span class=se>\n</span><span class=s2>"</span><span class=p>)</span></div>
+
+
+
+<span class=c1># Run to parse all log files and to create csv</span>
+<span class=k>if</span> <span class=vm>__name__</span> <span class=o>==</span> <span class=s2>"__main__"</span><span class=p>:</span>
+    <span class=n>parser</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>ArgumentParser</span><span class=p>]</span> <span class=o>=</span> <span class=n>moptipyapps_argparser</span><span class=p>(</span>
+        <span class=vm>__file__</span><span class=p>,</span>
+        <span class=s2>"Postprocess Runtimes"</span><span class=p>,</span>
+        <span class=s2>"Create postprocessing results."</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"source"</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./results"</span><span class=p>,</span>
+        <span class=n>help</span><span class=o>=</span><span class=s2>"the location of the experimental results, i.e., the root folder "</span>
+             <span class=s2>"under which to search for log files"</span><span class=p>,</span> <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>)</span>
+    <span class=n>parser</span><span class=o>.</span><span class=n>add_argument</span><span class=p>(</span>
+        <span class=s2>"dest"</span><span class=p>,</span> <span class=n>help</span><span class=o>=</span><span class=s2>"the path to the destination file to be created"</span><span class=p>,</span>
+        <span class=nb>type</span><span class=o>=</span><span class=n>Path</span><span class=p>,</span> <span class=n>nargs</span><span class=o>=</span><span class=s2>"?"</span><span class=p>,</span> <span class=n>default</span><span class=o>=</span><span class=s2>"./evaluation/runtimes.txt"</span><span class=p>)</span>
+
+    <span class=n>args</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=n>argparse</span><span class=o>.</span><span class=n>Namespace</span><span class=p>]</span> <span class=o>=</span> <span class=n>parser</span><span class=o>.</span><span class=n>parse_args</span><span class=p>()</span>
+    <span class=n>runtime_summary</span><span class=p>(</span><span class=n>args</span><span class=o>.</span><span class=n>source</span><span class=p>,</span> <span class=n>args</span><span class=o>.</span><span class=n>dest</span><span class=p>)</span>
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.94 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.runtime_summary</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2026, Thomas Weise.</div>
