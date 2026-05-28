@@ -500,6 +500,25 @@ interarrival_times=Erlang(k=4, theta=2.5)), \
 Product(product_id=9, routing=(0, 1, 2, 5, 1, 3, 11, 6, 1, 8, 10, 4, 12), \
 interarrival_times=Erlang(k=2, theta=5)))
 
+    Now we reproduce the data from Table 2 of the paper:
+
+    >>> for i, p in enumerate(default_products()):
+    ...     itat = p.interarrival_times
+    ...     s = str(itat)
+    ...     s = f"{i + 1}: {s[:s.index(',')]}, mean={itat.mean()})"
+    ...     s += f"; routing: {','.join(str(j + 1) for j in p.routing)}"
+    ...     print(s)
+    1: Erlang(k=3, mean=10); routing: 1,2,4,2,9,10,11
+    2: Erlang(k=2, mean=10); routing: 1,2,5,2,8,9,10,11
+    3: Uniform(low=5, mean=10); routing: 1,2,6,4,2,9,12,11
+    4: Erlang(k=3, mean=10); routing: 1,2,7,4,2,9,10,11
+    5: Erlang(k=4, mean=10); routing: 1,2,4,12,2,9,2,13
+    6: Erlang(k=2, mean=10); routing: 1,2,5,12,2,9,7,13
+    7: Erlang(k=4, mean=10); routing: 1,2,6,12,2,8,2,13
+    8: Uniform(low=5, mean=10); routing: 1,2,3,7,4,12,2,8,6,9,2,13
+    9: Erlang(k=4, mean=10); routing: 1,2,3,5,4,6,12,2,8,2,10,6,13
+    10: Erlang(k=2, mean=10); routing: 1,2,3,6,2,4,12,7,2,9,11,5,13
+
     1. Matthias Thürer, Nuno O. Fernandes, Hermann Lödding, and Mark
        Stevenson. Material Flow Control in Make-to-Stock Production Systems:
        An Assessment of Order Generation, Order Release and Production
@@ -565,6 +584,40 @@ def default_stations() -> tuple[Station, ...]:
  processing_windows=Const(v=0.125)),\
  Station(station_id=12, processing_time=Erlang(k=3, theta=0.48),\
  processing_windows=Const(v=0.125)))
+
+    Now we reproduce the data from Table 3 of the paper:
+
+    >>> from moptipyapps.utils.sampling import Exponential, AtLeast
+    >>> from numpy import array
+    >>> from numpy.random import default_rng
+    >>> g = default_rng(seed=11)
+    >>> for i, p in enumerate(default_stations()):
+    ...     pti = p.processing_time
+    ...     if isinstance(pti, AtLeast):
+    ...         pti = pti.d
+    ...     use_pti = pti
+    ...     if isinstance(use_pti, Exponential):
+    ...         use_pti = Gamma(1, use_pti.eta)
+    ...     elif isinstance(use_pti, Erlang):
+    ...         use_pti = Gamma(use_pti.k, use_pti.theta)
+    ...     s = str(use_pti)
+    ...     vals = array([pti.sample(g) for _ in range(100000)])
+    ...     cov = vals.std() / vals.mean()
+    ...     s = f"{i + 1}: {s}, {cov:.2f}; {use_pti.simplify() == pti}"
+    ...     print(s)
+    1: Gamma(k=3, theta=0.26), 0.58; True
+    2: Gamma(k=3, theta=0.12), 0.58; True
+    3: Gamma(k=2, theta=1.33), 0.71; True
+    4: Gamma(k=1, theta=1.06), 1.00; True
+    5: Gamma(k=3, theta=0.67), 0.58; True
+    6: Gamma(k=4, theta=0.35), 0.50; True
+    7: Gamma(k=3, theta=0.59), 0.58; True
+    8: Gamma(k=3, theta=0.63), 0.58; True
+    9: Gamma(k=2, theta=0.59), 0.71; True
+    10: Gamma(k=3, theta=0.6), 0.58; True
+    11: Gamma(k=1, theta=1.44), 1.00; True
+    12: Gamma(k=4, theta=0.29), 0.50; True
+    13: Gamma(k=3, theta=0.48), 0.58; True
 
     1. Matthias Thürer, Nuno O. Fernandes, Hermann Lödding, and Mark
        Stevenson. Material Flow Control in Make-to-Stock Production Systems:
