@@ -15,7 +15,7 @@ matrix.
 Each product unit requires a certain time at each work station.
 These times follow a certain random distribution.
 
-Ther are customer demands (:class:`~Demand`) that appear in the system at
+There are customer demands (:class:`~Demand`) that appear in the system at
 certain :attr:`~Demand.arrival` times. The demand is not known to the system
 before its :attr:`~Demand.arrival` time, so we cannot really anticipate it.
 However, when it arrives at the :attr:`~Demand.arrival` time, it has a certain

@@ -357,6 +357,7 @@ def result_summaries(
         y_space: MultiStatisticsSpace,
         x_space: Space | Callable[[MultiStatisticsSpace], Space] =
         __default_x_space,
+        path_filter: Callable[[Path], bool] = lambda _: True,
         index_filter: Callable[[int], bool] = lambda _: True,
         x_from_text: Callable[[Iterable[str]], Any] | None = None,
         y_from_text: Callable[[Iterable[str]], MultiStatistics] | None = None,
@@ -372,6 +373,8 @@ def result_summaries(
     :param dest: the destination directory
     :param x_space: the search space
     :param y_space: the multi-statistics space
+    :param index_filter: the function to filter the index
+    :param path_filter: the function to filter the paths
     :param x_from_text: convert text to an element of the x-space
     :param y_from_text: convert text to an element of the y-space
     :param x_to_text: convert an element of the x-space to text
@@ -381,13 +384,14 @@ def result_summaries(
     dst: Final[Path] = Path(dest)
     dst.ensure_dir_exists()
 
-    if src.is_dir():
-        for spt in src.list_dir():
-            result_summaries(spt, dst, y_space, x_space, index_filter,
-                             x_from_text, y_from_text)
-        return
-    if not src.is_file():
-        return
+    if path_filter(src):
+        if src.is_dir():
+            for spt in src.list_dir():
+                result_summaries(spt, dst, y_space, x_space, path_filter,
+                                 index_filter, x_from_text, y_from_text)
+            return
+        if not src.is_file():
+            return
 
     dest_file: Final[Path] = dst.resolve_inside(src.basename())
     logger(f"Now processing {src!r} to {dest_file!r}.")

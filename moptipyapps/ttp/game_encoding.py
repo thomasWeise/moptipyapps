@@ -88,6 +88,26 @@ def game_to_id(home: int | np.ndarray, away: int | np.ndarray, n: int) -> int:
     11
     >>> game_to_id(5, 4, 10)
     49
+
+    >>> for i in range(12):
+    ...     for j in range(1, 5):
+    ...         for k in range(1, 5):
+    ...             if j == k:
+    ...                 continue
+    ...             if game_to_id(j - 1, k - 1, 4) == i:
+    ...                 print(f"{i} = ({j}, {k})")
+    0 = (1, 2)
+    1 = (1, 3)
+    2 = (1, 4)
+    3 = (2, 1)
+    4 = (2, 3)
+    5 = (2, 4)
+    6 = (3, 1)
+    7 = (3, 2)
+    8 = (3, 4)
+    9 = (4, 1)
+    10 = (4, 2)
+    11 = (4, 3)
     """
     a = int(home)
     b = int(away)
@@ -369,6 +389,8 @@ def map_games(x: np.ndarray, y: np.ndarray) -> None:
     >>> teams = 4
     >>> rounds = 2
     >>> perm = search_space_for_n_and_rounds(teams, rounds).blueprint
+    >>> perm
+    array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11], dtype=int8)
     >>> dest = np.empty((rounds * (teams - 1), teams),
     ...                 int_range_to_dtype(-teams, teams))
     >>> map_games(perm, dest)
@@ -390,6 +412,22 @@ def map_games(x: np.ndarray, y: np.ndarray) -> None:
      [-2  1 -4  3]
      [-3 -4  1  2]
      [-4 -3  2  1]]
+    >>> from random import shuffle as shuffi
+    >>> from random import seed as seedi
+    >>> seedi(12)
+    >>> shuffi(perm)
+    >>> perm
+    array([10,  7,  8,  3,  9,  0,  5,  1,  4,  6,  2, 11], dtype=int8)
+    >>> dest = np.empty((rounds * (teams - 1), teams),
+    ...                 int_range_to_dtype(-teams, teams))
+    >>> map_games(perm, dest)
+    >>> print(dest)
+    [[ 3 -4 -1  2]
+     [-4 -3  2  1]
+     [-2  1  4 -3]
+     [ 2 -1 -4  3]
+     [-3  4  1 -2]
+     [ 4  3 -2 -1]]
      >>> from moptipyapps.ttp.instance import Instance
      >>> inst = Instance.from_resource("circ10")
      >>> perm = np.array([73,77,55,74,21,20,3,11,63,19,38,8,27,47,88,16,75,
