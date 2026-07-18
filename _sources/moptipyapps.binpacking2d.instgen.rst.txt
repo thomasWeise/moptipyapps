@@ -1,0 +1,66 @@
+moptipyapps.binpacking2d.instgen package
+========================================
+
+.. automodule:: moptipyapps.binpacking2d.instgen
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.binpacking2d.instgen.errors module
+----------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.instgen.errors
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.instgen.errors\_and\_hardness module
+-------------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.instgen.errors_and_hardness
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.instgen.experiment module
+--------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.instgen.experiment
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.instgen.hardness module
+------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.instgen.hardness
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.instgen.inst\_decoding module
+------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.instgen.inst_decoding
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.instgen.instance\_space module
+-------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.instgen.instance_space
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.instgen.problem module
+-----------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.instgen.problem
+   :members:
+   :show-inheritance:
+   :undoc-members:

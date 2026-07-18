@@ -1,0 +1,7 @@
+moptipyapps.qap.qaplib package
+==============================
+
+.. automodule:: moptipyapps.qap.qaplib
+   :members:
+   :show-inheritance:
+   :undoc-members:
