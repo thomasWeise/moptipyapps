@@ -17,9 +17,9 @@ The question is how should `X` be set so that we can
 
 1. satisfy as many customer demands as possible directly when they come in,
    i.e., maximize the fill rate
-   (:attr:`~moptipyapps.prodsched.statistics.Statistics.immediate_rates`,
+   (:attr:`~moptipyapps.prodsched.statistics.Statistics.service_levels`,
    represented by
-   :mod:`~moptipyapps.prodsched.objectives.worst_and_mean_fill_rate`) and
+   :mod:`~moptipyapps.prodsched.objectives.worst_and_mean_service_level`) and
 2. have a low total average number of product units sitting around in our
    warehouse, i.e., minimize the stock level
    (:attr:`~moptipyapps.prodsched.statistics.Statistics.stock_levels`,
@@ -101,7 +101,7 @@ products (0 worst, 1 best).
 Then our objective value -- subject to minimization -- is
 `(1 - PM) * 100 + (1 - AM)`.
 This is implemented in module
-:mod:`~moptipyapps.prodsched.objectives.worst_and_mean_fill_rate`.
+:mod:`~moptipyapps.prodsched.objectives.worst_and_mean_service_level`.
 
 The objective function minimizing the stock level is implemented in module
 :mod:`~moptipyapps.prodsched.objectives.max_stocklevel`.
@@ -136,7 +136,7 @@ In summary, what we do is this:
 
 6. As first objective, we use the smallest `PM_i_j` as `PM` and the smallest
    `AM_i` as `AM` and compute `(1 - AM) * 100 + (1 - PM)` in
-   :mod:`~moptipyapps.prodsched.objectives.worst_and_mean_fill_rate`.
+   :mod:`~moptipyapps.prodsched.objectives.worst_and_mean_service_level`.
 
 7. As second objective, we use the largest `SL_i` in
    :mod:`~moptipyapps.prodsched.objectives.max_stocklevel`.
@@ -206,7 +206,7 @@ from moptipyapps.prodsched.instance import Instance
 from moptipyapps.prodsched.instances import get_instances
 from moptipyapps.prodsched.multistatistics import MultiStatisticsSpace
 from moptipyapps.prodsched.objectives.max_stocklevel import MaxStockLevel
-from moptipyapps.prodsched.objectives.worst_and_mean_fill_rate import (
+from moptipyapps.prodsched.objectives.worst_and_mean_service_level import (
     WorstAndMeanFillRate,
 )
 from moptipyapps.prodsched.rop_multisimulation import ROPMultiSimulation

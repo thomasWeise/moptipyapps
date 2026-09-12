@@ -1,26 +1,26 @@
 """
-Maximize the worst-case immediate rate.
+Maximize the worst-case service level.
 
 This objective function tries to find solutions which have very robust fill
 rates.
-The fill rate is the fraction of customers that can get served directly,
+The service level is the fraction of customers that can get served directly,
 i.e., the fraction of customers that do not need to wait.
 This means that it is the fraction of customers whose demands can directly be
 satisfied from the stock.
 
-Fill rates are between 0 and 1.
-Of course, high fill rates are good and should therefore be subject to
+Service levels are between 0 and 1.
+Of course, high service levels are good and should therefore be subject to
 maximization.
-However, since we can only *minimize*, we minimize "1 - fill rate".
+However, since we can only *minimize*, we minimize "1 - service level".
 
 Now, the question is:
-What is a *robust* fill rate / solution?
+What is a *robust* service level / solution?
 Well, we simulate the solutions (such as re-order points) over multiple
 instances.
-A robust good fill rate would be high on the worst instance.
-In other words, the smallest fill rate measured on any instance should
+A robust good service level would be high on the worst instance.
+In other words, the smallest service level measured on any instance should
 be as high as possible.
-This means that the largest value "1 - fill rate" should be as small as
+This means that the largest value "1 - service level" should be as small as
 possible.
 So we use this as result of our objective function.
 """
@@ -32,18 +32,18 @@ from moptipyapps.prodsched.multistatistics import MultiStatistics
 
 
 class WorstFillRate(Objective):
-    """Compute the worst immediate rate and return `1 -` of it."""
+    """Compute the worst service level and return `1 -` of it."""
 
     def evaluate(self, x: MultiStatistics) -> int | float:
         """
-        Get the negated worst immediate rate.
+        Get the negated worst service level.
 
         :param x: the multi-statistics
         :return: the worst stock level
         """
         min_imm: int | float = 1
         for stat in x.per_instance:
-            for sl in stat.immediate_rates:
+            for sl in stat.service_levels:
                 if (sl is None) or not (0 < sl <= 1):
                     return 1
                 min_imm = min(min_imm, sl)
@@ -51,7 +51,7 @@ class WorstFillRate(Objective):
 
     def lower_bound(self) -> int:
         """
-        Get the lower bound of the inverted minimum immediate rate.
+        Get the lower bound of the inverted minimum service level.
 
         :retval 0: always
         """
@@ -59,7 +59,7 @@ class WorstFillRate(Objective):
 
     def upper_bound(self) -> int:
         """
-        Get the upper bound of the inverted minimum immediate rate.
+        Get the upper bound of the inverted minimum service level.
 
         :retval 1: always
         """

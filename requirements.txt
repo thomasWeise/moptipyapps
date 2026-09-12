@@ -22,10 +22,10 @@
 
 # `moptipy` provides the basic optimization infrastructure and the spaces and
 # tools that we use for optimization.
-moptipy[performance] == 0.9.185
+moptipy[performance] == 0.9.187
 
 # the common tools package
-pycommons == 0.8.100
+pycommons == 0.8.103
 
 # `numpy` is needed for its efficient data structures.
 numpy == 2.4.6

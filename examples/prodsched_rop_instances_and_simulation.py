@@ -17,6 +17,9 @@ from moptipyapps.prodsched.statistics import to_stream as stat_to_stream
 from moptipyapps.prodsched.statistics_collector import StatisticsCollector
 from moptipyapps.utils.shared import moptipyapps_argparser
 
+# the reorder point
+ROP: Final[tuple[int, ...]] = (4, 6, 3, 4, 4, 6, 3, 5, 6, 10)
+
 
 def run(dest_dir: str | Path, n_instances: int) -> None:
     """
@@ -56,16 +59,18 @@ def run(dest_dir: str | Path, n_instances: int) -> None:
                 writer(s)
 
         logger(f"Now running ROP-simulation {index}.")
-        stat: Statistics = Statistics(instance.n_products)
+        stat: Statistics = Statistics(
+            instance.n_products, instance.n_stations)
         col: StatisticsCollector = StatisticsCollector(instance)
         col.set_dest(stat)
         simulation: ROPSimulation = ROPSimulation(instance, col)
-        simulation.set_rop((4, 6, 3, 4, 4, 6, 3, 5, 6, 10))
+        simulation.set_rop(ROP)
         simulation.ctrl_run()
 
         logger(f"Now writing simulation data {index} to {log_file!r}.")
         with log_file.open_for_write() as stream:
             writer = line_writer(stream)
+            writer(f"ROP: {';'.join(map(str, ROP))}")
             for s in stat_to_stream(stat):
                 writer(s)
         all_stats.append(stat)

@@ -88,7 +88,6 @@ class GamePlan(Component, np.ndarray):
         csv: Final[str] = CSV_SEPARATOR
         sep: str = ""
         teams: Final[tuple[str, ...]] = self.instance.teams
-        len(teams)
 
         with StringIO() as sio:
             for k in self.flatten():

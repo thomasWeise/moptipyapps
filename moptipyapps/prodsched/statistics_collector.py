@@ -50,7 +50,7 @@ independent instances, then can be used as basis for objective functions
 
 
 >>> from moptipyapps.prodsched.simulation import Simulation
->>> statistics = Statistics(instance.n_products)
+>>> statistics = Statistics(instance.n_products, instance.n_stations)
 >>> collector = StatisticsCollector(instance)
 >>> collector.set_dest(statistics)
 >>> simulation = Simulation(instance, collector)
@@ -67,11 +67,12 @@ cwt.min;1603;2278;1603
 cwt.mean;1829.3333333333333;2278;1605
 cwt.max;2278;2278;1607
 cwt.sd;388.56187838403986;;2.8284271247461903
-fill.rate;0;0;0
+servicelevel;0;0;0
 stocklevel.mean;0.6078765407355446;0.4497444633730835;0.15813207736246118
 fulfilled.rate;1;1;1
+utilization.mean;0.12711694558573003;0.1645455456458563;0.08968834552560377
 
->>> statistics_2 = Statistics(instance.n_products)
+>>> statistics_2 = Statistics(instance.n_products, instance.n_stations)
 >>> statistics_2 = statistics_2.from_stream(text)
 >>> print("\n".join(list(to_stream(statistics_2))[:-1]))
 stat;total;product_0;product_1
@@ -83,9 +84,10 @@ cwt.min;1603;2278;1603
 cwt.mean;1829.3333333333333;2278;1605
 cwt.max;2278;2278;1607
 cwt.sd;388.56187838403986;;2.8284271247461903
-fill.rate;0;0;0
+servicelevel;0;0;0
 stocklevel.mean;0.6078765407355446;0.4497444633730835;0.15813207736246118
 fulfilled.rate;1;1;1
+utilization.mean;0.12711694558573003;0.1645455456458563;0.08968834552560377
 """
 
 from time import time_ns
@@ -154,6 +156,14 @@ class StatisticsCollector(Listener):
             StreamSum() for _ in range(n_products))
         #: the total stock level sum
         self.__stock_level: Final[StreamSum] = StreamSum()
+        #: the utilization on a per-machine basis
+        self.__utilizations: Final[tuple[StreamSum, ...]] = tuple(
+            StreamSum() for _ in range(instance.n_stations))
+        #: the total machine utilization sum
+        self.__utilization: Final[StreamSum] = StreamSum()
+        #: the last time machine became busy
+        self.__busy_start: Final[list[float | None]] = (
+            [None] * instance.n_stations)
         #: the number of products currently in warehouse and since when
         #: they were there
         self.__in_warehouse: Final[tuple[list[float], ...]] = tuple([
@@ -186,9 +196,13 @@ class StatisticsCollector(Listener):
             wh = self.__in_warehouse[i]
             wh[0] = 0.0
             wh[1] = 0.0
+        for i, m in enumerate(self.__utilizations):
+            m.reset()
+            self.__busy_start[i] = None
         self.__production_time.reset()
         self.__waiting_time.reset()
         self.__stock_level.reset()
+        self.__utilization.reset()
 
     def product_in_warehouse(
             self, time: float, product_id: int, amount: int,
@@ -211,6 +225,17 @@ class StatisticsCollector(Listener):
         iwh[0] = amount
         iwh[1] = time
 
+    def produce_at_begin(
+            self, time: float, station_id: int, job: Job) -> None:
+        """
+        Report the start of the production of a certain product at a station.
+
+        :param time: the current time
+        :param station_id: the station ID
+        :param job: the production job
+        """
+        self.__busy_start[station_id] = time
+
     def produce_at_end(
             self, time: float, station_id: int, job: Job) -> None:
         """
@@ -220,6 +245,12 @@ class StatisticsCollector(Listener):
         :param station_id: the station ID
         :param job: the production job
         """
+        if time > self.__warmup:
+            add = time - max(self.__warmup, self.__busy_start[
+                station_id])
+            self.__utilizations[station_id].add(add)
+            self.__utilization.add(add)
+            self.__busy_start[station_id] = None
         if job.measure and job.completed:
             am: Final[int] = job.amount
             tt: float = time - job.arrival
@@ -271,27 +302,40 @@ class StatisticsCollector(Listener):
         st: int = 0
         for i, n in enumerate(self.__immediately_satisfied):
             t = total[i]
-            dest.immediate_rates[i] = n / t
+            dest.service_levels[i] = n / t
             sn += n
             f = self.__fulfilled[i]
             dest.fulfilled_rates[i] = f / t
             sf += f
             st += t
-        dest.immediate_rate = sn / st
+        dest.service_level = sn / st
         dest.fulfilled_rate = sf / st
 
         for i, stat in enumerate(self.__waiting_times):
             dest.waiting_times[i] = stat.result_or_none()
         dest.waiting_time = self.__waiting_time.result_or_none()
 
-        slm: Final[StreamSum] = self.__stock_level
-        twl: Final[float] = self.__total - self.__warmup
+        slm: StreamSum = self.__stock_level
+        tt: Final[float] = self.__total
+        twl: Final[float] = tt - self.__warmup
         wu: Final[float] = self.__warmup
         for i, sm in enumerate(self.__stock_levels):
             wh = self.__in_warehouse[i]
-            v: float = (self.__total - max(wh[1], wu)) * wh[0]
+            v: float = (tt - max(wh[1], wu)) * wh[0]
             sm.add(v)
             slm.add(v)
             dest.stock_levels[i] = sm.result() / twl
         dest.stock_level = slm.result() / twl
+
+        slm = self.__utilization
+        for i, sm in enumerate(self.__utilizations):
+            wx = self.__busy_start[i]
+            if wx is not None:
+                v = tt - max(wu, wx)
+                sm.add(v)
+                slm.add(v)
+            dest.utilizations[i] = sm.result() / twl
+        dest.utilization = slm.result() / (twl * tuple.__len__(
+            self.__utilizations))
+
         dest.simulation_time_nanos = time_ns() - self.__start

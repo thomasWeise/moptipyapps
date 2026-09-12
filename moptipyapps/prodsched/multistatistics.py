@@ -57,7 +57,8 @@ class MultiStatistics:
         :param instances: the instances for which we create the statistics
         """
         object.__setattr__(self, "per_instance", tuple(
-            Statistics(inst.n_products) for inst in instances))
+            Statistics(inst.n_products, inst.n_stations)
+            for inst in instances))
         if names is None:
             names = tuple(inst.name for inst in instances)
         elif tuple.__len__(names) != tuple.__len__(instances):

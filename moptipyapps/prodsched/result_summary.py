@@ -59,7 +59,7 @@ def summarize_multi_statistics_to_text(y: MultiStatistics) \
     n_inst: Final[int] = tuple.__len__(pi)
     if n_inst <= 0:
         raise ValueError("No instance.")
-    n_prod: Final[int] = list.__len__(pi[0].immediate_rates)
+    n_prod: Final[int] = list.__len__(pi[0].service_levels)
 
     yield "## Per-Instance Statistics"
     yield (f"instance{__CS}fillRate{__CS}stockLevel{__CS}meanWaitingTime"
@@ -69,10 +69,10 @@ def summarize_multi_statistics_to_text(y: MultiStatistics) \
     wts = StreamStatistics.aggregate()
     pts = StreamStatistics.aggregate()
     for i, st in enumerate(pi):
-        yield (f"{i}{__CS}{__m(st.immediate_rate)}{__CS}{__m(st.stock_level)}"
+        yield (f"{i}{__CS}{__m(st.service_level)}{__CS}{__m(st.stock_level)}"
                f"{__CS}{__m(st.waiting_time)}{__CS}{__m(st.production_time)}")
-        if st.immediate_rate is not None:
-            irs.add(st.immediate_rate)
+        if st.service_level is not None:
+            irs.add(st.service_level)
         if st.stock_level is not None:
             sls.add(st.stock_level)
         if (st.waiting_time is not None) and (
@@ -119,11 +119,11 @@ def summarize_multi_statistics_to_text(y: MultiStatistics) \
         s = str(i)
         ci: int = 0
         for p in range(n_prod):
-            s = (f"{s}{__CS}{__m(st.immediate_rates[p])}{__CS}"
+            s = (f"{s}{__CS}{__m(st.service_levels[p])}{__CS}"
                  f"{__m(st.stock_levels[p])}{__CS}{__m(st.waiting_times[p])}"
                  f"{__CS}{__m(st.production_times[p])}")
 
-            v = st.immediate_rates[p]
+            v = st.service_levels[p]
             if v is not None:
                 collect[ci].add(v)
             ci += 1

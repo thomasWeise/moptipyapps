@@ -39,12 +39,16 @@ COL_PRODUCT_PREFIX: Final[str] = "product_"
 #: the mean TRP row
 ROW_TRP: Final[str] = "trp"
 #: the fill rate row
-ROW_FILL_RATE: Final[str] = f"fill{SCOPE_SEPARATOR}{KEY_RATE}"
+ROW_SERVICE_LEVEL: Final[str] = "servicelevel"
 #: the CWT row
 ROW_CWT: Final[str] = "cwt"
 #: the mean stock level row
 ROW_STOCK_LEVEL_MEAN: Final[str] = \
     f"stocklevel{SCOPE_SEPARATOR}{KEY_MEAN_ARITH}"
+#: the machine utilization row
+ROW_UTILIZATION_MEAN: Final[str] = \
+    f"utilization{SCOPE_SEPARATOR}{KEY_MEAN_ARITH}"
+
 #: the fulfilled rate
 ROW_FULFILLED_RATE: Final[str] = f"fulfilled{SCOPE_SEPARATOR}{KEY_RATE}"
 #: the simulation time getter
@@ -66,12 +70,12 @@ class Statistics:
 
     It provides the following statistics:
 
-    - :attr:`~immediate_rates`: The per-product-fillrate, i.e., the fraction
+    - :attr:`~service_levels`: The per-product-fillrate, i.e., the fraction
       of demands of a given product that were immediately fulfilled when
       arriving in the system (i.e., that were fulfilled by using product that
       was available in the warehouse/in stock).
       Higher values are good.
-    - :attr:`~immediate_rate`: The overall fillrate, i.e., the total fraction
+    - :attr:`~service_level`: The overall fillrate, i.e., the total fraction
       of demands that were immediately fulfilled upon arrival in the system
       over all demands. That is, this is the fraction of demands that were
       fulfilled by using product that was available in the warehouse/in stock.
@@ -79,13 +83,13 @@ class Statistics:
     - :attr:`~waiting_times`: The per-product waiting times ("CWT") for the
       demands that came in but could *not* immediately be fulfilled. These are
       the demands for a given product that were, so to say, not covered by the
-      fillrate/:attr:`~immediate_rate`.  If all demands of a product could
+      fillrate/:attr:`~service_level`.  If all demands of a product could
       immediately be satisfied, then this is `None`.
       Otherwise, smaller values are good.
     - :attr:`~waiting_time`: The overall waiting times ("CWT") for the demands
       that came in but could *not* immediately be fulfilled. These are all the
       demands for a given product that were, so to say, not covered by the
-      fillrate/:attr:`~immediate_rate`. If all demands could immediately be
+      fillrate/:attr:`~service_level`. If all demands could immediately be
       satisfied, then this is `None`.
       Otherwise, smaller values are good.
     - :attr:`~production_times`: The per-product times that producing one unit
@@ -107,6 +111,11 @@ class Statistics:
     - :attr:`~stock_level`: The total average amount units of any product in
       the warehouse averaged over the simulation time. Smaller values are
       better.
+    - :attr:`~utilizations`: The average per-workstation utilization. In other
+      words, the fraction of the non-warmup simulated time that each
+      workstation was busy.
+    - :attr:`~utilization`: The total average utilization, averaged over all
+      workstations.
     - :attr:`~simulation_time_nanos`: The total time that the simulation took,
       measured in nanoseconds.
 
@@ -116,13 +125,15 @@ class Statistics:
     :class:`~moptipyapps.prodsched.simulation.Simulation`.
     """
 
-    def __init__(self, n_products: int) -> None:
+    def __init__(self, n_products: int, n_stations: int) -> None:
         """
         Create the statistics record for a given number of products.
 
         :param n_products: the number of products
+        :param n_stations: the number of stations
         """
         check_int_range(n_products, "n_products", 1, 1_000_000_000)
+        check_int_range(n_stations, "n_stations", 1, 1_000_000_000)
         #: the production time (TRP) statistics per-product
         self.production_times: Final[list[
             StreamStatistics | None]] = [None] * n_products
@@ -130,11 +141,11 @@ class Statistics:
         self.production_time: StreamStatistics | None = None
         #: the fraction of demands that were immediately satisfied,
         #: on a per-product basis, i.e., the fillrate
-        self.immediate_rates: Final[list[int | float | None]] = (
+        self.service_levels: Final[list[int | float | None]] = (
             [None] * n_products)
         #: the overall fraction of immediately satisfied demands, i.e.,
         #: the fillrate
-        self.immediate_rate: int | float | None = None
+        self.service_level: int | float | None = None
         #: the average waiting time for all demands that were not immediately
         #: satisfied -- only counting demands that were actually satisfied,
         #: i.e., the CWT
@@ -154,6 +165,11 @@ class Statistics:
             int | float | None]] = [None] * n_products
         #: the overall average stock level
         self.stock_level: int | float | None = None
+        #: the average machine utilization, on a per-station basis
+        self.utilizations: Final[list[
+            int | float | None]] = [None] * n_stations
+        #: the overall average utilization
+        self.utilization: int | float | None = None
         #: the nanoseconds used by the simulation
         self.simulation_time_nanos: int | float | None = None
 
@@ -168,13 +184,16 @@ class Statistics:
             raise ValueError("Huh?")
         for i in range(n):
             self.production_times[i] = None
-            self.immediate_rates[i] = None
+            self.service_levels[i] = None
             self.waiting_times[i] = None
             self.fulfilled_rates[i] = None
             self.stock_levels[i] = None
+        for i in range(list.__len__(self.utilizations)):
+            self.utilizations[i] = None
 
         self.production_time = None
-        self.immediate_rate = None
+        self.service_level = None
+        self.utilization = None
         self.waiting_time = None
         self.fulfilled_rate = None
         self.stock_level = None
@@ -190,8 +209,8 @@ class Statistics:
             raise type_error(stat, "stat", Statistics)
         self.production_times[:] = stat.production_times
         self.production_time = stat.production_time
-        self.immediate_rates[:] = stat.immediate_rates
-        self.immediate_rate = stat.immediate_rate
+        self.service_levels[:] = stat.service_levels
+        self.service_level = stat.service_level
         self.waiting_times[:] = stat.waiting_times
         self.waiting_time = stat.waiting_time
         self.fulfilled_rates[:] = stat.fulfilled_rates
@@ -199,6 +218,8 @@ class Statistics:
         self.stock_levels[:] = stat.stock_levels
         self.stock_level = stat.stock_level
         self.simulation_time_nanos = stat.simulation_time_nanos
+        self.utilizations[:] = stat.utilizations
+        self.utilization = stat.utilization
 
     def from_stream(self, stream: Iterable[str]) -> Self:
         """
@@ -219,8 +240,8 @@ class Statistics:
         keys: Final[set[str]] = {
             f"{key}{SCOPE_SEPARATOR}{the_stat[0]}"
             for key in (ROW_TRP, ROW_CWT) for the_stat in _STATS}
-        keys.update((ROW_FILL_RATE, ROW_FULFILLED_RATE,
-                     ROW_STOCK_LEVEL_MEAN))
+        keys.update((ROW_SERVICE_LEVEL, ROW_FULFILLED_RATE,
+                     ROW_STOCK_LEVEL_MEAN, ROW_UTILIZATION_MEAN))
         sim_time_key: Final[str] = ROW_SIMULATION_TIME
 
         data: dict[str, list[int | float | None]] = {}
@@ -258,9 +279,9 @@ class Statistics:
         self.waiting_time = _split_data_stat(
             data, ROW_CWT, self.waiting_times)
 
-        vals: list[int | float | None] = data[ROW_FILL_RATE]
-        self.immediate_rate = vals[0]
-        self.immediate_rates[:] = vals[1:]
+        vals: list[int | float | None] = data[ROW_SERVICE_LEVEL]
+        self.service_level = vals[0]
+        self.service_levels[:] = vals[1:]
 
         vals = data[ROW_STOCK_LEVEL_MEAN]
         self.stock_level = vals[0]
@@ -269,6 +290,10 @@ class Statistics:
         vals = data[ROW_FULFILLED_RATE]
         self.fulfilled_rate = vals[0]
         self.fulfilled_rates[:] = vals[1:]
+
+        vals = data[ROW_UTILIZATION_MEAN]
+        self.utilization = vals[0]
+        self.utilizations[:] = vals[1:]
 
         return self
 
@@ -344,13 +369,16 @@ def to_stream(stats: Statistics) -> Generator[str, None, None]:
                 f"{key}{SCOPE_SEPARATOR}{stat}", nts(call(single))), (
                 map(nts, map(call, alle)))))
     yield str.join(CSV_SEPARATOR, chain((
-        ROW_FILL_RATE, nts(stats.immediate_rate)), (
-        map(nts, stats.immediate_rates))))
+        ROW_SERVICE_LEVEL, nts(stats.service_level)), (
+        map(nts, stats.service_levels))))
     yield str.join(CSV_SEPARATOR, chain((
         ROW_STOCK_LEVEL_MEAN, nts(stats.stock_level)), (
         map(nts, stats.stock_levels))))
     yield str.join(CSV_SEPARATOR, chain((
         ROW_FULFILLED_RATE, nts(stats.fulfilled_rate)), (
         map(nts, stats.fulfilled_rates))))
+    yield str.join(CSV_SEPARATOR, chain((
+        ROW_UTILIZATION_MEAN, nts(stats.utilization)), (
+        map(nts, stats.utilizations))))
     yield f"{ROW_SIMULATION_TIME}{nts(
         stats.simulation_time_nanos / 1_000_000_000)}"
