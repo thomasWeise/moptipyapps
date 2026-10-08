@@ -1,0 +1,34 @@
+moptipyapps.prodsched.objectives package
+========================================
+
+.. automodule:: moptipyapps.prodsched.objectives
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.prodsched.objectives.max\_stocklevel module
+-------------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.objectives.max_stocklevel
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.objectives.worst\_and\_mean\_service\_level module
+------------------------------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.objectives.worst_and_mean_service_level
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.prodsched.objectives.worst\_service\_level module
+-------------------------------------------------------------
+
+.. automodule:: moptipyapps.prodsched.objectives.worst_service_level
+   :members:
+   :show-inheritance:
+   :undoc-members:

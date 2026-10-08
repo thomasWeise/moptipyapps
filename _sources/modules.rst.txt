@@ -1,0 +1,7 @@
+moptipyapps
+===========
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps

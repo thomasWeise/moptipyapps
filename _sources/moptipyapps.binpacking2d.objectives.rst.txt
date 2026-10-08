@@ -1,0 +1,66 @@
+moptipyapps.binpacking2d.objectives package
+===========================================
+
+.. automodule:: moptipyapps.binpacking2d.objectives
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.binpacking2d.objectives.bin\_count module
+-----------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.objectives.bin_count
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.objectives.bin\_count\_and\_empty module
+-----------------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.objectives.bin_count_and_empty
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.objectives.bin\_count\_and\_last\_empty module
+-----------------------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.objectives.bin_count_and_last_empty
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.objectives.bin\_count\_and\_last\_skyline module
+-------------------------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.objectives.bin_count_and_last_skyline
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.objectives.bin\_count\_and\_last\_small module
+-----------------------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.objectives.bin_count_and_last_small
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.objectives.bin\_count\_and\_lowest\_skyline module
+---------------------------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.objectives.bin_count_and_lowest_skyline
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.objectives.bin\_count\_and\_small module
+-----------------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.objectives.bin_count_and_small
+   :members:
+   :show-inheritance:
+   :undoc-members:

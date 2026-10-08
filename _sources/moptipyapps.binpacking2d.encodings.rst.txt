@@ -1,0 +1,26 @@
+moptipyapps.binpacking2d.encodings package
+==========================================
+
+.. automodule:: moptipyapps.binpacking2d.encodings
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+moptipyapps.binpacking2d.encodings.ibl\_encoding\_1 module
+----------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.encodings.ibl_encoding_1
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.binpacking2d.encodings.ibl\_encoding\_2 module
+----------------------------------------------------------
+
+.. automodule:: moptipyapps.binpacking2d.encodings.ibl_encoding_2
+   :members:
+   :show-inheritance:
+   :undoc-members:
