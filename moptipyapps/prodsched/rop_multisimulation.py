@@ -315,6 +315,8 @@ from moptipyapps.prodsched.multistatistics import (
     MultiStatistics,
     MultiStatisticsSpace,
 )
+from moptipyapps.prodsched.random_rop_simulation import RandomROPSimulation
+from moptipyapps.prodsched.random_simulation import RandomInstance
 from moptipyapps.prodsched.rop_simulation import ROPSimulation
 from moptipyapps.prodsched.statistics_collector import StatisticsCollector
 
@@ -335,7 +337,10 @@ class ROPMultiSimulation(Encoding):
             StatisticsCollector(inst) for inst in space.instances)
         #: the simulations and collectors
         self.__simulations: Final[tuple[tuple[
-            ROPSimulation, StatisticsCollector], ...]] = tuple(
+            ROPSimulation | RandomROPSimulation,
+            StatisticsCollector], ...]] = tuple(
+            (RandomROPSimulation(inst, col[i]), col[i]) if isinstance(
+                inst, RandomInstance) else
             (ROPSimulation(inst, col[i]), col[i])
             for i, inst in enumerate(space.instances))
         #: the internal space
