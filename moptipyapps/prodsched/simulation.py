@@ -230,7 +230,7 @@ T=420.0! finished j(id: 0, p: 0, am: 10, ar: 20, me: T, c: T, st: 120, sp: 1)\
  at station 1
 T=420.0! product=0, amount=10, in_warehouse=0, in_production=0,\
  1 pending demands
-T=420.0! d(id: 0, p: 0, c: 0, am: 10, ar: 20, dl: 100, me: T) statisfied
+T=420.0! d(id: 0, p: 0, c: 0, am: 10, ar: 20, dl: 100, me: T) satisfied
 T=420.0 -- finished
 
 >>> instance = Instance(
@@ -289,19 +289,19 @@ T=107.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 95, sp: 1)\
  at station 0
 T=107.0! product=1, amount=9, in_warehouse=1, in_production=7,\
  2 pending demands
-T=107.0: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) statisfied
+T=107.0: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) satisfied
 T=107.0! 0 units of product 1 in warehouse
 T=112.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, st: 52, sp: 1)\
  at station 1
 T=112.0! product=0, amount=3, in_warehouse=2, in_production=0,\
  1 pending demands
-T=112.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied
+T=112.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) satisfied
 T=112.0! 0 units of product 0 in warehouse
 T=144.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: T, st: 95, sp: 1)\
  at station 0
 T=144.0! product=1, amount=7, in_warehouse=0, in_production=0,\
  1 pending demands
-T=144.0! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) statisfied
+T=144.0! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) satisfied
 T=144.0 -- finished
 
 
@@ -346,19 +346,19 @@ T=107.0! start j(id: 2, p: 1, am: 7, ar: 30, me: T, c: F, st: 95, sp: 1)\
  at station 0
 T=107.0! product=1, amount=9, in_warehouse=1, in_production=7,\
  2 pending demands
-T=107.0: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) statisfied
+T=107.0: d(id: 0, p: 1, c: 0, am: 10, ar: 20, dl: 90, me: F) satisfied
 T=107.0! 0 units of product 1 in warehouse
 T=112.0! finished j(id: 1, p: 0, am: 3, ar: 22, me: T, c: T, st: 52, sp: 1)\
  at station 1
 T=112.0! product=0, amount=3, in_warehouse=2, in_production=0,\
  1 pending demands
-T=112.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied
+T=112.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) satisfied
 T=112.0! 0 units of product 0 in warehouse
 T=144.0! finished j(id: 2, p: 1, am: 7, ar: 30, me: T, c: T, st: 95, sp: 1)\
  at station 0
 T=144.0! product=1, amount=7, in_warehouse=0, in_production=0,\
  1 pending demands
-T=144.0! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) statisfied
+T=144.0! d(id: 2, p: 1, c: 0, am: 7, ar: 30, dl: 200, me: T) satisfied
 T=144.0 -- finished
 
 
@@ -1106,7 +1106,7 @@ class PrintingListener(Listener):
     def demand_satisfied(self, time: float, demand: Demand) -> None:
         """Print that a demand was satisfied."""
         self.__output(
-            f"T={time}{'!' if demand.measure else ':'} {demand} statisfied")
+            f"T={time}{'!' if demand.measure else ':'} {demand} satisfied")
 
     def event_product(self, time: float,  # pylint: disable=R0913,R0917
                       product_id: int, amount: int,

@@ -5,7 +5,7 @@ A simulator for production scheduling that is more "randomized".
 >>> ri.n_products
 10
 >>> ri.n_demands
-9998
+10038
 >>> ri.station_product_unit_times
 (((nan, nan), (nan, nan), (nan, nan), (nan, nan), (nan, nan), (nan, nan), \
 (nan, nan), (nan, nan), (nan, nan), (nan, nan)), ((nan, nan), (nan, nan), \
@@ -24,6 +24,12 @@ A simulator for production scheduling that is more "randomized".
 (nan, nan), (nan, nan), (nan, nan), (nan, nan), (nan, nan), (nan, nan)), \
 ((), (), (), (), (nan, nan), (nan, nan), (nan, nan), (nan, nan), \
 (nan, nan), (nan, nan)))
+
+>>> from moptipyapps.prodsched.mfc_generator import sample_mfc_instance
+>>> di = sample_mfc_instance(seed=324)
+
+>>> di.demands == ri.demands
+True
 
 >>> collector: list[str] = []
 >>> from moptipyapps.prodsched.simulation import PrintingListener
@@ -44,64 +50,67 @@ T=0.0: product=9, amount=0, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: product=3, amount=0, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: product=8, amount=0, in_warehouse=0, in_production=0, 0 pending demands
 T=0.0: product=7, amount=0, in_warehouse=0, in_production=0, 0 pending demands
-T=3.424208875424501: product=5, amount=0, in_warehouse=0, in_production=0, \
+T=2.981548103971826: product=0, amount=0, in_warehouse=0, in_production=0, \
 1 pending demands
-T=3.424208875424501: station=0, 1 jobs queued
-T=3.424208875424501: start j(id: 0, p: 5, am: 1, ar: 3.424208875424501, \
-me: F, c: F, st: 3.424208875424501, sp: 0) at station 0
-T=3.6567696275343033: finished j(id: 0, p: 5, am: 1, ar: 3.424208875424501, \
-me: F, c: F, st: 3.424208875424501, sp: 0) at station 0
-T=3.6567696275343033: station=1, 1 jobs queued
-T=3.6567696275343033: start j(id: 0, p: 5, am: 1, ar: 3.424208875424501, \
-me: F, c: F, st: 3.6567696275343033, sp: 1) at station 1
-T=4.0981763278696475: finished j(id: 0, p: 5, am: 1, ar: 3.424208875424501, \
-me: F, c: F, st: 3.6567696275343033, sp: 1) at station 1
-T=4.0981763278696475: station=4, 1 jobs queued
-T=4.0981763278696475: start j(id: 0, p: 5, am: 1, ar: 3.424208875424501, \
-me: F, c: F, st: 4.0981763278696475, sp: 2) at station 4
+T=2.981548103971826: station=0, 1 jobs queued
+T=2.981548103971826: start j(id: 0, p: 0, am: 1, ar: 2.981548103971826, \
+me: F, c: F, st: 2.981548103971826, sp: 0) at station 0
+T=3.4193569376148965: finished j(id: 0, p: 0, am: 1, ar: 2.981548103971826, \
+me: F, c: F, st: 2.981548103971826, sp: 0) at station 0
+T=3.4193569376148965: station=1, 1 jobs queued
+T=3.4193569376148965: start j(id: 0, p: 0, am: 1, ar: 2.981548103971826, \
+me: F, c: F, st: 3.4193569376148965, sp: 1) at station 1
+T=3.55779441043288: product=1, amount=0, in_warehouse=0, in_production=0, \
+1 pending demands
+T=3.55779441043288: station=0, 1 jobs queued
+T=3.55779441043288: start j(id: 1, p: 1, am: 1, ar: 3.55779441043288, me: F, \
+c: F, st: 3.55779441043288, sp: 0) at station 0
 
 >>> for i in range(len(collector) - 20, len(collector)):
 ...     print(collector[i])
-T=9999.428331523672! finished j(id: 9995, p: 0, am: 1, ar: \
-9996.460708942874, me: T, c: F, st: 9997.801768977704, sp: 1) at station 1
-T=9999.428331523672! station=1, 3 jobs queued
-T=9999.428331523672! start j(id: 9996, p: 3, am: 1, ar: 9997.478248967976, \
-me: T, c: F, st: 9998.587385267516, sp: 1) at station 1
-T=9999.428331523672! station=3, 1 jobs queued
-T=9999.428331523672! start j(id: 9995, p: 0, am: 1, ar: 9996.460708942874, \
-me: T, c: F, st: 9999.428331523672, sp: 2) at station 3
-T=9999.58444837528! finished j(id: 9983, p: 6, am: 1, ar: 9983.484802449133, \
-me: T, c: T, st: 9998.124429217616, sp: 7) at station 12
-T=9999.58444837528! station=12, 1 jobs queued
-T=9999.58444837528! start j(id: 9959, p: 9, am: 1, ar: 9956.252508364129, \
-me: T, c: F, st: 9998.430253328681, sp: 12) at station 12
-T=9999.58444837528! product=6, amount=1, in_warehouse=0, in_production=0, \
-1 pending demands
-T=9999.58444837528! d(id: 6984, p: 6, c: 6984, am: 1, ar: 9983.484802449133, \
-dl: 9983.484802449133, me: T) statisfied
-T=9999.869861971298! finished j(id: 9984, p: 9, am: 1, ar: 9984.207389040752, \
-me: T, c: F, st: 9996.357685721181, sp: 7) at station 6
-T=9999.869861971298! station=6, 1 jobs queued
-T=9999.869861971298! start j(id: 9990, p: 7, am: 1, ar: 9992.63213872734, \
-me: T, c: F, st: 9998.56285992803, sp: 3) at station 6
-T=9999.920430233462! finished j(id: 9996, p: 3, am: 1, ar: 9997.478248967976, \
-me: T, c: F, st: 9998.587385267516, sp: 1) at station 1
-T=9999.920430233462! station=1, 3 jobs queued
-T=9999.920430233462! start j(id: 9982, p: 7, am: 1, ar: 9982.32594565836, \
-me: T, c: F, st: 9999.143844794991, sp: 6) at station 1
-T=9999.998742667354! product=7, amount=0, in_warehouse=0, in_production=3, \
-4 pending demands
-T=9999.998742667354! station=0, 1 jobs queued
-T=9999.998742667354! start j(id: 9997, p: 7, am: 1, ar: 9999.998742667354, \
-me: T, c: F, st: 9999.998742667354, sp: 0) at station 0
-T=9999.998742667354 -- finished
+T=9999.323989064784! start j(id: 10035, p: 4, am: 1, ar: 9997.792977742796, \
+me: T, c: F, st: 9998.976626430733, sp: 1) at station 1
+T=9999.360407487817! finished j(id: 9983, p: 7, am: 1, ar: 9949.406339628928, \
+me: T, c: T, st: 9989.970820097158, sp: 11) at station 12
+T=9999.360407487817! station=12, 7 jobs queued
+T=9999.360407487817! start j(id: 10003, p: 4, am: 1, ar: 9969.66567880894, \
+me: T, c: F, st: 9991.124064608839, sp: 7) at station 12
+T=9999.360407487817! product=7, amount=1, in_warehouse=0, in_production=4, \
+5 pending demands
+T=9999.360407487817! d(id: 8000, p: 7, c: 8000, am: 1, ar: \
+9949.406339628928, dl: 9949.406339628928, me: T) satisfied
+T=9999.504763898161! finished j(id: 10035, p: 4, am: 1, ar: \
+9997.792977742796, me: T, c: F, st: 9998.976626430733, sp: 1) \
+at station 1
+T=9999.79811329168! product=6, amount=0, in_warehouse=0, \
+in_production=3, 4 pending demands
+T=9999.953134938109! finished j(id: 10029, p: 6, am: 1, \
+ar: 9993.680935722501, me: T, c: F, st: 9995.014424332754, sp: 2) at station 5
+T=9999.953134938109! station=5, 1 jobs queued
+T=9999.953134938109! start j(id: 10030, p: 2, am: 1, ar: 9993.858569427597, \
+me: T, c: F, st: 9995.741612058786, sp: 2) at station 5
+T=9999.984813470339! finished j(id: 10003, p: 4, am: 1, ar: \
+9969.66567880894, me: T, c: T, st: 9991.124064608839, sp: 7) at station 12
+T=9999.984813470339! station=12, 6 jobs queued
+T=9999.984813470339! start j(id: 10002, p: 5, am: 1, ar: \
+9964.392348080759, me: T, c: F, st: 9992.164222251737, sp: 7) at station 12
+T=9999.984813470339! product=4, amount=1, in_warehouse=0, \
+in_production=3, 4 pending demands
+T=9999.984813470339! d(id: 4992, p: 4, c: 4992, am: 1, ar: \
+9969.66567880894, dl: 9969.66567880894, me: T) satisfied
+T=9999.992789452692! finished j(id: 10018, p: 0, am: 1, ar: \
+9978.69384408688, me: T, c: F, st: 9993.208961813833, sp: 4) at station 8
+T=9999.992789452692! station=8, 4 jobs queued
+T=9999.992789452692! start j(id: 10012, p: 2, am: 1, ar: \
+9975.265252124665, me: T, c: F, st: 9993.724592052344, sp: 5) at station 8
+T=9999.992789452692 -- finished
 """
 
 from dataclasses import dataclass
 from math import nan
 from typing import Final, Iterable, cast
 
-from moptipy.utils.nputils import rand_generator, rand_seeds_from_str
+from moptipy.utils.nputils import rand_generator
 from numpy.random import Generator
 
 from moptipyapps.prodsched.instance import (
@@ -154,7 +163,7 @@ class RandomInstance(Instance):
 
         prods: Final[list[Product]] = sorted(products)
         n_products: Final[int] = list.__len__(prods)
-        gen: Final[Generator] = rand_generator(rand_seeds_from_str(name, 1)[0])
+        gen: Final[Generator] = rand_generator(seed)
         demands, _ = _sample_demands(
             gen, prods, time_end_warmup, time_end_measure)
         n_demands: Final[int] = tuple.__len__(demands)
@@ -174,6 +183,8 @@ class RandomInstance(Instance):
 
         #: the random seed to use
         self.seed: Final[int] = seed
+        #: the internal state where a random generator should pick up
+        self.state: Final = gen.bit_generator.state
 
         super().__init__(name=name,
                          n_products=n_products,
@@ -215,11 +226,11 @@ class RandomSimulation(Simulation):
         #: the stations
         self.__stations: Final[tuple[Station, ...]] = instance.stations
         #: the internal generator
-        self.__rnd: Generator = rand_generator(self.seed)
+        self.__rnd: Final[Generator] = rand_generator(self.seed)
 
     def ctrl_run(self) -> None:
         """Begin the simulation."""
-        self.__rnd = rand_generator(self.seed)
+        self.__rnd.bit_generator.state = self.instance.state  # type: ignore
         super().ctrl_run()
 
     def _create_job(self, jid: int, product_id: int, amount: int,

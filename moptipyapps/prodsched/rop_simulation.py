@@ -56,7 +56,7 @@ T=197.0: finished j(id: 0, p: 0, am: 11, ar: 0, me: F, c: T, st: 130,\
  sp: 1) at station 1
 T=197.0: product=0, amount=11, in_warehouse=0, in_production=1,\
  1 pending demands
-T=197.0: d(id: 0, p: 0, c: 0, am: 1, ar: 100, dl: 100, me: F) statisfied
+T=197.0: d(id: 0, p: 0, c: 0, am: 1, ar: 100, dl: 100, me: F) satisfied
 T=197.0: 10 units of product 0 in warehouse
 T=240.0: finished j(id: 1, p: 1, am: 21, ar: 0, me: F, c: T, st: 84,\
  sp: 1) at station 0
@@ -78,7 +78,7 @@ T=255.0: product=0, amount=1, in_warehouse=10, in_production=0,\
 T=255.0: 11 units of product 0 in warehouse
 T=500.0: product=1, amount=0, in_warehouse=21, in_production=0,\
  1 pending demands
-T=500.0: d(id: 2, p: 1, c: 2, am: 1, ar: 500, dl: 500, me: F) statisfied
+T=500.0: d(id: 2, p: 1, c: 2, am: 1, ar: 500, dl: 500, me: F) satisfied
 T=500.0: 20 units of product 1 in warehouse
 T=500.0: station=1, 1 jobs queued
 T=500.0: start j(id: 3, p: 1, am: 1, ar: 500, me: F, c: F, st: 500,\
@@ -95,7 +95,7 @@ T=508.0: product=1, amount=1, in_warehouse=20, in_production=0,\
 T=508.0: 21 units of product 1 in warehouse
 T=3100.0! product=0, amount=0, in_warehouse=11, in_production=0,\
  1 pending demands
-T=3100.0! d(id: 1, p: 0, c: 1, am: 1, ar: 3100, dl: 3100, me: T) statisfied
+T=3100.0! d(id: 1, p: 0, c: 1, am: 1, ar: 3100, dl: 3100, me: T) satisfied
 T=3100.0! 10 units of product 0 in warehouse
 T=3100.0! station=0, 1 jobs queued
 T=3100.0! start j(id: 4, p: 0, am: 1, ar: 3100, me: T, c: F, st: 3100,\
@@ -112,7 +112,7 @@ T=3117.0! product=0, amount=1, in_warehouse=10, in_production=0,\
 T=3117.0! 11 units of product 0 in warehouse
 T=4000.0! product=1, amount=0, in_warehouse=21, in_production=0,\
  1 pending demands
-T=4000.0! d(id: 3, p: 1, c: 3, am: 1, ar: 4000, dl: 5000, me: T) statisfied
+T=4000.0! d(id: 3, p: 1, c: 3, am: 1, ar: 4000, dl: 5000, me: T) satisfied
 T=4000.0! 20 units of product 1 in warehouse
 T=4000.0! station=1, 1 jobs queued
 T=4000.0! start j(id: 5, p: 1, am: 1, ar: 4000, me: T, c: F, st: 4000,\
@@ -201,8 +201,8 @@ T=171.0: start j(id: 2, p: 0, am: 3, ar: 5, me: F, c: F, st: 140, sp: 1)\
  at station 1
 T=171.0! product=0, amount=9, in_warehouse=2, in_production=8,\
  2 pending demands
-T=171.0: d(id: 4, p: 0, c: 0, am: 3, ar: 5, dl: 2000, me: F) statisfied
-T=171.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) statisfied
+T=171.0: d(id: 4, p: 0, c: 0, am: 3, ar: 5, dl: 2000, me: F) satisfied
+T=171.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) satisfied
 T=171.0! 3 units of product 0 in warehouse
 T=186.0: finished j(id: 2, p: 0, am: 3, ar: 5, me: F, c: T, st: 140, sp: 1)\
  at station 1
@@ -229,8 +229,8 @@ T=263.0: start j(id: 3, p: 1, am: 4, ar: 20, me: F, c: F, st: 57, sp: 1)\
  at station 0
 T=263.0! product=1, amount=10, in_warehouse=1, in_production=14,\
  3 pending demands
-T=263.0: d(id: 0, p: 1, c: 0, am: 4, ar: 20, dl: 90, me: F) statisfied
-T=263.0! d(id: 2, p: 1, c: 0, am: 4, ar: 30, dl: 200, me: T) statisfied
+T=263.0: d(id: 0, p: 1, c: 0, am: 4, ar: 20, dl: 90, me: F) satisfied
+T=263.0! d(id: 2, p: 1, c: 0, am: 4, ar: 30, dl: 200, me: T) satisfied
 T=263.0! 3 units of product 1 in warehouse
 T=287.0: finished j(id: 3, p: 1, am: 4, ar: 20, me: F, c: T, st: 57, sp: 1)\
  at station 0
@@ -239,7 +239,121 @@ T=287.0! start j(id: 5, p: 1, am: 4, ar: 30, me: T, c: F, st: 69, sp: 1)\
  at station 0
 T=287.0! product=1, amount=4, in_warehouse=3, in_production=10,\
  1 pending demands
-T=287.0! d(id: 3, p: 1, c: 0, am: 6, ar: 60, dl: 200, me: T) statisfied
+T=287.0! d(id: 3, p: 1, c: 0, am: 6, ar: 60, dl: 200, me: T) satisfied
+T=287.0! 1 units of product 1 in warehouse
+T=303.0! finished j(id: 5, p: 1, am: 4, ar: 30, me: T, c: T, st: 69, sp: 1)\
+ at station 0
+T=303.0! station=0, 1 jobs queued
+T=303.0! start j(id: 6, p: 1, am: 6, ar: 60, me: T, c: F, st: 102, sp: 1)\
+ at station 0
+T=303.0! product=1, amount=4, in_warehouse=1, in_production=6,\
+ 0 pending demands
+T=303.0! 5 units of product 1 in warehouse
+T=337.0! finished j(id: 6, p: 1, am: 6, ar: 60, me: T, c: T, st: 102, sp: 1)\
+ at station 0
+T=337.0! product=1, amount=6, in_warehouse=5, in_production=0,\
+ 0 pending demands
+T=337.0! 11 units of product 1 in warehouse
+T=337.0 -- finished
+
+>>> rop_sim.ctrl_reset()
+>>> rop_sim.ctrl_run()
+start
+T=0.0: product=0, amount=2, in_warehouse=0, in_production=0, 0 pending demands
+T=0.0: 2 units of product 0 in warehouse
+T=0.0: station=0, 1 jobs queued
+T=0.0: start j(id: 0, p: 0, am: 9, ar: 0, me: F, c: F, st: 0, sp: 0)\
+ at station 0
+T=0.0: product=1, amount=1, in_warehouse=0, in_production=0, 0 pending demands
+T=0.0: 1 units of product 1 in warehouse
+T=0.0: station=1, 1 jobs queued
+T=0.0: start j(id: 1, p: 1, am: 10, ar: 0, me: F, c: F, st: 0, sp: 0)\
+ at station 1
+T=5.0: product=0, amount=0, in_warehouse=2, in_production=9, 1 pending demands
+T=20.0: product=1, amount=0, in_warehouse=1, in_production=10,\
+ 1 pending demands
+T=22.0! product=0, amount=0, in_warehouse=2, in_production=12,\
+ 2 pending demands
+T=30.0! product=1, amount=0, in_warehouse=1, in_production=14,\
+ 2 pending demands
+T=39.0: finished j(id: 1, p: 1, am: 10, ar: 0, me: F, c: F, st: 0, sp: 0)\
+ at station 1
+T=39.0! station=1, 2 jobs queued
+T=39.0: start j(id: 3, p: 1, am: 4, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=57.0: finished j(id: 3, p: 1, am: 4, ar: 20, me: F, c: F, st: 20, sp: 0)\
+ at station 1
+T=57.0! station=1, 1 jobs queued
+T=57.0! start j(id: 5, p: 1, am: 4, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=60.0! product=1, amount=0, in_warehouse=1, in_production=18,\
+ 3 pending demands
+T=69.0! finished j(id: 5, p: 1, am: 4, ar: 30, me: T, c: F, st: 30, sp: 0)\
+ at station 1
+T=69.0! station=1, 1 jobs queued
+T=69.0! start j(id: 6, p: 1, am: 6, ar: 60, me: T, c: F, st: 60, sp: 0)\
+ at station 1
+T=102.0! finished j(id: 6, p: 1, am: 6, ar: 60, me: T, c: F, st: 60, sp: 0)\
+ at station 1
+T=110.0: finished j(id: 0, p: 0, am: 9, ar: 0, me: F, c: F, st: 0, sp: 0)\
+ at station 0
+T=110.0! station=0, 6 jobs queued
+T=110.0: start j(id: 2, p: 0, am: 3, ar: 5, me: F, c: F, st: 5, sp: 0)\
+ at station 0
+T=110.0! station=1, 1 jobs queued
+T=110.0: start j(id: 0, p: 0, am: 9, ar: 0, me: F, c: F, st: 110, sp: 1)\
+ at station 1
+T=140.0: finished j(id: 2, p: 0, am: 3, ar: 5, me: F, c: F, st: 5, sp: 0)\
+ at station 0
+T=140.0! station=0, 5 jobs queued
+T=140.0! start j(id: 4, p: 0, am: 5, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=171.0: finished j(id: 0, p: 0, am: 9, ar: 0, me: F, c: T, st: 110, sp: 1)\
+ at station 1
+T=171.0! station=1, 1 jobs queued
+T=171.0: start j(id: 2, p: 0, am: 3, ar: 5, me: F, c: F, st: 140, sp: 1)\
+ at station 1
+T=171.0! product=0, amount=9, in_warehouse=2, in_production=8,\
+ 2 pending demands
+T=171.0: d(id: 4, p: 0, c: 0, am: 3, ar: 5, dl: 2000, me: F) satisfied
+T=171.0! d(id: 1, p: 0, c: 0, am: 5, ar: 22, dl: 200, me: T) satisfied
+T=171.0! 3 units of product 0 in warehouse
+T=186.0: finished j(id: 2, p: 0, am: 3, ar: 5, me: F, c: T, st: 140, sp: 1)\
+ at station 1
+T=186.0! product=0, amount=3, in_warehouse=3, in_production=5,\
+ 0 pending demands
+T=186.0! 6 units of product 0 in warehouse
+T=210.0! finished j(id: 4, p: 0, am: 5, ar: 22, me: T, c: F, st: 22, sp: 0)\
+ at station 0
+T=210.0! station=0, 4 jobs queued
+T=210.0: start j(id: 1, p: 1, am: 10, ar: 0, me: F, c: F, st: 39, sp: 1)\
+ at station 0
+T=210.0! station=1, 1 jobs queued
+T=210.0! start j(id: 4, p: 0, am: 5, ar: 22, me: T, c: F, st: 210, sp: 1)\
+ at station 1
+T=245.0! finished j(id: 4, p: 0, am: 5, ar: 22, me: T, c: T, st: 210, sp: 1)\
+ at station 1
+T=245.0! product=0, amount=5, in_warehouse=6, in_production=0,\
+ 0 pending demands
+T=245.0! 11 units of product 0 in warehouse
+T=263.0: finished j(id: 1, p: 1, am: 10, ar: 0, me: F, c: T, st: 39, sp: 1)\
+ at station 0
+T=263.0! station=0, 3 jobs queued
+T=263.0: start j(id: 3, p: 1, am: 4, ar: 20, me: F, c: F, st: 57, sp: 1)\
+ at station 0
+T=263.0! product=1, amount=10, in_warehouse=1, in_production=14,\
+ 3 pending demands
+T=263.0: d(id: 0, p: 1, c: 0, am: 4, ar: 20, dl: 90, me: F) satisfied
+T=263.0! d(id: 2, p: 1, c: 0, am: 4, ar: 30, dl: 200, me: T) satisfied
+T=263.0! 3 units of product 1 in warehouse
+T=287.0: finished j(id: 3, p: 1, am: 4, ar: 20, me: F, c: T, st: 57, sp: 1)\
+ at station 0
+T=287.0! station=0, 2 jobs queued
+T=287.0! start j(id: 5, p: 1, am: 4, ar: 30, me: T, c: F, st: 69, sp: 1)\
+ at station 0
+T=287.0! product=1, amount=4, in_warehouse=3, in_production=10,\
+ 1 pending demands
+T=287.0! d(id: 3, p: 1, c: 0, am: 6, ar: 60, dl: 200, me: T) satisfied
 T=287.0! 1 units of product 1 in warehouse
 T=303.0! finished j(id: 5, p: 1, am: 4, ar: 30, me: T, c: T, st: 69, sp: 1)\
  at station 0
