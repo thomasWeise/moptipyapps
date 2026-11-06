@@ -118,7 +118,7 @@ every single production decision if need be.
    Flexible Services and Manufacturing Journal. 37(1):1-37. March 2025.
    doi:<https://doi.org/10.1007/s10696-024-09532-2>
 """
-import datetime
+import datetime as dt
 from dataclasses import dataclass
 from typing import Callable, Final, Iterable
 
@@ -150,7 +150,7 @@ from moptipyapps.utils.sampling import (
 from moptipyapps.version import __version__
 
 #: the "now" function
-__DTN: Final[Callable[[], datetime.datetime]] = datetime.datetime.now
+__DTN: Final[Callable[[], dt.datetime]] = dt.datetime.now
 
 
 #: The information key for interarrival times
@@ -284,6 +284,44 @@ class Station:
             self.processing_windows)
 
 
+def _sample_demands(random: Generator,
+                    products: Iterable[Product],
+                    time_end_warmup: int | float,
+                    time_end_measure: int | float)\
+        -> tuple[tuple[Demand, ...], int]:
+    """
+    Sample demands using the default generator.
+
+    :param random: the random number generator
+    :param products: the iterable of products
+    :param time_end_warmup: the end of the warmup period
+    :param time_end_measure: the end of the measurement period
+    :return: the tuple with all demands
+    """
+    demands: Final[list[Demand]] = []
+    current_id: int = 0
+    for product in products:
+        time: float = 0.0
+        while True:
+            until = product.interarrival_times.sample(random)
+            time += until
+            if time >= time_end_measure:
+                break
+            demands.append(
+                Demand(
+                    arrival=time,
+                    deadline=time,
+                    demand_id=current_id,
+                    customer_id=current_id,
+                    product_id=product.product_id,
+                    amount=1,
+                    measure=time_end_warmup <= time,
+                ),
+            )
+            current_id += 1
+    return tuple(sorted(demands)), current_id
+
+
 # pylint: disable=R0914,R0912,R0915
 def sample_mfc_instance(products: Iterable[Product] | None = None,
                         stations: Iterable[Station] | None = None,
@@ -411,20 +449,8 @@ def sample_mfc_instance(products: Iterable[Product] | None = None,
     random: Final[Generator] = rand_generator(seed)
 
     # sample the demands
-    demands: Final[list[Demand]] = []
-    current_id: int = 0
-    for product in products:
-        time: float = 0.0
-        while True:
-            until = product.interarrival_times.sample(random)
-            time += until
-            if time >= time_end_measure:
-                break
-            demands.append(Demand(
-                arrival=time, deadline=time, demand_id=current_id,
-                customer_id=current_id, product_id=product.product_id,
-                amount=1, measure=time_end_warmup <= time))
-            current_id += 1
+    demands, current_id = _sample_demands(
+        random, products, time_end_warmup, time_end_measure)
 
     #: sample the working times
     production_times: Final[list[list[list[float]]]] = []

@@ -28,7 +28,6 @@ import numpy as np
 from moptipy.api.objective import Objective
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import DEFAULT_FLOAT
-
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.objective import FigureOfMerit
 

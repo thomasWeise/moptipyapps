@@ -5,14 +5,13 @@ from typing import Callable, Final
 
 import numpy as np
 from moptipy.utils.nputils import is_all_finite
-from numpy.random import Generator, default_rng
-
 from moptipyapps.dynamic_control.system import System
 from moptipyapps.dynamic_control.systems.lorenz import LORENZ_4, LORENZ_111
 from moptipyapps.dynamic_control.systems.stuart_landau import (
     STUART_LANDAU_4,
     STUART_LANDAU_111,
 )
+from numpy.random import Generator, default_rng
 
 
 def __system_test(system: System,

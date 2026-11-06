@@ -4,8 +4,6 @@ from typing import Callable, Final
 
 import numpy as np
 from moptipy.utils.nputils import is_all_finite
-from numpy.random import Generator, default_rng
-
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.controllers.ann import anns, make_ann
 from moptipyapps.dynamic_control.controllers.cubic import cubic
@@ -19,6 +17,7 @@ from moptipyapps.dynamic_control.controllers.predefined import predefined
 from moptipyapps.dynamic_control.controllers.quadratic import quadratic
 from moptipyapps.dynamic_control.systems.lorenz import LORENZ_4
 from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_4
+from numpy.random import Generator, default_rng
 
 
 def __controller_test(controller: Controller,

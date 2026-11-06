@@ -21,11 +21,10 @@ instances of :class:`~moptipyapps.dynamic_control.controller.Controller`.
 from typing import Callable, Final, Iterable, cast
 
 import numpy as np
-from pycommons.types import check_int_range, type_error
-
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.controllers.codegen import CodeGenerator
 from moptipyapps.dynamic_control.system import System
+from pycommons.types import check_int_range, type_error
 
 
 def make_ann(state_dims: int, control_dims: int, layers: list[int]) \

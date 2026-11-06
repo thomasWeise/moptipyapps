@@ -23,12 +23,11 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import array_to_str
-from pycommons.io.path import Path
-from pycommons.types import check_int_range, type_error
-
 from moptipyapps.dynamic_control.ode import multi_run_ode
 from moptipyapps.dynamic_control.results_log import ResultsLog
 from moptipyapps.dynamic_control.results_plot import ResultsPlot
+from pycommons.io.path import Path
+from pycommons.types import check_int_range, type_error
 
 #: the color for training points
 _TRAINING_COLOR: Final[str] = "orange"

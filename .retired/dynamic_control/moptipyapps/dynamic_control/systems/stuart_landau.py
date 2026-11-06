@@ -26,12 +26,11 @@ from typing import Final
 
 import numba  # type: ignore
 import numpy as np
-from pycommons.types import check_int_range
-
 from moptipyapps.dynamic_control.starting_points import (
     make_interesting_starting_points,
 )
 from moptipyapps.dynamic_control.system import System
+from pycommons.types import check_int_range
 
 
 @numba.njit(cache=True, inline="always", fastmath=True, boundscheck=False)

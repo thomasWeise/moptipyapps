@@ -20,8 +20,6 @@ from moptipy.algorithms.so.vector.cmaes_lib import BiPopCMAES
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
 from moptipy.api.process import Process
-from pycommons.io.path import Path, directory_path
-
 from moptipyapps.dynamic_control.controllers.ann import anns
 from moptipyapps.dynamic_control.controllers.cubic import cubic
 from moptipyapps.dynamic_control.controllers.linear import linear
@@ -36,6 +34,8 @@ from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.objective import FigureOfMeritLE
 from moptipyapps.dynamic_control.systems.lorenz import LORENZ_111
 from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_111
+from pycommons.io.path import Path, directory_path
+
 from moptipyapps.utils.shared import moptipyapps_argparser
 
 

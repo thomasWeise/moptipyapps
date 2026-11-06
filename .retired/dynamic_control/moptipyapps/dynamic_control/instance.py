@@ -30,11 +30,10 @@ import numpy as np
 from moptipy.api.component import Component
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.strings import sanitize_name
-from pycommons.io.path import Path
-from pycommons.types import type_error
-
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.system import System
+from pycommons.io.path import Path
+from pycommons.types import type_error
 
 
 class Instance(Component):

@@ -6,8 +6,6 @@ from typing import Callable, Final
 
 import numpy as np
 from moptipy.utils.nputils import is_all_finite
-from numpy.random import Generator, default_rng
-
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.experiment_raw import make_instances
 from moptipyapps.dynamic_control.experiment_surrogate import (
@@ -21,6 +19,7 @@ from moptipyapps.dynamic_control.ode import (
     t_from_ode,
 )
 from moptipyapps.dynamic_control.system import System
+from numpy.random import Generator, default_rng
 
 
 def __run_ode_test(instance: Instance,

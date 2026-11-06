@@ -6,8 +6,6 @@ from typing import Any, Callable, Final
 from moptipy.operators.vectors.op0_uniform import Op0Uniform
 from moptipy.spaces.vectorspace import VectorSpace
 from moptipy.tests.objective import validate_objective
-from numpy.random import Generator, default_rng
-
 from moptipyapps.dynamic_control.controllers.ann import anns
 from moptipyapps.dynamic_control.controllers.cubic import cubic
 from moptipyapps.dynamic_control.controllers.linear import linear
@@ -20,6 +18,7 @@ from moptipyapps.dynamic_control.objective import (
 from moptipyapps.dynamic_control.system import System
 from moptipyapps.dynamic_control.systems.lorenz import LORENZ_4
 from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_4
+from numpy.random import Generator, default_rng
 
 
 def __objective_test(fc: Callable[[Instance, bool], FigureOfMerit],

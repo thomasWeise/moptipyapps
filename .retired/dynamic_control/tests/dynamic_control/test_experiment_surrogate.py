@@ -5,9 +5,6 @@ from typing import Callable, Final, cast
 from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
 from moptipy.evaluation.end_results import EndResult, from_logs
-from numpy.random import Generator, default_rng
-from pycommons.io.temp import temp_dir
-
 from moptipyapps.dynamic_control.experiment_surrogate import (
     base_setup,
     make_instances,
@@ -15,6 +12,8 @@ from moptipyapps.dynamic_control.experiment_surrogate import (
 from moptipyapps.dynamic_control.surrogate_optimizer import SurrogateOptimizer
 from moptipyapps.dynamic_control.system import System
 from moptipyapps.dynamic_control.system_model import SystemModel
+from numpy.random import Generator, default_rng
+from pycommons.io.temp import temp_dir
 
 
 def __make_instances(random: Generator) -> list[Callable[[], SystemModel]]:

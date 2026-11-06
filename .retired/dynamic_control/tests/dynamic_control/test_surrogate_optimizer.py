@@ -3,11 +3,9 @@
 
 from typing import Final
 
+import moptipyapps.dynamic_control.model_objective as mo
 import numpy as np
 from moptipy.api.execution import Execution
-from numpy.random import Generator, default_rng
-
-import moptipyapps.dynamic_control.model_objective as mo
 from moptipyapps.dynamic_control.experiment_surrogate import make_instances
 from moptipyapps.dynamic_control.objective import (
     FigureOfMerit,
@@ -15,6 +13,7 @@ from moptipyapps.dynamic_control.objective import (
 )
 from moptipyapps.dynamic_control.surrogate_optimizer import SurrogateOptimizer
 from moptipyapps.dynamic_control.system_model import SystemModel
+from numpy.random import Generator, default_rng
 
 
 def test_surrogate_cmaes() -> None:

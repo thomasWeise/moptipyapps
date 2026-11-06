@@ -24,10 +24,10 @@ import numpy as np
 from moptipy.api.objective import Objective
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import array_to_str
-from pycommons.types import type_error
-
 from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.ode import diff_from_ode, j_from_ode, run_ode
+from pycommons.types import type_error
+
 from moptipyapps.utils.shared import SCOPE_INSTANCE
 
 

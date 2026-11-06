@@ -6,12 +6,11 @@ from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
 from moptipy.evaluation.end_results import EndResult, from_logs
 from moptipy.utils.nputils import rand_seeds_from_str
-from numpy.random import Generator, default_rng
-from pycommons.io.temp import temp_dir
-
 from moptipyapps.dynamic_control.experiment_raw import cmaes, make_instances
 from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.system import System
+from numpy.random import Generator, default_rng
+from pycommons.io.temp import temp_dir
 
 
 def __make_instances() -> list[Callable[[], Instance]]:

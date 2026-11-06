@@ -99,14 +99,13 @@ from moptipy.operators.vectors.op0_uniform import Op0Uniform
 from moptipy.spaces.vectorspace import VectorSpace
 from moptipy.utils.logger import KeyValueLogSection
 from moptipy.utils.nputils import rand_seed_generate
-from numpy.random import Generator
-from pycommons.io.path import Path
-from pycommons.types import check_int_range, type_error
-
 from moptipyapps.dynamic_control.model_objective import ModelObjective
 from moptipyapps.dynamic_control.objective import FigureOfMerit
 from moptipyapps.dynamic_control.system import System
 from moptipyapps.dynamic_control.system_model import SystemModel
+from numpy.random import Generator
+from pycommons.io.path import Path
+from pycommons.types import check_int_range, type_error
 
 
 def _nop() -> None:

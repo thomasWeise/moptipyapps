@@ -14,10 +14,9 @@ from typing import Final, Iterable
 
 import numba  # type: ignore
 import numpy as np
-from numpy import inf
-
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.system import System
+from numpy import inf
 
 #: the golden ratio
 PHI: Final[float] = 0.5 * (np.sqrt(5.0) + 1.0)

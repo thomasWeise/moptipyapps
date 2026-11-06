@@ -11,7 +11,6 @@ from typing import Final, Iterable
 
 import numba  # type: ignore
 import numpy as np
-
 from moptipyapps.dynamic_control.controller import Controller
 from moptipyapps.dynamic_control.system import System
 

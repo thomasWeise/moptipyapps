@@ -29,8 +29,6 @@ from moptipy.api.execution import Execution
 from moptipy.api.experiment import run_experiment
 from moptipy.api.process import Process
 from moptipy.spaces.vectorspace import VectorSpace
-from pycommons.io.path import Path, directory_path
-
 from moptipyapps.dynamic_control.controllers.ann import make_ann
 from moptipyapps.dynamic_control.instance import Instance
 from moptipyapps.dynamic_control.objective import (
@@ -47,6 +45,8 @@ from moptipyapps.dynamic_control.systems.stuart_landau import STUART_LANDAU_4
 from moptipyapps.dynamic_control.systems.three_coupled_oscillators import (
     THREE_COUPLED_OSCILLATORS,
 )
+from pycommons.io.path import Path, directory_path
+
 from moptipyapps.utils.shared import moptipyapps_argparser
 
 

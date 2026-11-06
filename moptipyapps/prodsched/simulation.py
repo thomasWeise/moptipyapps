@@ -458,7 +458,7 @@ T=95.0 -- finished
 from dataclasses import dataclass, field
 from heapq import heappop, heappush
 from time import time_ns
-from typing import Any, Callable, Final
+from typing import Any, Callable, Final, Iterator
 
 import numpy as np
 from pycommons.strings.string_conv import bool_to_str, float_to_str
@@ -633,12 +633,12 @@ class Simulation:  # pylint: disable=R0902
         #: the instance whose data is simulated
         self.instance: Final[Instance] = instance
         #: the product routes
-        self.__routes: Final[tuple[tuple[int, ...], ...]] = instance.routes
+        self.routes: Final[tuple[tuple[int, ...], ...]] = instance.routes
         #: the station-product-unit-times
         self.__mput: Final[tuple[tuple[np.ndarray, ...], ...]] = (
             instance.station_product_unit_times)
         #: the end of the warmup period
-        self.__warmup: Final[float] = instance.time_end_warmup
+        self.warmup: Final[float] = instance.time_end_warmup
         #: the end of the measurement period
         self.__measure: Final[float] = instance.time_end_measure
 
@@ -721,7 +721,7 @@ class Simulation:  # pylint: disable=R0902
         queue: Final[list[_Event]] = self.__queue
 
         #: fill the warehouse at time index 0
-        for product_id, amount in enumerate(self.instance.warehous_at_t0):
+        for product_id, amount in self._get_initially_warehouse():
             heappush(queue, _Event(0.0, self.__product_available, (
                 product_id, amount)))
         #: fill in the customer demands/orders
@@ -738,6 +738,22 @@ class Simulation:  # pylint: disable=R0902
             event.call(*event.args)
 
         self.__l_finished(self.__time)
+
+    def _get_initially_warehouse(self) -> Iterator[tuple[int, int]]:
+        """
+        Get the product-id/amount tuples initially in the warehouse.
+
+        :return: the tuples
+        """
+        return enumerate(self.instance.warehous_at_t0)
+
+    def _get_start_demands(self) -> Iterator[Demand]:
+        """
+        Get the start demands.
+
+        :return: the start demands
+        """
+        return iter(self.instance.demands)
 
     def act_demand_satisfied(self, demand: Demand) -> None:
         """
@@ -843,7 +859,8 @@ class Simulation:  # pylint: disable=R0902
         :param job: the job to be executed
         """
         product_id: Final[int] = job.product_id
-        station_id: Final[int] = self.__routes[product_id][job.step]
+        step: Final[int] = job.step
+        station_id: Final[int] = self.routes[product_id][step]
         time: Final[float] = self.__time
         self.__mq[station_id].remove(job)  # exception if job is not there
 
@@ -853,10 +870,28 @@ class Simulation:  # pylint: disable=R0902
         self.__mbusy[station_id] = True
         self.__l_produce_at_begin(time, station_id, job)
 
-        end_time: float = compute_finish_time(
-            time, job.amount, self.__mput[station_id][product_id])
+        end_time: float = self._get_job_finish_time(
+            time, job, step, station_id, product_id)
         if end_time < self.__measure:  # only simulate if within time window
-            heappush(self.__queue, _Event(end_time, self.__job_step, (job, )))
+            heappush(self.__queue, _Event(end_time, self.__job_step, (job,)))
+
+    def _get_job_finish_time(  # pylint: disable=W0613
+            self, time: float,
+            job: Job,  # pylint: disable=W0613
+            step: int,  # pylint: disable=W0613
+            station_id: int, product_id: int) -> float:
+        """
+        Get the finish time of a job.
+
+        :param time: the start time
+        :param job: the job
+        :param step: the job step
+        :param station_id: the station ID
+        :param product_id: the product ID
+        :return: the finish time
+        """
+        return compute_finish_time(
+            time, job.amount, self.__mput[station_id][product_id])
 
     def act_store_in_warehouse(self, product_id: int, amount: int) -> None:
         """
@@ -872,7 +907,7 @@ class Simulation:  # pylint: disable=R0902
         self.__warehouse[product_id] = wh
         time: Final[float] = self.__time
         self.__l_product_in_warehouse(
-            time, product_id, wh, self.__warmup <= time)
+            time, product_id, wh, self.warmup <= time)
 
     def act_take_from_warehouse(self, product_id: int, amount: int) -> None:
         """
@@ -893,7 +928,7 @@ class Simulation:  # pylint: disable=R0902
         self.__warehouse[product_id] = wh
         time: Final[float] = self.__time
         self.__l_product_in_warehouse(
-            time, product_id, wh, self.__warmup <= time)
+            time, product_id, wh, self.warmup <= time)
 
     def act_produce(self, product_id: int, amount: int) -> None:
         """
@@ -908,8 +943,24 @@ class Simulation:  # pylint: disable=R0902
         time: Final[float] = self.__time
         jid: Final[int] = self.__job_id
         self.__job_id = jid + 1
-        self.__job_step(Job(jid, product_id, amount, time,
-                            self.__warmup <= time))
+        self.__job_step(self._create_job(
+            jid, product_id, amount, time, self.warmup <= time))
+
+    def _create_job(self, jid: int,  # pylint: disable=W0613
+                    product_id: int, amount: int,  # pylint: disable=W0613
+                    time: float,  # pylint: disable=W0613
+                    measure: bool) -> Job:  # pylint: disable=W0613
+        """
+        Create the job.
+
+        :param jid: the job id
+        :param product_id: the product id
+        :param amount: the amount of product
+        :param time: the start time
+        :param measure: will this be measured
+        :return: the job
+        """
+        return Job(jid, product_id, amount, time, self.warmup <= time)
 
     def __product_available(
             self, product_id: int, amount: int) -> None:
@@ -926,7 +977,7 @@ class Simulation:  # pylint: disable=R0902
         ip: Final[int] = self.__in_production[product_id]
         time: Final[float] = self.__time
         self.__l_event_product(time, product_id, amount, wh, ip, tp,
-                               self.__warmup <= time)
+                               self.warmup <= time)
         self.event_product(time, product_id, amount, wh, ip, tp)
 
     def __demand_issued(self, demand: Demand) -> None:
@@ -946,7 +997,7 @@ class Simulation:  # pylint: disable=R0902
         ip: Final[int] = self.__in_production[product_id]
         iw: Final[int] = self.__warehouse[product_id]
         self.__l_event_product(time, product_id, 0, iw, ip, tp,
-                               self.__warmup <= time)
+                               self.warmup <= time)
         self.event_product(time, product_id, 0, iw, ip, tp)
 
     def __job_step(self, job: Job) -> None:
@@ -962,12 +1013,12 @@ class Simulation:  # pylint: disable=R0902
         :param job: the job
         """
         product_id: Final[int] = job.product_id
-        routes: Final[tuple[int, ...]] = self.__routes[product_id]
+        routes: Final[tuple[int, ...]] = self.routes[product_id]
         time: Final[float] = self.__time
 
         # WARNING: We only track jobs with issue time within the measurement
         # period!
-        warm: Final[float] = self.__warmup
+        warm: Final[float] = self.warmup
         time_in_meas: Final[bool] = warm <= time
 
         job_step: Final[int] = job.step
