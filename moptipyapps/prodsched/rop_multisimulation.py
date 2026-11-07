@@ -354,7 +354,7 @@ class ROPMultiSimulation(Encoding):
         yield the same statistics.
 
         :param x: the array
-        :param y: the Gantt chart
+        :param y: the multi statistics
         """
         # First we map the vector to a tuple of integers.
         x_tuple: Final[tuple[int, ...]] = tuple(map(int, x))

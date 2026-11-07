@@ -41,7 +41,7 @@ from moptipy.api.objective import Objective
 from moptipyapps.prodsched.multistatistics import MultiStatistics
 
 
-class WorstAndMeanFillRate(Objective):
+class WorstAndMeanServiceLevel(Objective):
     """Combine and minimize worst and average service level."""
 
     def evaluate(self, x: MultiStatistics) -> int | float:

@@ -207,7 +207,7 @@ from moptipyapps.prodsched.instances import get_instances
 from moptipyapps.prodsched.multistatistics import MultiStatisticsSpace
 from moptipyapps.prodsched.objectives.max_stocklevel import MaxStockLevel
 from moptipyapps.prodsched.objectives.worst_and_mean_service_level import (
-    WorstAndMeanFillRate,
+    WorstAndMeanServiceLevel,
 )
 from moptipyapps.prodsched.rop_multisimulation import ROPMultiSimulation
 from moptipyapps.utils.shared import moptipyapps_argparser
@@ -261,7 +261,7 @@ def run(dest: str, instances: str, n_inst: int, n_runs: int,
     algo: Final[NSGA2] = NSGA2(op0, op1, op2, ps, 1 / min(16, ps))
     solution_space: Final[MultiStatisticsSpace] = MultiStatisticsSpace(insts)
     encoding: Final[ROPMultiSimulation] = ROPMultiSimulation(solution_space)
-    f1: Final[WorstAndMeanFillRate] = WorstAndMeanFillRate()
+    f1: Final[WorstAndMeanServiceLevel] = WorstAndMeanServiceLevel()
     f2: Final[MaxStockLevel] = MaxStockLevel()
     ws: Final[WeightedSum] = WeightedSum((f1, f2), (
         (1 / (f1.upper_bound() - f1.lower_bound())), 1 / (2 * n_prod)))

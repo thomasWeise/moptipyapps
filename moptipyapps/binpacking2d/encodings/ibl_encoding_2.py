@@ -466,7 +466,7 @@ class ImprovedBottomLeftEncoding2(Encoding):
         Map a potentially signed permutation to a packing.
 
         :param x: the array
-        :param y: the Gantt chart
+        :param y: the packing
         """
         y.n_bins = _decode(x, y, self.__instance, self.__instance.bin_width,
                            self.__instance.bin_height, self.__bin_starts,

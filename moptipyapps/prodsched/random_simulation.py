@@ -248,8 +248,10 @@ class RandomSimulation(Simulation):
         gen: Final[Generator] = self.__rnd
         stat: Final[tuple[Station, ...]] = self.__stations
         return TimeJob(jid, product_id, amount, time, self.warmup <= time,
-                       worktimes=tuple(stat[i].processing_time.sample(gen)
-                                       for i in self.routes[product_id]))
+                       worktimes=tuple(
+                           sum(stat[i].processing_time.sample(gen)
+                               for _ in range(amount))
+                           for i in self.routes[product_id]))
 
     def _get_job_finish_time(
             self, time: float, job: Job,
