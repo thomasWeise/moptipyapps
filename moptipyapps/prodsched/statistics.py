@@ -233,8 +233,9 @@ class Statistics:
         """
         self.clear()
 
-        n: Final[int] = list.__len__(self.production_times)
-        if n <= 0:
+        n_prod: Final[int] = list.__len__(self.production_times)
+        n_stat: Final[int] = list.__len__(self.utilizations)
+        if min(n_prod, n_stat) <= 0:
             raise ValueError("Huh?")
 
         keys: Final[set[str]] = {
@@ -259,10 +260,11 @@ class Statistics:
 
             cols: list[str] = str.split(srow, CSV_SEPARATOR)
             key: str = cols[0]
-            if (list.__len__(cols) <= (n + 1)) or (key not in keys):
-                continue
             if key in data:
                 raise ValueError(f"Duplicate key '{key}'.")
+            n: int = n_stat if key == ROW_UTILIZATION_MEAN else n_prod
+            if (list.__len__(cols) <= (n + 1)) or (key not in keys):
+                continue
             data[key] = [str_to_num_or_none(cols[i]) for i in range(1, n + 2)]
             keys.remove(key)
             if (set.__len__(keys) <= 0) and (sim_time is not None):

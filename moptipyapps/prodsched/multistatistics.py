@@ -190,7 +190,7 @@ class MultiStatisticsSpace(Space):
         :return: the multi-statistics
         """
         result: Final[MultiStatistics] = self.create().from_stream(
-            text.split())
+            str.split(text, "\n"))
         self.validate(result)
         return result
 

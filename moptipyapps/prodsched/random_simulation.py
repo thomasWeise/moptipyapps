@@ -112,6 +112,7 @@ from typing import Final, Iterable, cast
 
 from moptipy.utils.nputils import rand_generator
 from numpy.random import Generator
+from pycommons.ds.immutable_map import immutable_mapping
 
 from moptipyapps.prodsched.instance import (
     Instance,
@@ -184,7 +185,7 @@ class RandomInstance(Instance):
         #: the random seed to use
         self.seed: Final[int] = seed
         #: the internal state where a random generator should pick up
-        self.state: Final = gen.bit_generator.state
+        self.state: Final = immutable_mapping(dict(gen.bit_generator.state))
 
         super().__init__(name=name,
                          n_products=n_products,
@@ -230,7 +231,8 @@ class RandomSimulation(Simulation):
 
     def ctrl_run(self) -> None:
         """Begin the simulation."""
-        self.__rnd.bit_generator.state = self.instance.state  # type: ignore
+        self.__rnd.bit_generator.state = (  # type: ignore
+            dict(self.instance.state))  # type: ignore
         super().ctrl_run()
 
     def _create_job(self, jid: int, product_id: int, amount: int,

@@ -458,7 +458,7 @@ T=95.0 -- finished
 from dataclasses import dataclass, field
 from heapq import heappop, heappush
 from time import time_ns
-from typing import Any, Callable, Final, Iterator
+from typing import Any, Callable, Final
 
 import numpy as np
 from pycommons.strings.string_conv import bool_to_str, float_to_str
@@ -721,7 +721,7 @@ class Simulation:  # pylint: disable=R0902
         queue: Final[list[_Event]] = self.__queue
 
         #: fill the warehouse at time index 0
-        for product_id, amount in self._get_initially_warehouse():
+        for product_id, amount in enumerate(self.instance.warehous_at_t0):
             heappush(queue, _Event(0.0, self.__product_available, (
                 product_id, amount)))
         #: fill in the customer demands/orders
@@ -738,22 +738,6 @@ class Simulation:  # pylint: disable=R0902
             event.call(*event.args)
 
         self.__l_finished(self.__time)
-
-    def _get_initially_warehouse(self) -> Iterator[tuple[int, int]]:
-        """
-        Get the product-id/amount tuples initially in the warehouse.
-
-        :return: the tuples
-        """
-        return enumerate(self.instance.warehous_at_t0)
-
-    def _get_start_demands(self) -> Iterator[Demand]:
-        """
-        Get the start demands.
-
-        :return: the start demands
-        """
-        return iter(self.instance.demands)
 
     def act_demand_satisfied(self, demand: Demand) -> None:
         """
