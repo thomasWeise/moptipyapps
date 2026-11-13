@@ -55,6 +55,13 @@ ROW_FULFILLED_RATE: Final[str] = f"fulfilled{SCOPE_SEPARATOR}{KEY_RATE}"
 ROW_SIMULATION_TIME: Final[str] = \
     f"time{SCOPE_SEPARATOR}s{KEY_VALUE_SEPARATOR}"
 
+#: the keys that may need to get swapped to ensure compatibility with old
+#: versions
+_SWAP_KEYS: Final[Callable[[str, str], str]] = {
+    "fill.rate": ROW_SERVICE_LEVEL,
+    "fill": ROW_SERVICE_LEVEL,
+}.get
+
 #: the statistics that we will print
 _STATS: tuple[tuple[str, Callable[[
     StreamStatistics], int | float | None]], ...] = (
@@ -254,12 +261,14 @@ class Statistics:
                     round(float(row[str.__len__(
                         sim_time_key):]) * 1_000_000_000),
                     sim_time_key, 0, 1_000_000_000_000_000_000_000_000)
-                if set.__len__(keys) <= 0:
+                if (set.__len__(keys) <= 0) or ((set.__len__(
+                        keys) == 1) and (ROW_UTILIZATION_MEAN in keys)):
                     break
                 continue
 
             cols: list[str] = str.split(srow, CSV_SEPARATOR)
             key: str = cols[0]
+            key = _SWAP_KEYS(key, key)
             if key in data:
                 raise ValueError(f"Duplicate key '{key}'.")
             n: int = n_stat if key == ROW_UTILIZATION_MEAN else n_prod
@@ -270,8 +279,13 @@ class Statistics:
             if (set.__len__(keys) <= 0) and (sim_time is not None):
                 break
 
-        if set.__len__(keys) > 0:
+        if (set.__len__(keys) > 0) and (
+                (ROW_UTILIZATION_MEAN not in keys) or (
+                set.__len__(keys) > 1)):
+            # old versions do not support utilization, so if only this key
+            # is missing, we accept it. otherwise, there will be an error.
             raise ValueError(f"Missing keys: {keys}")
+
         if sim_time is None:
             raise ValueError(f"Did not find key '{sim_time_key}'.")
 
@@ -293,9 +307,10 @@ class Statistics:
         self.fulfilled_rate = vals[0]
         self.fulfilled_rates[:] = vals[1:]
 
-        vals = data[ROW_UTILIZATION_MEAN]
-        self.utilization = vals[0]
-        self.utilizations[:] = vals[1:]
+        if ROW_UTILIZATION_MEAN in data:
+            vals = data[ROW_UTILIZATION_MEAN]
+            self.utilization = vals[0]
+            self.utilizations[:] = vals[1:]
 
         return self
 
