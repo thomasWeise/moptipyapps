@@ -1,0 +1,235 @@
+<!doctype html><html data-content_root=../../../ lang=en><meta charset=utf-8><meta content="width=device-width,initial-scale=1.0"name=viewport><title>moptipyapps.prodsched.random_rop_simulation — moptipyapps 0.8.104 documentation</title><link href="../../../_static/pygments.css?v=b86133f3"rel=stylesheet><link href="../../../_static/bizstyle.css?v=5283bb3d"rel=stylesheet><link href="../../../_static/sphinx_autodoc_typehints.css?v=057ac668"rel=stylesheet><script src="../../../_static/documentation_options.js?v=da1944fa"></script><script src="../../../_static/doctools.js?v=fd6eb6e6"></script><script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script><script src=../../../_static/bizstyle.js></script><link href=https://thomasweise.github.io/moptipyapps/_modules/moptipyapps/prodsched/random_rop_simulation.html rel=canonical><link href=../../../genindex.html rel=index title=Index><link href=../../../search.html rel=search title=Search><meta content="width=device-width,initial-scale=1.0"name=viewport><body><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"accesskey=I href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.104 documentation</a> »<li class="nav-item nav-item-1"><a accesskey=U href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.random_rop_simulation</a></ul></div><div class=document><div class=documentwrapper><div class=bodywrapper><div class=body role=main><h1>Source code for moptipyapps.prodsched.random_rop_simulation</h1><div class=highlight><pre>
+<span></span><span class=sd>"""</span>
+<span class=sd>A randomized re-order-point-based simulation.</span>
+
+<span class=sd>>>> ri = RandomInstance(seed=324)</span>
+<span class=sd>>>> collector: list[str] = []</span>
+<span class=sd>>>> from moptipyapps.prodsched.simulation import PrintingListener</span>
+<span class=sd>>>> simulation = RandomROPSimulation(ri, PrintingListener(</span>
+<span class=sd>...                 output=collector.append, print_time=False))</span>
+<span class=sd>>>> simulation.set_rop([1] * ri.n_products)</span>
+<span class=sd>>>> simulation.ctrl_run()</span>
+
+<span class=sd>>>> for i in range(20):</span>
+<span class=sd>...     print(collector[i])</span>
+<span class=sd>start</span>
+<span class=sd>T=0.0: product=0, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: station=0, 1 jobs queued</span>
+<span class=sd>T=0.0: start j(id: 0, p: 0, am: 2, ar: 0, me: F, c: F, st: 0, sp: 0) at \</span>
+<span class=sd>station 0</span>
+<span class=sd>T=0.0: product=2, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=6, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=5, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=1, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=4, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=9, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=3, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=8, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=7, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=1.700981296962859: finished j(id: 0, p: 0, am: 2, ar: 0, me: F, c: F, st: \</span>
+<span class=sd>0, sp: 0) at station 0</span>
+<span class=sd>T=1.700981296962859: station=0, 9 jobs queued</span>
+<span class=sd>T=1.700981296962859: start j(id: 1, p: 2, am: 2, ar: 0, me: F, c: F, st: 0, \</span>
+<span class=sd>sp: 0) at station 0</span>
+<span class=sd>T=1.700981296962859: station=1, 1 jobs queued</span>
+<span class=sd>T=1.700981296962859: start j(id: 0, p: 0, am: 2, ar: 0, me: F, c: F, st: \</span>
+<span class=sd>1.700981296962859, sp: 1) at station 1</span>
+<span class=sd>T=2.217634752949551: finished j(id: 0, p: 0, am: 2, ar: 0, me: F, c: F, \</span>
+<span class=sd>st: 1.700981296962859, sp: 1) at station 1</span>
+<span class=sd>T=2.217634752949551: station=3, 1 jobs queued</span>
+
+<span class=sd>>>> for i in range(len(collector) - 20, len(collector)):</span>
+<span class=sd>...     print(collector[i])</span>
+<span class=sd>T=9999.33328342021! start j(id: 10014, p: 2, am: 1, ar: 9970.157310086975, \</span>
+<span class=sd>me: T, c: F, st: 9996.158106819432, sp: 7) at station 10</span>
+<span class=sd>T=9999.33328342021! product=3, amount=1, in_warehouse=0, in_production=2, \</span>
+<span class=sd>1 pending demands</span>
+<span class=sd>T=9999.33328342021! d(id: 4008, p: 3, c: 4008, am: 1, ar: 9989.806382347304, \</span>
+<span class=sd>dl: 9989.806382347304, me: T) satisfied</span>
+<span class=sd>T=9999.522691001024! finished j(id: 10021, p: 4, am: 1, ar: 9974.764243825606\</span>
+<span class=sd>, me: T, c: F, st: 9995.187765657156, sp: 6) at station 1</span>
+<span class=sd>T=9999.522691001024! station=1, 9 jobs queued</span>
+<span class=sd>T=9999.522691001024! start j(id: 10017, p: 6, am: 1, ar: 9971.454782810877, \</span>
+<span class=sd>me: T, c: F, st: 9995.510736597318, sp: 6) at station 1</span>
+<span class=sd>T=9999.66344376004! finished j(id: 10044, p: 5, am: 1, ar: 9997.291327122433\</span>
+<span class=sd>, me: T, c: F, st: 9997.291327122433, sp: 0) at station 0</span>
+<span class=sd>T=9999.66344376004! station=0, 2 jobs queued</span>
+<span class=sd>T=9999.66344376004! start j(id: 10045, p: 4, am: 1, ar: 9997.792977742796, \</span>
+<span class=sd>me: T, c: F, st: 9997.792977742796, sp: 0) at station 0</span>
+<span class=sd>T=9999.669678312202! finished j(id: 10039, p: 6, am: 1, ar: \</span>
+<span class=sd>9993.680935722501, me: T, c: F, st: 9998.800471480217, sp: 2) at station 5</span>
+<span class=sd>T=9999.79811329168! product=6, amount=0, in_warehouse=0, in_production=4, \</span>
+<span class=sd>3 pending demands</span>
+<span class=sd>T=9999.93543391247! finished j(id: 10014, p: 2, am: 1, ar: 9970.157310086975,\</span>
+<span class=sd> me: T, c: T, st: 9996.158106819432, sp: 7) at station 10</span>
+<span class=sd>T=9999.93543391247! station=10, 2 jobs queued</span>
+<span class=sd>T=9999.93543391247! start j(id: 9982, p: 9, am: 1, ar: 9933.380445487133, \</span>
+<span class=sd>me: T, c: F, st: 9997.379811520846, sp: 10) at station 10</span>
+<span class=sd>T=9999.93543391247! product=2, amount=1, in_warehouse=0, in_production=3, \</span>
+<span class=sd>2 pending demands</span>
+<span class=sd>T=9999.93543391247! d(id: 2989, p: 2, c: 2989, am: 1, ar: 9983.827600477664\</span>
+<span class=sd>, dl: 9983.827600477664, me: T) satisfied</span>
+<span class=sd>T=9999.995308785708! finished j(id: 10024, p: 8, am: 1, ar: 9976.199007067482\</span>
+<span class=sd>, me: T, c: F, st: 9997.64169250468, sp: 3) at station 4</span>
+<span class=sd>T=9999.995308785708! station=4, 1 jobs queued</span>
+<span class=sd>T=9999.995308785708! start j(id: 10038, p: 5, am: 1, ar: 9993.649532104819\</span>
+<span class=sd>, me: T, c: F, st: 9998.100880797963, sp: 2) at station 4</span>
+<span class=sd>T=9999.995308785708 -- finished</span>
+
+<span class=sd>>>> collector.clear()</span>
+<span class=sd>>>> simulation.ctrl_reset()</span>
+<span class=sd>>>> simulation.ctrl_run()</span>
+
+<span class=sd>>>> for i in range(20):</span>
+<span class=sd>...     print(collector[i])</span>
+<span class=sd>start</span>
+<span class=sd>T=0.0: product=0, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: station=0, 1 jobs queued</span>
+<span class=sd>T=0.0: start j(id: 0, p: 0, am: 2, ar: 0, me: F, c: F, st: 0, sp: 0) at \</span>
+<span class=sd>station 0</span>
+<span class=sd>T=0.0: product=2, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=6, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=5, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=1, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=4, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=9, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=3, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=8, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=0.0: product=7, amount=0, in_warehouse=0, in_production=0, 0 pending demands</span>
+<span class=sd>T=1.700981296962859: finished j(id: 0, p: 0, am: 2, ar: 0, me: F, c: F, st: \</span>
+<span class=sd>0, sp: 0) at station 0</span>
+<span class=sd>T=1.700981296962859: station=0, 9 jobs queued</span>
+<span class=sd>T=1.700981296962859: start j(id: 1, p: 2, am: 2, ar: 0, me: F, c: F, st: 0, \</span>
+<span class=sd>sp: 0) at station 0</span>
+<span class=sd>T=1.700981296962859: station=1, 1 jobs queued</span>
+<span class=sd>T=1.700981296962859: start j(id: 0, p: 0, am: 2, ar: 0, me: F, c: F, st: \</span>
+<span class=sd>1.700981296962859, sp: 1) at station 1</span>
+<span class=sd>T=2.217634752949551: finished j(id: 0, p: 0, am: 2, ar: 0, me: F, c: F, \</span>
+<span class=sd>st: 1.700981296962859, sp: 1) at station 1</span>
+<span class=sd>T=2.217634752949551: station=3, 1 jobs queued</span>
+
+<span class=sd>>>> for i in range(len(collector) - 20, len(collector)):</span>
+<span class=sd>...     print(collector[i])</span>
+<span class=sd>T=9999.33328342021! start j(id: 10014, p: 2, am: 1, ar: 9970.157310086975, \</span>
+<span class=sd>me: T, c: F, st: 9996.158106819432, sp: 7) at station 10</span>
+<span class=sd>T=9999.33328342021! product=3, amount=1, in_warehouse=0, in_production=2, \</span>
+<span class=sd>1 pending demands</span>
+<span class=sd>T=9999.33328342021! d(id: 4008, p: 3, c: 4008, am: 1, ar: 9989.806382347304, \</span>
+<span class=sd>dl: 9989.806382347304, me: T) satisfied</span>
+<span class=sd>T=9999.522691001024! finished j(id: 10021, p: 4, am: 1, ar: 9974.764243825606\</span>
+<span class=sd>, me: T, c: F, st: 9995.187765657156, sp: 6) at station 1</span>
+<span class=sd>T=9999.522691001024! station=1, 9 jobs queued</span>
+<span class=sd>T=9999.522691001024! start j(id: 10017, p: 6, am: 1, ar: 9971.454782810877, \</span>
+<span class=sd>me: T, c: F, st: 9995.510736597318, sp: 6) at station 1</span>
+<span class=sd>T=9999.66344376004! finished j(id: 10044, p: 5, am: 1, ar: 9997.291327122433\</span>
+<span class=sd>, me: T, c: F, st: 9997.291327122433, sp: 0) at station 0</span>
+<span class=sd>T=9999.66344376004! station=0, 2 jobs queued</span>
+<span class=sd>T=9999.66344376004! start j(id: 10045, p: 4, am: 1, ar: 9997.792977742796, \</span>
+<span class=sd>me: T, c: F, st: 9997.792977742796, sp: 0) at station 0</span>
+<span class=sd>T=9999.669678312202! finished j(id: 10039, p: 6, am: 1, ar: \</span>
+<span class=sd>9993.680935722501, me: T, c: F, st: 9998.800471480217, sp: 2) at station 5</span>
+<span class=sd>T=9999.79811329168! product=6, amount=0, in_warehouse=0, in_production=4, \</span>
+<span class=sd>3 pending demands</span>
+<span class=sd>T=9999.93543391247! finished j(id: 10014, p: 2, am: 1, ar: 9970.157310086975,\</span>
+<span class=sd> me: T, c: T, st: 9996.158106819432, sp: 7) at station 10</span>
+<span class=sd>T=9999.93543391247! station=10, 2 jobs queued</span>
+<span class=sd>T=9999.93543391247! start j(id: 9982, p: 9, am: 1, ar: 9933.380445487133, \</span>
+<span class=sd>me: T, c: F, st: 9997.379811520846, sp: 10) at station 10</span>
+<span class=sd>T=9999.93543391247! product=2, amount=1, in_warehouse=0, in_production=3, \</span>
+<span class=sd>2 pending demands</span>
+<span class=sd>T=9999.93543391247! d(id: 2989, p: 2, c: 2989, am: 1, ar: 9983.827600477664\</span>
+<span class=sd>, dl: 9983.827600477664, me: T) satisfied</span>
+<span class=sd>T=9999.995308785708! finished j(id: 10024, p: 8, am: 1, ar: 9976.199007067482\</span>
+<span class=sd>, me: T, c: F, st: 9997.64169250468, sp: 3) at station 4</span>
+<span class=sd>T=9999.995308785708! station=4, 1 jobs queued</span>
+<span class=sd>T=9999.995308785708! start j(id: 10038, p: 5, am: 1, ar: 9993.649532104819\</span>
+<span class=sd>, me: T, c: F, st: 9998.100880797963, sp: 2) at station 4</span>
+<span class=sd>T=9999.995308785708 -- finished</span>
+<span class=sd>"""</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>typing</span><span class=w> </span><span class=kn>import</span> <span class=n>Final</span><span class=p>,</span> <span class=n>Iterable</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.types</span><span class=w> </span><span class=kn>import</span> <span class=n>check_int_range</span><span class=p>,</span> <span class=n>type_error</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.instance</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>Demand</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.random_simulation</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>RandomInstance</span><span class=p>,</span>
+    <span class=n>RandomSimulation</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.prodsched.simulation</span><span class=w> </span><span class=kn>import</span> <span class=n>Listener</span>
+
+
+<div class=viewcode-block id=RandomROPSimulation>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.random_rop_simulation.RandomROPSimulation>[docs]</a>
+<span class=k>class</span><span class=w> </span><span class=nc>RandomROPSimulation</span><span class=p>(</span><span class=n>RandomSimulation</span><span class=p>):</span>
+<span class=w>    </span><span class=sd>"""Create the randomized re-order point-based simulation."""</span>
+
+    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>instance</span><span class=p>:</span> <span class=n>RandomInstance</span><span class=p>,</span> <span class=n>listener</span><span class=p>:</span> <span class=n>Listener</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Initialize this simulation.</span>
+
+<span class=sd>        :param instance: the instance</span>
+<span class=sd>        :param listener: the listener</span>
+<span class=sd>        """</span>
+        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>(</span><span class=n>instance</span><span class=p>,</span> <span class=n>listener</span><span class=p>)</span>
+        <span class=c1>#: the re-order point</span>
+        <span class=bp>self</span><span class=o>.</span><span class=n>__rop</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>list</span><span class=p>[</span><span class=nb>int</span><span class=p>]]</span> <span class=o>=</span> <span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>*</span> <span class=n>instance</span><span class=o>.</span><span class=n>n_products</span>
+
+<div class=viewcode-block id=RandomROPSimulation.set_rop>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.random_rop_simulation.RandomROPSimulation.set_rop>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>set_rop</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>rop</span><span class=p>:</span> <span class=n>Iterable</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>|</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>)</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""</span>
+<span class=sd>        Set the re-order point.</span>
+
+<span class=sd>        :param rop: the re-order point</span>
+<span class=sd>        """</span>
+        <span class=k>if</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>rop</span><span class=p>,</span> <span class=n>np</span><span class=o>.</span><span class=n>ndarray</span><span class=p>):</span>
+            <span class=n>rop</span> <span class=o>=</span> <span class=nb>map</span><span class=p>(</span><span class=nb>int</span><span class=p>,</span> <span class=n>rop</span><span class=p>)</span>  <span class=c1># type: ignore</span>
+        <span class=k>if</span> <span class=ow>not</span> <span class=nb>isinstance</span><span class=p>(</span><span class=n>rop</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>):</span>
+            <span class=k>raise</span> <span class=n>type_error</span><span class=p>(</span><span class=n>rop</span><span class=p>,</span> <span class=s2>"rop"</span><span class=p>,</span> <span class=n>Iterable</span><span class=p>)</span>
+        <span class=n>i</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=o>-</span><span class=mi>1</span>
+        <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>rv</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>rop</span><span class=p>):</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>__rop</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=n>check_int_range</span><span class=p>(</span>
+                <span class=n>rv</span><span class=p>,</span> <span class=s2>"rop-value"</span><span class=p>,</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>1_000_000_000</span><span class=p>)</span>
+        <span class=n>i</span> <span class=o>+=</span> <span class=mi>1</span>
+        <span class=n>n_prod</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=nb>list</span><span class=o>.</span><span class=fm>__len__</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>__rop</span><span class=p>)</span>
+        <span class=k>if</span> <span class=n>i</span> <span class=o>!=</span> <span class=n>n_prod</span><span class=p>:</span>
+            <span class=k>raise</span> <span class=ne>ValueError</span><span class=p>(</span><span class=sa>f</span><span class=s2>"Invalid rop length </span><span class=si>{</span><span class=n>i</span><span class=si>}</span><span class=s2>, must be </span><span class=si>{</span><span class=n>n_prod</span><span class=si>}</span><span class=s2>!"</span><span class=p>)</span></div>
+
+
+<div class=viewcode-block id=RandomROPSimulation.event_product>
+<a class=viewcode-back href=../../../moptipyapps.prodsched.html#moptipyapps.prodsched.random_rop_simulation.RandomROPSimulation.event_product>[docs]</a>
+    <span class=k>def</span><span class=w> </span><span class=nf>event_product</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>time</span><span class=p>:</span> <span class=nb>float</span><span class=p>,</span>  <span class=c1># pylint: disable=W0613,R0913,R0917</span>
+                      <span class=n>product_id</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span> <span class=n>amount</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>in_warehouse</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>
+                      <span class=n>in_production</span><span class=p>:</span> <span class=nb>int</span><span class=p>,</span>  <span class=c1># pylint: disable=W0613</span>
+                      <span class=n>pending_demands</span><span class=p>:</span> <span class=nb>tuple</span><span class=p>[</span><span class=n>Demand</span><span class=p>,</span> <span class=o>...</span><span class=p>])</span> <span class=o>-></span> <span class=kc>None</span><span class=p>:</span>
+<span class=w>        </span><span class=sd>"""Perform a simulation step based on a product."""</span>
+        <span class=c1># satisfy demands</span>
+        <span class=n>available</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>in_warehouse</span> <span class=o>+</span> <span class=n>amount</span>
+        <span class=n>unsatisfied</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=mi>0</span>
+        <span class=k>for</span> <span class=n>demand</span> <span class=ow>in</span> <span class=n>pending_demands</span><span class=p>:</span>
+            <span class=n>request</span><span class=p>:</span> <span class=nb>int</span> <span class=o>=</span> <span class=n>demand</span><span class=o>.</span><span class=n>amount</span>
+            <span class=k>if</span> <span class=n>request</span> <span class=o><=</span> <span class=n>available</span><span class=p>:</span>
+                <span class=bp>self</span><span class=o>.</span><span class=n>act_demand_satisfied</span><span class=p>(</span><span class=n>demand</span><span class=p>)</span>
+                <span class=n>available</span> <span class=o>-=</span> <span class=n>request</span>
+            <span class=k>else</span><span class=p>:</span>
+                <span class=n>unsatisfied</span> <span class=o>+=</span> <span class=n>request</span>
+
+        <span class=c1># update warehouse</span>
+        <span class=k>if</span> <span class=n>available</span> <span class=o><</span> <span class=n>in_warehouse</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>act_take_from_warehouse</span><span class=p>(</span><span class=n>product_id</span><span class=p>,</span> <span class=n>in_warehouse</span> <span class=o>-</span> <span class=n>available</span><span class=p>)</span>
+        <span class=k>elif</span> <span class=n>available</span> <span class=o>></span> <span class=n>in_warehouse</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>act_store_in_warehouse</span><span class=p>(</span><span class=n>product_id</span><span class=p>,</span> <span class=n>available</span> <span class=o>-</span> <span class=n>in_warehouse</span><span class=p>)</span>
+
+        <span class=c1># check if re-order point needs to be triggered</span>
+        <span class=n>rop</span><span class=p>:</span> <span class=n>Final</span><span class=p>[</span><span class=nb>int</span><span class=p>]</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>__rop</span><span class=p>[</span><span class=n>product_id</span><span class=p>]</span>
+        <span class=n>available</span> <span class=o>=</span> <span class=n>available</span> <span class=o>-</span> <span class=n>unsatisfied</span> <span class=o>+</span> <span class=n>in_production</span>
+        <span class=k>if</span> <span class=n>available</span> <span class=o><=</span> <span class=n>rop</span><span class=p>:</span>
+            <span class=bp>self</span><span class=o>.</span><span class=n>act_produce</span><span class=p>(</span><span class=n>product_id</span><span class=p>,</span> <span class=n>rop</span> <span class=o>-</span> <span class=n>available</span> <span class=o>+</span> <span class=mi>1</span><span class=p>)</span></div>
+</div>
+
+</pre></div><div class=clearer></div></div></div></div><div aria-label=Main class=sphinxsidebar role=navigation><div class=sphinxsidebarwrapper><search id=searchbox role=search style=display:none> <h3 id=searchlabel>Quick search</h3> <div class=searchformwrapper><form action=../../../search.html class=search><input aria-labelledby=searchlabel autocapitalize=off autocomplete=off autocorrect=off name=q spellcheck=false><input type=submit value=Go></form></div> </search><script>document.getElementById(`searchbox`).style.display=`block`;</script></div></div><div class=clearer></div></div><div aria-label=Related class=related role=navigation><h3>Navigation</h3><ul><li class=right style=margin-right:10px><a title="General Index"href=../../../genindex.html>index</a><li class=right><a title="Python Module Index"href=../../../py-modindex.html>modules</a> |<li class="nav-item nav-item-0"><a href=../../../index.html>moptipyapps 0.8.104 documentation</a> »<li class="nav-item nav-item-1"><a href=../../index.html>Module code</a> »<li class="nav-item nav-item-this"><a href>moptipyapps.prodsched.random_rop_simulation</a></ul></div><div class=footer role=contentinfo>© Copyright 2023-2026, Thomas Weise.</div>

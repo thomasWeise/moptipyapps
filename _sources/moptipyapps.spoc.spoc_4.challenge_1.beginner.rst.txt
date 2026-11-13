@@ -1,0 +1,66 @@
+moptipyapps.spoc.spoc\_4.challenge\_1.beginner package
+======================================================
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1.beginner
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   moptipyapps.spoc.spoc_4.challenge_1.beginner.data
+
+Submodules
+----------
+
+moptipyapps.spoc.spoc\_4.challenge\_1.beginner.base\_obj module
+---------------------------------------------------------------
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1.beginner.base_obj
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.spoc.spoc\_4.challenge\_1.beginner.experiment module
+----------------------------------------------------------------
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1.beginner.experiment
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.spoc.spoc\_4.challenge\_1.beginner.instance module
+--------------------------------------------------------------
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1.beginner.instance
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.spoc.spoc\_4.challenge\_1.beginner.objective\_no\_penalty module
+----------------------------------------------------------------------------
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_no_penalty
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.spoc.spoc\_4.challenge\_1.beginner.objective\_with\_penalty module
+------------------------------------------------------------------------------
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1.beginner.objective_with_penalty
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+moptipyapps.spoc.spoc\_4.challenge\_1.beginner.permutation\_encoding module
+---------------------------------------------------------------------------
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1.beginner.permutation_encoding
+   :members:
+   :show-inheritance:
+   :undoc-members:

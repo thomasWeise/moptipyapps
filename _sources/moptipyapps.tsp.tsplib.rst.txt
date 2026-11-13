@@ -1,0 +1,7 @@
+moptipyapps.tsp.tsplib package
+==============================
+
+.. automodule:: moptipyapps.tsp.tsplib
+   :members:
+   :show-inheritance:
+   :undoc-members:

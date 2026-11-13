@@ -1,0 +1,7 @@
+moptipyapps.spoc.spoc\_4.challenge\_1.beginner.data package
+===========================================================
+
+.. automodule:: moptipyapps.spoc.spoc_4.challenge_1.beginner.data
+   :members:
+   :show-inheritance:
+   :undoc-members:

@@ -1,0 +1,113 @@
+<!doctype html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd"><title></title><meta content="text/html; charset=utf-8"http-equiv=content-type><style>pre{line-height:125%}td.linenos .normal,span.linenos{color:inherit;background-color:#0000;padding-left:5px;padding-right:5px}td.linenos .special,span.linenos.special{color:#000;background-color:#ffffc0;padding-left:5px;padding-right:5px}body .hll{background-color:#ffc}body{background:#f8f8f8}body .c{color:#3d7b7b;font-style:italic}body .err{border:1px solid red}body .k{color:green;font-weight:700}body .o{color:#666}body .ch,body .cm{color:#3d7b7b;font-style:italic}body .cp{color:#9c6500}body .cpf,body .c1,body .cs{color:#3d7b7b;font-style:italic}body .gd{color:#a00000}body .ge{font-style:italic}body .ges{font-style:italic;font-weight:700}body .gr{color:#e40000}body .gh{color:navy;font-weight:700}body .gi{color:#008400}body .go{color:#717171}body .gp{color:navy;font-weight:700}body .gs{font-weight:700}body .gu{color:purple;font-weight:700}body .gt{color:#04d}body .kc,body .kd,body .kn{color:green;font-weight:700}body .kp{color:green}body .kr{color:green;font-weight:700}body .kt{color:#b00040}body .m{color:#666}body .s{color:#ba2121}body .na{color:#687822}body .nb{color:green}body .nc{color:#00f;font-weight:700}body .no{color:#800}body .nd{color:#a2f}body .ni{color:#717171;font-weight:700}body .ne{color:#cb3f38;font-weight:700}body .nf{color:#00f}body .nl{color:#767600}body .nn{color:#00f;font-weight:700}body .nt{color:green;font-weight:700}body .nv{color:#19177c}body .ow{color:#a2f;font-weight:700}body .w{color:#bbb}body .mb,body .mf,body .mh,body .mi,body .mo{color:#666}body .sa,body .sb,body .sc,body .dl{color:#ba2121}body .sd{color:#ba2121;font-style:italic}body .s2{color:#ba2121}body .se{color:#aa5d1f;font-weight:700}body .sh{color:#ba2121}body .si{color:#a45a77;font-weight:700}body .sx{color:green}body .sr{color:#a45a77}body .s1{color:#ba2121}body .ss{color:#19177c}body .bp{color:green}body .fm{color:#00f}body .vc,body .vg,body .vi,body .vm{color:#19177c}body .il{color:#666}</style><body><h2></h2><div class=highlight><pre><span></span><span class=sd>"""</span>
+<span class=sd>Plot a 2-dimensional packing.</span>
+
+<span class=sd>Here we try out the two different variants of the improved-bottom-left</span>
+<span class=sd>encoding. `ImprovedBottomLeftEncoding1` inserts objects one by one and moves</span>
+<span class=sd>on to a new bin once an object doesn't fit into the current bin. It will then</span>
+<span class=sd>never consider the filled bin again. `ImprovedBottomLeftEncoding2` always</span>
+<span class=sd>tries all bins for any object.</span>
+
+<span class=sd>We try both encodings for instance `a10` and fixed (but randomly chosen)</span>
+<span class=sd>signed permutation as input string.</span>
+
+<span class=sd>You will see that `ImprovedBottomLeftEncoding1` needs four bins, whereas</span>
+<span class=sd>`ImprovedBottomLeftEncoding2` needs three.</span>
+
+<span class=sd>In the file `binpacking2d_rls.py`, we plug `ImprovedBottomLeftEncoding2` into</span>
+<span class=sd>a simple randomized local search. This search runs for 1024 steps and finds a</span>
+<span class=sd>packing that only needs two bins.</span>
+<span class=sd>"""</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>time</span><span class=w> </span><span class=kn>import</span> <span class=n>sleep</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>webbrowser</span><span class=w> </span><span class=kn>import</span> <span class=n>open_new_tab</span>
+
+<span class=kn>import</span><span class=w> </span><span class=nn>numpy</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>np</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.nputils</span><span class=w> </span><span class=kn>import</span> <span class=n>rand_generator</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipy.utils.plot_utils</span><span class=w> </span><span class=kn>import</span> <span class=n>save_figure</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.io.temp</span><span class=w> </span><span class=kn>import</span> <span class=n>temp_dir</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>pycommons.processes.caller</span><span class=w> </span><span class=kn>import</span> <span class=n>is_build</span>
+
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.encodings.ibl_encoding_1</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>ImprovedBottomLeftEncoding1</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.encodings.ibl_encoding_2</span><span class=w> </span><span class=kn>import</span> <span class=p>(</span>
+    <span class=n>ImprovedBottomLeftEncoding2</span><span class=p>,</span>
+<span class=p>)</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.instance</span><span class=w> </span><span class=kn>import</span> <span class=n>Instance</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.packing_space</span><span class=w> </span><span class=kn>import</span> <span class=n>PackingSpace</span>
+<span class=kn>from</span><span class=w> </span><span class=nn>moptipyapps.binpacking2d.plot_packing</span><span class=w> </span><span class=kn>import</span> <span class=n>plot_packing</span>
+
+<span class=n>random</span> <span class=o>=</span> <span class=n>rand_generator</span><span class=p>(</span><span class=mi>3</span><span class=p>)</span>  <span class=c1># get a random number generator</span>
+<span class=n>instance</span> <span class=o>=</span> <span class=n>Instance</span><span class=o>.</span><span class=n>from_resource</span><span class=p>(</span><span class=s2>"a10"</span><span class=p>)</span>  <span class=c1># pick instance a10</span>
+<span class=n>space</span> <span class=o>=</span> <span class=n>PackingSpace</span><span class=p>(</span><span class=n>instance</span><span class=p>)</span>  <span class=c1># create the packing space</span>
+
+<span class=c1># We test two versions of the Improved Bottom Left Encoding</span>
+<span class=n>encodings</span> <span class=o>=</span> <span class=p>[</span><span class=n>ImprovedBottomLeftEncoding1</span><span class=p>(</span><span class=n>instance</span><span class=p>),</span>  <span class=c1># the 1st encoding</span>
+             <span class=n>ImprovedBottomLeftEncoding2</span><span class=p>(</span><span class=n>instance</span><span class=p>)]</span>  <span class=c1># the 2nd encoding</span>
+
+<span class=c1># The data that the encoding can convert to a packing is an array with</span>
+<span class=c1># the same length as the total number n_items of objects to pack. Now a</span>
+<span class=c1># packing instance has n_different_items different items, each of which</span>
+<span class=c1># can occur multiple times, i.e., may occur repeatedly.</span>
+<span class=c1># So we include each of n_different_items item IDs exactly as often as</span>
+<span class=c1># it should be repeated. We sometimes include it directly and sometimes</span>
+<span class=c1># in the negated form, which is interpreted as a 90deg rotation by the</span>
+<span class=c1># encoding.</span>
+<span class=c1># Then, we convert the list of item IDs to a numpy array and, finally, shuffle</span>
+<span class=c1># the array. The encoding then inserts the items in the same sequence they</span>
+<span class=c1># appear in the array into bins.</span>
+
+<span class=c1># generate the data for a random packing</span>
+<span class=n>x_data</span> <span class=o>=</span> <span class=n>instance</span><span class=o>.</span><span class=n>get_standard_item_sequence</span><span class=p>()</span>
+<span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>e</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>x_data</span><span class=p>):</span>
+    <span class=k>if</span> <span class=n>random</span><span class=o>.</span><span class=n>integers</span><span class=p>(</span><span class=mi>2</span><span class=p>)</span> <span class=o>!=</span> <span class=mi>0</span><span class=p>:</span>
+        <span class=n>x_data</span><span class=p>[</span><span class=n>i</span><span class=p>]</span> <span class=o>=</span> <span class=o>-</span><span class=n>e</span>
+<span class=n>x</span> <span class=o>=</span> <span class=n>np</span><span class=o>.</span><span class=n>array</span><span class=p>(</span><span class=n>x_data</span><span class=p>,</span> <span class=n>instance</span><span class=o>.</span><span class=n>dtype</span><span class=p>)</span>  <span class=c1># convert the data to a numpy array</span>
+<span class=n>random</span><span class=o>.</span><span class=n>shuffle</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>  <span class=c1># shuffle the data, i.e., the insertion sequence</span>
+
+<span class=c1># The packing is a two-dimensional matrix of items.</span>
+<span class=c1># Each row corresponds to one item. It stores the item ID, the ID of the bin</span>
+<span class=c1># into which the item is to be inserted, as well as the left-x, bottom-y,</span>
+<span class=c1># right-x, and top-y coordinates of the item.</span>
+<span class=c1># We now allocate one packing record for each encoding and apply the</span>
+<span class=c1># encodings.</span>
+<span class=n>ys</span> <span class=o>=</span> <span class=p>[]</span>
+<span class=k>for</span> <span class=n>encoding</span> <span class=ow>in</span> <span class=n>encodings</span><span class=p>:</span>
+    <span class=n>y</span> <span class=o>=</span> <span class=n>space</span><span class=o>.</span><span class=n>create</span><span class=p>()</span>  <span class=c1># allocate the packing</span>
+    <span class=n>encoding</span><span class=o>.</span><span class=n>decode</span><span class=p>(</span><span class=n>x</span><span class=p>,</span> <span class=n>y</span><span class=p>)</span>  <span class=c1># perform the encoding</span>
+    <span class=n>space</span><span class=o>.</span><span class=n>validate</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>  <span class=c1># check</span>
+    <span class=n>ys</span><span class=o>.</span><span class=n>append</span><span class=p>(</span><span class=n>y</span><span class=p>)</span>
+
+
+<span class=c1># We can now plot the packing.  We create the figures in a temp directory.</span>
+<span class=c1># To keep the figures, you would put an existing directory path into `td` by</span>
+<span class=c1># doing `from pycommons.io.path import Path; td = Path("mydir")` and not use</span>
+<span class=c1># the `with` block.</span>
+<span class=k>with</span> <span class=n>temp_dir</span><span class=p>()</span> <span class=k>as</span> <span class=n>td</span><span class=p>:</span>  <span class=c1># create temporary directory `td`</span>
+    <span class=n>files</span> <span class=o>=</span> <span class=p>[]</span>  <span class=c1># the collection of files</span>
+
+<span class=c1># Plot the packings. The default plotting includes the item ID into each</span>
+<span class=c1># rectangle. If enough space is there, it will also include the index of the</span>
+<span class=c1># item in the bin (starting at 1), and, if then there is still enough space,</span>
+<span class=c1># also the overall index of the item in the encoding (starting at 1).</span>
+    <span class=k>for</span> <span class=n>i</span><span class=p>,</span> <span class=n>y</span> <span class=ow>in</span> <span class=nb>enumerate</span><span class=p>(</span><span class=n>ys</span><span class=p>):</span>
+        <span class=n>fig</span> <span class=o>=</span> <span class=n>plot_packing</span><span class=p>(</span><span class=n>y</span><span class=p>,</span> <span class=n>max_bins_per_row</span><span class=o>=</span><span class=mi>2</span><span class=p>,</span> <span class=n>max_rows</span><span class=o>=</span><span class=mi>2</span><span class=p>)</span>
+
+        <span class=c1># Save the image as svg and png.</span>
+        <span class=n>files</span><span class=o>.</span><span class=n>extend</span><span class=p>(</span><span class=n>save_figure</span><span class=p>(</span>
+            <span class=n>fig</span><span class=o>=</span><span class=n>fig</span><span class=p>,</span>  <span class=c1># store fig to a file</span>
+            <span class=n>file_name</span><span class=o>=</span><span class=sa>f</span><span class=s2>"packing_plot_a10_ibl</span><span class=si>{</span><span class=n>i</span><span class=w> </span><span class=o>+</span><span class=w> </span><span class=mi>1</span><span class=si>}</span><span class=s2>"</span><span class=p>,</span>  <span class=c1># base name</span>
+            <span class=n>dir_name</span><span class=o>=</span><span class=n>td</span><span class=p>,</span>  <span class=c1># store graphic in temp directory</span>
+            <span class=n>formats</span><span class=o>=</span><span class=p>(</span><span class=s2>"svg"</span><span class=p>,</span> <span class=s2>"png"</span><span class=p>)))</span>  <span class=c1># file types: svg and png</span>
+        <span class=k>del</span> <span class=n>fig</span>  <span class=c1># dispose figure</span>
+
+<span class=c1># OK, we have now generated and saved the plot in a file.</span>
+<span class=c1># We will open it in the web browser if we are not in a make build.</span>
+    <span class=k>if</span> <span class=ow>not</span> <span class=n>is_build</span><span class=p>():</span>
+        <span class=k>for</span> <span class=n>file</span> <span class=ow>in</span> <span class=n>files</span><span class=p>:</span>  <span class=c1># for each file we generated</span>
+            <span class=n>open_new_tab</span><span class=p>(</span><span class=sa>f</span><span class=s2>"file://</span><span class=si>{</span><span class=n>file</span><span class=si>}</span><span class=s2>"</span><span class=p>)</span>  <span class=c1># open a browser tab</span>
+        <span class=n>sleep</span><span class=p>(</span><span class=mi>10</span><span class=p>)</span>  <span class=c1># sleep 10 seconds (enough time for the browser to load)</span>
+<span class=c1># The temp directory is deleted as soon as we leave the `with` block.</span>
+<span class=c1># Hence, all the figures generated above as well as the experimental results</span>
+<span class=c1># now have disappeared.</span>
+</pre></div>
